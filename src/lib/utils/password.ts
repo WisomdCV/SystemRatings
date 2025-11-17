@@ -1,22 +1,24 @@
 import bcrypt from 'bcryptjs';
 
 /**
- * Genera un hash de una contraseña en texto plano.
- * @param {string} password - La contraseña a hashear.
- * @returns {Promise<string>} - El hash de la contraseña.
+ * Generates a hash from a plain text password.
+ *
+ * @param {string} password - The password to hash.
+ * @returns {Promise<string>} - The hashed password.
  */
-export const hashPassword = async (password: string) => {
+export const hashPassword = async (password: string): Promise<string> => {
   const hashedPassword = await bcrypt.hash(password, 12);
   return hashedPassword;
 };
 
 /**
- * Compara una contraseña en texto plano con un hash existente.
- * @param {string} password - La contraseña en texto plano.
- * @param {string} hash - El hash contra el que se compara.
- * @returns {Promise<boolean>} - True si las contraseñas coinciden, false en caso contrario.
+ * Compares a plain text password with an existing hash.
+ *
+ * @param {string} password - The plain text password.
+ * @param {string} hash - The hash to compare against.
+ * @returns {Promise<boolean>} - True if the passwords match, false otherwise.
  */
-export const comparePasswords = async (password: string, hash: string) => {
+export const comparePasswords = async (password: string, hash: string): Promise<boolean> => {
   const isMatch = await bcrypt.compare(password, hash);
   return isMatch;
 };

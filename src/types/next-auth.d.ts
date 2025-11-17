@@ -3,29 +3,34 @@ import { JWT } from 'next-auth/jwt';
 
 declare module 'next-auth' {
   /**
-   * Extiende el objeto Session para incluir nuestras propiedades personalizadas.
+   * Extends the Session object to include our custom properties.
    */
   interface Session {
     user: {
+      /** The user's unique identifier. */
       id: string;
+      /** The user's role identifier. */
       role: number;
-    } & DefaultSession['user']; // Mantiene las propiedades por defecto (name, email, image)
+    } & DefaultSession['user']; // Keeps the default properties (name, email, image)
   }
 
   /**
-   * Extiende el objeto User por defecto.
+   * Extends the default User object.
    */
   interface User {
+    /** The user's role identifier. */
     role?: number;
   }
 }
 
 declare module 'next-auth/jwt' {
   /**
-   * Extiende el token JWT para incluir nuestras propiedades personalizadas.
+   * Extends the JWT to include our custom properties.
    */
   interface JWT {
+    /** The user's unique identifier. */
     id?: string;
+    /** The user's role identifier. */
     role?: number;
   }
 }
