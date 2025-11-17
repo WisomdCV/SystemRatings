@@ -3,19 +3,27 @@ import { createClient } from '@libsql/client';
 import * as schema from './schema';
 import dotenv from 'dotenv';
 
-// Carga las variables de entorno del archivo .env
+// Load environment variables from the .env file.
 dotenv.config({ path: '.env' });
 
-// Es una buena práctica asegurarse de que la variable de entorno exista
+// It is a good practice to ensure that the environment variable exists.
 if (!process.env.DATABASE_URL) {
-  throw new Error('La variable de entorno DATABASE_URL no está definida.');
+  throw new Error('The DATABASE_URL environment variable is not defined.');
 }
 
-// 1. Crea el cliente que se conecta a la base de datos
+/**
+ * The database client used to connect to the database.
+ *
+ * @see https://github.com/libsql/libsql-client-ts
+ */
 const client = createClient({
   url: process.env.DATABASE_URL,
 });
 
-// 2. Inicializa Drizzle, pasándole el cliente y nuestro esquema.
-// El objeto 'db' es el que usaremos en toda nuestra aplicación para hacer consultas.
+/**
+ * The Drizzle ORM instance.
+ * This is the object we will use throughout our application to make queries.
+ *
+ * @see https://orm.drizzle.team/docs/overview
+ */
 export const db = drizzle(client, { schema });

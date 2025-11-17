@@ -1,34 +1,38 @@
 import { db } from './index';
 import { cargos, categorias, roles } from './schema';
 
+/**
+ * Seeds the database with initial data.
+ * This script is intended to be run from the command line.
+ */
 async function main() {
-  console.log('🌱 Empezando el seeding de la base de datos...');
+  console.log('🌱 Starting database seeding...');
 
-  // --- Limpieza de tablas (opcional, pero útil para re-ejecutar el script) ---
-  // Descomenta estas líneas si quieres que el script borre los datos existentes antes de insertar
-  // console.log('🗑️ Limpiando tablas existentes...');
+  // --- Table cleanup (optional, but useful for re-running the script) ---
+  // Uncomment these lines if you want the script to delete existing data before inserting
+  // console.log('🗑️ Clearing existing tables...');
   // await db.delete(cargos);
   // await db.delete(categorias);
   // await db.delete(roles);
 
-  // --- Inserción de Categorías ---
-  console.log('📥 Insertando categorías...');
+  // --- Category Insertion ---
+  console.log('📥 Inserting categories...');
   await db.insert(categorias).values([
-    { nombre: 'TRAINEE', descripcion: 'Recién ingresado' },
-    { nombre: 'JUNIOR', descripcion: 'Miembro con 1 año de experiencia en IISE' },
-    { nombre: 'SENIOR', descripcion: 'Miembro con 4 años de experiencia en IISE' },
+    { nombre: 'TRAINEE', descripcion: 'Newly joined' },
+    { nombre: 'JUNIOR', descripcion: 'Member with 1 year of experience in IISE' },
+    { nombre: 'SENIOR', descripcion: 'Member with 4 years of experience in IISE' },
   ]);
 
-  // --- Inserción de Roles de Sistema ---
-  console.log('📥 Insertando roles de sistema...');
+  // --- System Role Insertion ---
+  console.log('📥 Inserting system roles...');
   await db.insert(roles).values([
-    { id: 1, nombre: 'Administrador' },
+    { id: 1, nombre: 'Administrator' },
     { id: 2, nombre: 'Developer' },
-    { id: 3, nombre: 'Usuario' },
+    { id: 3, nombre: 'User' },
   ]);
 
-  // --- Inserción de Cargos ---
-  console.log('📥 Insertando cargos...');
+  // --- Position Insertion ---
+  console.log('📥 Inserting positions...');
   await db.insert(cargos).values([
     { nombre: 'Director de Logística' },
     { nombre: 'Director de PMO' },
@@ -56,11 +60,11 @@ async function main() {
     { nombre: 'Tesorero de IISE UNSA' },
   ]);
 
-  console.log('✅ Seeding completado exitosamente!');
+  console.log('✅ Seeding completed successfully!');
   process.exit(0);
 }
 
 main().catch((error) => {
-  console.error('❌ Error durante el seeding:', error);
+  console.error('❌ Error during seeding:', error);
   process.exit(1);
 });
