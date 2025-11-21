@@ -9,8 +9,8 @@ if (!process.env.DATABASE_URL) {
 }
 
 export default defineConfig({
-  schema: './src/lib/db/schema.ts',
-  out: './src/lib/db/migrations',
+  schema: './src/db/schema.ts',
+  out: './src/db/migrations',
   dialect: 'sqlite', // 'driver' se reemplaza por 'dialect' para la nueva sintaxis
   dbCredentials: {
     // El '!' al final le dice a TypeScript que estamos seguros de que este valor existe,

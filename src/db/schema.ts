@@ -1,4 +1,5 @@
-import { integer, sqliteTable, text, real, primaryKey } from "drizzle-orm/sqlite-core";
+import { integer, sqliteTable, text, real, primaryKey, unique } from "drizzle-orm/sqlite-core";
+import { relations, sql } from "drizzle-orm";
 import type { AdapterAccount } from "next-auth/adapters";
 
 // ========================================================
@@ -53,7 +54,7 @@ export const users = sqliteTable("users", {
   banExpiresAt: integer("ban_expires_at", { mode: "timestamp" }),      // NULL = Permanente, Fecha = Temporal
   banReason: text("ban_reason"),
 
-  createdAt: integer("created_at", { mode: "timestamp" }).defaultNow(),
+  createdAt: integer("created_at", { mode: "timestamp" }).default(sql`(cast(strftime('%s','now') as int))`),
 });
 
 export const accounts = sqliteTable(
@@ -108,8 +109,11 @@ export const monthlyScores = sqliteTable("monthly_scores", {
 
   finalKpi: real("final_kpi").default(0),             // Calculado antes de insertar
   feedbackNotes: text("feedback_notes"),
-  updatedAt: integer("updated_at", { mode: "timestamp" }).defaultNow(),
-}); // UNIQUE(user_id, period) needs to be handled via uniqueIndex or similar if supported/needed, or app logic. Drizzle supports unique().
+  updatedAt: integer("updated_at", { mode: "timestamp" }).default(sql`(cast(strftime('%s','now') as int))`),
+}, (t) => ({
+  // ESTO HACE LA MAGIA: Impide que un usuario tenga 2 notas el mismo mes
+  unq: unique().on(t.userId, t.period),
+}));
 
 // ========================================================
 // 4. MÓDULO DE GESTIÓN (Agenda y Justificaciones)
@@ -130,7 +134,7 @@ export const meetings = sqliteTable("meetings", {
   areaId: integer("area_id").references(() => areas.id),
 
   createdBy: text("created_by").references(() => users.id),
-  createdAt: integer("created_at", { mode: "timestamp" }).defaultNow(),
+  createdAt: integer("created_at", { mode: "timestamp" }).default(sql`(cast(strftime('%s','now') as int))`),
 });
 
 export const justifications = sqliteTable("justifications", {
@@ -147,3 +151,29 @@ export const justifications = sqliteTable("justifications", {
   adminComment: text("admin_comment"),
   createdAt: integer("created_at", { mode: "timestamp" }).defaultNow(),
 });
+
+// ========================================================
+// 5. RELACIONES (Para consultas fáciles en Drizzle)
+// ========================================================
+
+export const usersRelations = relations(users, ({ one, many }) => ({
+  role: one(roles, { fields: [users.roleId], references: [roles.id] }),
+  area: one(areas, { fields: [users.areaId], references: [areas.id] }),
+  category: one(categories, { fields: [users.categoryId], references: [categories.id] }),
+  scores: many(monthlyScores),
+  meetingsCreated: many(meetings, { relationName: "creator" }),
+}));
+
+export const meetingsRelations = relations(meetings, ({ one }) => ({
+  area: one(areas, { fields: [meetings.areaId], references: [areas.id] }),
+  creator: one(users, { fields: [meetings.createdBy], references: [users.id], relationName: "creator" }),
+}));
+
+export const monthlyScoresRelations = relations(monthlyScores, ({ one }) => ({
+  user: one(users, { fields: [monthlyScores.userId], references: [users.id] }),
+}));
+
+export const justificationsRelations = relations(justifications, ({ one }) => ({
+  user: one(users, { fields: [justifications.userId], references: [users.id] }),
+  meeting: one(meetings, { fields: [justifications.meetingId], references: [meetings.id] }),
+}));

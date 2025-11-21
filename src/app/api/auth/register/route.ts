@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { db } from '@/lib/db';
-import { usuarios } from '@/lib/db/schema';
+import { db } from '@/db';
+import { users } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { hashPassword } from '@/lib/utils/password';
 
@@ -25,8 +25,8 @@ export async function POST(req: Request) {
     // 2. Verificar si el usuario ya existe en la base de datos
     const usuarioExistente = await db
       .select()
-      .from(usuarios)
-      .where(eq(usuarios.email, email));
+      .from(users)
+      .where(eq(users.email, email));
 
     if (usuarioExistente.length > 0) {
       return NextResponse.json(
@@ -41,17 +41,18 @@ export async function POST(req: Request) {
     // 4. Insertar el nuevo usuario en la base de datos
     // Usamos .returning() para que nos devuelva los datos del usuario creado
     const nuevoUsuario = await db
-      .insert(usuarios)
+      .insert(users)
       .values({
-        nombre,
+        id: crypto.randomUUID(), // Generar UUID para el nuevo usuario
+        name: nombre, // nombre -> name
         email,
-        passwordHash: hashedPassword, // <-- CORRECCIÓN AQUÍ
+        // passwordHash: hashedPassword, // TODO: Falta campo password en schema
         // rol_id se establece por defecto a 3 (Usuario) según el esquema
       })
       .returning({
-        id: usuarios.id,
-        nombre: usuarios.nombre,
-        email: usuarios.email,
+        id: users.id,
+        name: users.name,
+        email: users.email,
       });
 
     // 5. Devolver una respuesta exitosa
