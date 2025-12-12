@@ -248,3 +248,13 @@ export const gradesRelations = relations(grades, ({ one }) => ({
   user: one(users, { fields: [grades.userId], references: [users.id], relationName: "studentGrades" }),
   assignedBy: one(users, { fields: [grades.assignedById], references: [users.id], relationName: "evaluatorGrades" }),
 }));
+
+export const kpiMonthlySummariesRelations = relations(kpiMonthlySummaries, ({ one }) => ({
+  user: one(users, { fields: [kpiMonthlySummaries.userId], references: [users.id] }),
+  semester: one(semesters, { fields: [kpiMonthlySummaries.semesterId], references: [semesters.id] }),
+}));
+
+export const areaKpiSummariesRelations = relations(areaKpiSummaries, ({ one }) => ({
+  area: one(areas, { fields: [areaKpiSummaries.areaId], references: [areas.id] }),
+  semester: one(semesters, { fields: [areaKpiSummaries.semesterId], references: [semesters.id] }),
+}));
