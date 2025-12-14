@@ -77,7 +77,7 @@ export default function DashboardView({ user }: DashboardViewProps) {
                 angleLines: { color: "#edeafd" },
                 grid: { color: "#edeafd" },
                 pointLabels: {
-                    font: { size: 10, weight: "700" as const },
+                    font: { size: 10, weight: "bold" },
                     color: "#4a248e",
                 },
                 ticks: { display: false, backdropColor: "transparent" },
@@ -394,8 +394,8 @@ export default function DashboardView({ user }: DashboardViewProps) {
                             <div className="bg-meteorite-100 p-1 rounded-xl flex border border-meteorite-200 self-end sm:self-auto">
                                 <button
                                     className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${chartView === "monthly"
-                                            ? "tab-active"
-                                            : "text-meteorite-500 hover:bg-white/50"
+                                        ? "tab-active"
+                                        : "text-meteorite-500 hover:bg-white/50"
                                         }`}
                                     onClick={() => setChartView("monthly")}
                                 >
@@ -403,8 +403,8 @@ export default function DashboardView({ user }: DashboardViewProps) {
                                 </button>
                                 <button
                                     className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${chartView === "semester"
-                                            ? "tab-active"
-                                            : "text-meteorite-500 hover:bg-white/50"
+                                        ? "tab-active"
+                                        : "text-meteorite-500 hover:bg-white/50"
                                         }`}
                                     onClick={() => setChartView("semester")}
                                 >

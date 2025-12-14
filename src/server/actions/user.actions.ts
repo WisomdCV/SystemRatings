@@ -1,53 +1,97 @@
 "use server";
 
 import { auth } from "@/server/auth";
-import { getUsersListService, promoteUserService } from "@/server/services/user.service";
+import {
+    getUsersListService,
+    promoteUserService,
+    updateUserDataService,
+    moderateUserService,
+} from "@/server/services/user.service";
 import { ActionResult } from "@/types";
-import { UpdateUserSchema } from "@/lib/validators/user";
+import {
+    UpdateUserRoleSchema,
+    UpdateUserProfileSchema,
+    ModerateUserSchema,
+} from "@/lib/validators/user";
 import { revalidatePath } from "next/cache";
 
-export async function getUsersAction(): Promise<ActionResult<any[]>> {
+// --- 1. Get Users with Filters ---
+export async function getUsersAction(
+    search?: string,
+    role?: string,
+    status?: string,
+    page: number = 1
+): Promise<ActionResult<any>> {
     try {
         const session = await auth();
-        if (!session?.user) {
-            return { success: false, error: "No autorizado" };
-        }
+        if (!session?.user) return { success: false, error: "No autenticado" };
 
-        const users = await getUsersListService();
-        return { success: true, data: users };
+        const result = await getUsersListService(
+            { search, role, status },
+            { page, limit: 10 }
+        );
+
+        return { success: true, data: result };
     } catch (error) {
-        console.error("Error in getUsersAction:", error);
+        console.error("Error getUsersAction:", error);
         return { success: false, error: "Error al obtener usuarios" };
     }
 }
 
-export async function updateUserRoleAction(input: {
-    userId: string;
-    data: unknown;
-}): Promise<ActionResult<any>> {
+// --- 2. Update Role (Promote/Transfer) ---
+export async function updateUserRoleAction(input: any): Promise<ActionResult<any>> {
     try {
         const session = await auth();
-        if (!session?.user?.id) {
-            return { success: false, error: "No autorizado" };
+        if (!session?.user?.id) return { success: false, error: "No autenticado" };
+
+        // Validar input
+        const validated = UpdateUserRoleSchema.safeParse(input);
+        if (!validated.success) {
+            return { success: false, error: "Datos inválidos: " + validated.error.message };
         }
 
-        // 1. Validar inputs
-        const validatedData = UpdateUserSchema.safeParse(input.data);
-        if (!validatedData.success) {
-            return { success: false, error: "Datos inválidos: " + validatedData.error.message };
-        }
-
-        // 2. Llamar al servicio
-        const updatedUser = await promoteUserService(
-            session.user.id,
-            input.userId,
-            validatedData.data
-        );
-
-        revalidatePath("/dashboard/users"); // O donde listes los usuarios
+        const updatedUser = await promoteUserService(session.user.id, validated.data);
+        revalidatePath("/dashboard/users");
         return { success: true, data: updatedUser };
     } catch (error: any) {
-        console.error("Error in updateUserRoleAction:", error);
-        return { success: false, error: error.message || "Error al actualizar usuario" };
+        return { success: false, error: error.message };
+    }
+}
+
+// --- 3. Update Profile Data ---
+export async function updateUserDataAction(input: any): Promise<ActionResult<any>> {
+    try {
+        const session = await auth();
+        if (!session?.user?.id) return { success: false, error: "No autenticado" };
+
+        const validated = UpdateUserProfileSchema.safeParse(input);
+        if (!validated.success) {
+            return { success: false, error: "Datos inválidos" };
+        }
+
+        const updatedUser = await updateUserDataService(session.user.id, validated.data);
+        revalidatePath("/dashboard/users");
+        return { success: true, data: updatedUser };
+    } catch (error: any) {
+        return { success: false, error: error.message };
+    }
+}
+
+// --- 4. Moderate User ---
+export async function moderateUserAction(input: any): Promise<ActionResult<any>> {
+    try {
+        const session = await auth();
+        if (!session?.user?.id) return { success: false, error: "No autenticado" };
+
+        const validated = ModerateUserSchema.safeParse(input);
+        if (!validated.success) {
+            return { success: false, error: "Razón de moderación requerida" };
+        }
+
+        const result = await moderateUserService(session.user.id, validated.data);
+        revalidatePath("/dashboard/users");
+        return { success: true, data: result };
+    } catch (error: any) {
+        return { success: false, error: error.message };
     }
 }

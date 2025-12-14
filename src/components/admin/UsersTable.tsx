@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import Image from "next/image";
-import { updateUserRoleAction } from "@/server/actions/user.actions";
+import { MoreVertical, Edit, Trash2 } from "lucide-react";
+import UserEditDrawer from "./UserEditDrawer";
 
 type User = {
     id: string;
@@ -14,6 +15,10 @@ type User = {
     lastName: string | null;
     status: string | null;
     currentAreaId: string | null;
+    cui: string | null;
+    phone: string | null;
+    category: string | null;
+    moderationReason: string | null;
     currentArea: {
         id: string;
         name: string;
@@ -31,141 +36,126 @@ interface UsersTableProps {
     areas: Area[];
 }
 
-const ROLES = [
-    "VOLUNTEER",
-    "MEMBER",
-    "DIRECTOR",
-    "SUBDIRECTOR",
-    "PRESIDENT",
-    "TREASURER",
-    "DEV",
-];
-
 export default function UsersTable({ users, areas }: UsersTableProps) {
-    const [isPending, startTransition] = useTransition();
+    const [selectedUser, setSelectedUser] = useState<User | null>(null);
+    const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
-    const handleRoleChange = (userId: string, newRole: string) => {
-        startTransition(async () => {
-            const result = await updateUserRoleAction({
-                userId,
-                data: { role: newRole },
-            });
-            if (!result.success) {
-                alert("Error al actualizar rol: " + result.error);
-            }
-        });
+    const handleEditClick = (user: User) => {
+        setSelectedUser(user);
+        setIsDrawerOpen(true);
     };
 
-    const handleAreaChange = (userId: string, newAreaId: string) => {
-        startTransition(async () => {
-            const result = await updateUserRoleAction({
-                userId,
-                data: { currentAreaId: newAreaId },
-            });
-            if (!result.success) {
-                alert("Error al actualizar área: " + result.error);
-            }
-        });
+    const closeDrawer = () => {
+        setIsDrawerOpen(false);
+        setSelectedUser(null);
     };
-
-    // const handleStatusChange = (userId: string, newStatus: string) => ... (Similar logic)
 
     return (
-        <div className="rounded-sm border border-stroke bg-white px-5 pt-6 pb-2.5 shadow-default dark:border-strokedark dark:bg-boxdark sm:px-7.5 xl:pb-1">
-            <div className="max-w-full overflow-x-auto">
-                <table className="w-full table-auto">
-                    <thead>
-                        <tr className="bg-gray-2 text-left dark:bg-meta-4">
-                            <th className="min-w-[220px] py-4 px-4 font-medium text-black dark:text-white xl:pl-11">
-                                Usuario
+        <div className="relative overflow-x-auto bg-white rounded-2xl shadow-sm border border-meteorite-100">
+            {/* Table */}
+            <table className="w-full text-sm text-left text-gray-500">
+                <thead className="text-xs text-meteorite-900 uppercase bg-meteorite-50/50">
+                    <tr>
+                        <th scope="col" className="p-4">
+                            <div className="flex items-center">
+                                <input id="checkbox-all" type="checkbox" className="w-4 h-4 text-meteorite-600 bg-gray-100 border-gray-300 rounded focus:ring-meteorite-500" />
+                                <label htmlFor="checkbox-all" className="sr-only">checkbox</label>
+                            </div>
+                        </th>
+                        <th scope="col" className="px-6 py-3 font-medium">Nombre / Email</th>
+                        <th scope="col" className="px-6 py-3 font-medium">Rol & Área</th>
+                        <th scope="col" className="px-6 py-3 font-medium">Categoría</th>
+                        <th scope="col" className="px-6 py-3 font-medium">Estado</th>
+                        <th scope="col" className="px-6 py-3 font-medium">Acción</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {users.map((user) => (
+                        <tr key={user.id} className="bg-white border-b border-meteorite-100 hover:bg-meteorite-50/30 transition-colors">
+                            <td className="w-4 p-4">
+                                <div className="flex items-center">
+                                    <input id={`checkbox-${user.id}`} type="checkbox" className="w-4 h-4 text-meteorite-600 bg-gray-100 border-gray-300 rounded focus:ring-meteorite-500" />
+                                    <label htmlFor={`checkbox-${user.id}`} className="sr-only">checkbox</label>
+                                </div>
+                            </td>
+                            <th scope="row" className="flex items-center px-6 py-4 text-gray-900 whitespace-nowrap">
+                                {user.image ? (
+                                    <Image
+                                        width={40} height={40}
+                                        className="w-10 h-10 rounded-full border border-meteorite-200"
+                                        src={user.image}
+                                        alt={user.name || "User"}
+                                    />
+                                ) : (
+                                    <div className="w-10 h-10 rounded-full bg-meteorite-100 text-meteorite-600 flex items-center justify-center font-bold text-lg border border-meteorite-200">
+                                        {(user.firstName?.[0] || user.name?.[0] || "U").toUpperCase()}
+                                    </div>
+                                )}
+                                <div className="pl-3">
+                                    <div className="text-base font-semibold">{user.firstName ? `${user.firstName} ${user.lastName || ''}` : user.name}</div>
+                                    <div className="font-normal text-gray-500">{user.email}</div>
+                                </div>
                             </th>
-                            <th className="min-w-[150px] py-4 px-4 font-medium text-black dark:text-white">
-                                Rol
-                            </th>
-                            <th className="min-w-[150px] py-4 px-4 font-medium text-black dark:text-white">
-                                Área
-                            </th>
-                            <th className="min-w-[120px] py-4 px-4 font-medium text-black dark:text-white">
-                                Estado
-                            </th>
+                            <td className="px-6 py-4">
+                                <div className="flex flex-col">
+                                    <span className="font-medium text-meteorite-900">{user.role}</span>
+                                    <span className="text-xs text-gray-500">{user.currentArea?.name || "Sin Área"}</span>
+                                </div>
+                            </td>
+                            <td className="px-6 py-4">
+                                <span className={`inline-flex rounded-full bg-opacity-10 py-1 px-3 text-xs font-medium border ${user.category === 'MASTER' ? 'bg-purple-100 text-purple-700 border-purple-200' :
+                                    user.category === 'SENIOR' ? 'bg-blue-100 text-blue-700 border-blue-200' :
+                                        'bg-gray-100 text-gray-700 border-gray-200'
+                                    }`}>
+                                    {user.category || 'TRAINEE'}
+                                </span>
+                            </td>
+                            <td className="px-6 py-4">
+                                <div className="flex items-center">
+                                    <div className={`h-2.5 w-2.5 rounded-full me-2 ${user.status === 'ACTIVE' ? 'bg-green-500' :
+                                        user.status === 'BANNED' ? 'bg-red-500' : 'bg-yellow-500'
+                                        }`}></div>
+                                    <span className="font-medium">{user.status}</span>
+                                </div>
+                            </td>
+                            <td className="px-6 py-4">
+                                <button
+                                    onClick={() => handleEditClick(user)}
+                                    className="font-medium text-meteorite-600 dark:text-meteorite-400 hover:underline flex items-center gap-1"
+                                >
+                                    <Edit className="w-4 h-4" /> Editar
+                                </button>
+                            </td>
                         </tr>
-                    </thead>
-                    <tbody>
-                        {users.map((user, key) => (
-                            <tr key={user.id}>
-                                <td className="border-b border-[#eee] py-5 px-4 pl-9 dark:border-strokedark xl:pl-11">
-                                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-                                        <div className="h-12.5 w-12.5 rounded-md">
-                                            {user.image ? (
-                                                <Image
-                                                    src={user.image}
-                                                    width={50}
-                                                    height={50}
-                                                    alt="User"
-                                                    className="rounded-full"
-                                                />
-                                            ) : (
-                                                <div className="h-10 w-10 rounded-full bg-slate-200" />
-                                            )}
-                                        </div>
-                                        <div>
-                                            <h5 className="font-medium text-black dark:text-white">
-                                                {user.firstName} {user.lastName}
-                                            </h5>
-                                            <p className="text-sm text-gray-500">{user.email}</p>
-                                        </div>
-                                    </div>
-                                </td>
-                                <td className="border-b border-[#eee] py-5 px-4 dark:border-strokedark">
-                                    <div className="relative">
-                                        <select
-                                            className="bg-transparent text-black dark:text-white outline-none border border-stroke rounded p-1 text-sm focus:border-primary"
-                                            value={user.role || "VOLUNTEER"}
-                                            onChange={(e) => handleRoleChange(user.id, e.target.value)}
-                                            disabled={isPending}
-                                        >
-                                            {ROLES.map((role) => (
-                                                <option key={role} value={role}>
-                                                    {role}
-                                                </option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                </td>
-                                <td className="border-b border-[#eee] py-5 px-4 dark:border-strokedark">
-                                    <div className="relative">
-                                        <select
-                                            className="bg-transparent text-black dark:text-white outline-none border border-stroke rounded p-1 text-sm focus:border-primary max-w-[150px]"
-                                            value={user.currentAreaId || ""}
-                                            onChange={(e) => handleAreaChange(user.id, e.target.value)}
-                                            disabled={isPending}
-                                        >
-                                            <option value="">Sin Área</option>
-                                            {areas.map((area) => (
-                                                <option key={area.id} value={area.id}>
-                                                    {area.name} ({area.code})
-                                                </option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                </td>
-                                <td className="border-b border-[#eee] py-5 px-4 dark:border-strokedark">
-                                    <p
-                                        className={`inline-flex rounded-full bg-opacity-10 py-1 px-3 text-sm font-medium ${user.status === "ACTIVE"
-                                                ? "bg-success text-success"
-                                                : user.status === "BANNED"
-                                                    ? "bg-danger text-danger"
-                                                    : "bg-warning text-warning"
-                                            }`}
-                                    >
-                                        {user.status || "UNKNOWN"}
-                                    </p>
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
+                    ))}
+
+                    {users.length === 0 && (
+                        <tr>
+                            <td colSpan={6} className="text-center py-8 text-gray-500">
+                                No se encontraron usuarios. Intenta ajustar los filtros.
+                            </td>
+                        </tr>
+                    )}
+                </tbody>
+            </table>
+
+            {/* Pagination Footer (Placeholder) */}
+            <div className="flex items-center justify-between p-4 border-t border-meteorite-100">
+                <span className="text-sm text-gray-500">
+                    Mostrando <span className="font-semibold text-gray-900">{users.length}</span> resultados
+                </span>
+                <div className="inline-flex mt-2 xs:mt-0">
+                    {/* Buttons would go here linked to page param */}
+                </div>
             </div>
+
+            {/* Drawer */}
+            <UserEditDrawer
+                user={selectedUser}
+                areas={areas}
+                isOpen={isDrawerOpen}
+                onClose={closeDrawer}
+            />
         </div>
     );
 }

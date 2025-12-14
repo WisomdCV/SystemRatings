@@ -395,7 +395,7 @@ export default function LandingPage() {
                 una red de contactos que impulsará tu carrera antes de egresar.
               </p>
 
-              <ul class="space-y-6">
+              <ul className="space-y-6">
                 <li className="flex items-start">
                   <div className="flex-shrink-0 w-8 h-8 rounded-full bg-meteorite-600 flex items-center justify-center text-white mt-1">
                     <Check className="w-4 h-4" />

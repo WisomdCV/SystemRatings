@@ -1,32 +1,150 @@
 import * as userDAO from "../data-access/users";
-import { UpdateUserDTO } from "@/lib/validators/user";
+import { db } from "@/db";
+import { positionHistory, semesters, users } from "@/db/schema";
+import { eq, and, isNull, sql } from "drizzle-orm";
+import {
+    UpdateUserRoleDTO,
+    UpdateUserProfileDTO,
+    ModerateUserDTO,
+} from "@/lib/validators/user";
 
-export async function getUsersListService() {
-    return await userDAO.getAllUsers();
+// --- Helpers ---
+async function getActiveSemesterId() {
+    const activeSemester = await db.query.semesters.findFirst({
+        where: eq(semesters.isActive, true),
+    });
+    return activeSemester?.id || null;
+}
+
+// --- Services ---
+
+export async function getUsersListService(
+    filters?: userDAO.UserFilters,
+    pagination?: userDAO.PaginationOptions
+) {
+    return await userDAO.getAllUsers(filters, pagination);
 }
 
 /**
- * Promueve o actualiza un usuario.
- * Solo puede ser ejecutado por usuarios con rol DEV o PRESIDENT.
+ * Funcionalidad 2: Ascenso o Traslado de Área
  */
 export async function promoteUserService(
     actorId: string,
-    targetUserId: string,
-    data: UpdateUserDTO
+    data: UpdateUserRoleDTO
 ) {
-    // 1. Verificar quien ejecuta la acción
+    // 1. Verificar Permisos del Actor
     const actor = await userDAO.getUserById(actorId);
-
-    if (!actor) {
-        throw new Error("Usuario 'actor' no encontrado.");
+    if (!actor || !["DEV", "PRESIDENT"].includes(actor.role || "")) {
+        throw new Error("No tienes permisos (Se requiere DEV o PRESIDENT).");
     }
 
-    const allowedRoles = ["DEV", "PRESIDENT"];
-    if (!actor.role || !allowedRoles.includes(actor.role)) {
-        throw new Error("No tienes permisos para realizar esta acción.");
+    // 2. Verificar integridad del Target (Usuario a modificar)
+    const targetUser = await userDAO.getUserById(data.userId);
+    if (!targetUser) throw new Error("Usuario objetivo no encontrado.");
+
+    // 3. Regla de Negocio: DIRECTOR/SUBDIRECTOR debe tener área
+    if (["DIRECTOR", "SUBDIRECTOR"].includes(data.role) && !data.areaId) {
+        throw new Error("Un Director o Subdirector debe pertenecer a un Área.");
     }
 
-    // 2. Ejecutar la actualización
-    const updatedUser = await userDAO.updateUser(targetUserId, data);
-    return updatedUser;
+    // 4. Verificar si realmente hay cambios
+    if (targetUser.role === data.role && targetUser.currentAreaId === data.areaId) {
+        return targetUser; // No op
+    }
+
+    // 5. Transacción de Base de Datos
+    return await db.transaction(async (tx) => {
+        const currentSemesterId = await getActiveSemesterId();
+
+        // A. Cerrar Historial Anterior (si existe uno abierto)
+        await tx
+            .update(positionHistory)
+            .set({ endDate: new Date() })
+            .where(
+                and(
+                    eq(positionHistory.userId, data.userId),
+                    isNull(positionHistory.endDate)
+                )
+            );
+
+        // B. Crear Nuevo Historial
+        await tx.insert(positionHistory).values({
+            userId: data.userId,
+            role: data.role,
+            areaId: data.areaId,
+            semesterId: currentSemesterId, // Podría ser null si no hay semestre activo
+            startDate: new Date(),
+        });
+
+        // C. Actualizar Usuario
+        const [updatedUser] = await tx
+            .update(users)
+            .set({
+                role: data.role,
+                currentAreaId: data.areaId, // Puede ser null
+                updatedAt: new Date(),
+            })
+            .where(eq(users.id, data.userId))
+            .returning();
+
+        return updatedUser;
+    });
+}
+
+/**
+ * Funcionalidad 3: Actualización de Datos Administrativos
+ */
+export async function updateUserDataService(
+    actorId: string,
+    data: UpdateUserProfileDTO
+) {
+    // 1. Verificar Permisos (Admin genérico o solo DEV/PRESI? Asumimos DEV/PRES)
+    // Nota: Podríamos relajar esto si hay un rol RRHH, por ahora mantenemos strict
+    const actor = await userDAO.getUserById(actorId);
+    if (!actor || !["DEV", "PRESIDENT"].includes(actor.role || "")) {
+        throw new Error("No autorizado.");
+    }
+
+    // 2. Verificar duplicidad de CUI (si aplica)
+    if (data.cui) {
+        const existingCui = await db.query.users.findFirst({
+            where: and(eq(users.cui, data.cui), sql`${users.id} != ${data.userId}`)
+        });
+        if (existingCui) throw new Error("El CUI ya está registrado por otro usuario.");
+    }
+
+    // 3. Actualizar
+    return await userDAO.updateUser(data.userId, {
+        cui: data.cui,
+        phone: data.phone,
+        category: data.category,
+    });
+}
+
+/**
+ * Funcionalidad 4: Moderación
+ */
+export async function moderateUserService(
+    actorId: string,
+    data: ModerateUserDTO
+) {
+    const actor = await userDAO.getUserById(actorId);
+    const targetUser = await userDAO.getUserById(data.userId);
+
+    if (!actor || !targetUser) throw new Error("Usuario no encontrado.");
+
+    // Regla: PRESIDENT no puede banear a DEV
+    if (actor.role === "PRESIDENT" && targetUser.role === "DEV") {
+        throw new Error("Acción prohibida: El Presidente no puede moderar al Desarrollador.");
+    }
+
+    // Regla: Solo DEV y PRESIDENT moderan
+    if (!["DEV", "PRESIDENT"].includes(actor.role || "")) {
+        throw new Error("No autorizado.");
+    }
+
+    return await userDAO.updateUser(data.userId, {
+        status: data.status,
+        moderationReason: data.moderationReason,
+    });
 }
