@@ -10,6 +10,19 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  /* Meteorite Palette */
+  --color-meteorite-50: #f5f4fe;
+  --color-meteorite-100: #edeafd;
+  --color-meteorite-200: #ddd8fc;
+  --color-meteorite-300: #c4b9f9;
+  --color-meteorite-400: #a791f4;
+  --color-meteorite-500: #8a65ed;
+  --color-meteorite-600: #7a44e3;
+  --color-meteorite-700: #6a32cf;
+  --color-meteorite-800: #592aad;
+  --color-meteorite-900: #4a248e;
+  --color-meteorite-950: #361973;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -23,4 +36,38 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Glassmorphism */
+.card-glass {
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  box-shadow: 0 4px 20px -2px rgba(54, 25, 115, 0.05); /* meteorite-950-ish */
+  transition: all 0.3s ease;
+}
+
+.card-glass:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 25px -5px rgba(122, 68, 227, 0.1); /* meteorite-600-ish */
+}
+
+/* Ocultar Scrollbar */
+.hide-scroll::-webkit-scrollbar {
+  display: none;
+}
+.hide-scroll {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Tab Active */
+.tab-active {
+  background-color: var(--color-meteorite-600);
+  color: white;
+  box-shadow: 0 4px 12px rgba(122, 68, 227, 0.3);
+}
+
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
 }
