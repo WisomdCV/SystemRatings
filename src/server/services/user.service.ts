@@ -73,6 +73,7 @@ export async function promoteUserService(
             role: data.role,
             areaId: data.areaId,
             semesterId: currentSemesterId, // Podría ser null si no hay semestre activo
+            reason: data.reason, // Save the audit reason
             startDate: new Date(),
         });
 
@@ -143,8 +144,12 @@ export async function moderateUserService(
         throw new Error("No autorizado.");
     }
 
+    // Logic: If status is not SUSPENDED, clear suspendedUntil
+    const suspendedUntil = data.status === "SUSPENDED" ? data.suspendedUntil : null;
+
     return await userDAO.updateUser(data.userId, {
         status: data.status,
         moderationReason: data.moderationReason,
+        suspendedUntil: suspendedUntil,
     });
 }

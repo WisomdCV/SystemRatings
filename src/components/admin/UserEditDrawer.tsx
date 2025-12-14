@@ -23,6 +23,7 @@ type User = {
     phone: string | null;
     category: string | null;
     moderationReason: string | null;
+    suspendedUntil: Date | null;
     currentArea: {
         id: string;
         name: string;
@@ -102,6 +103,7 @@ export default function UserEditDrawer({
                 userId: user.id,
                 status: formData.status ?? user.status,
                 moderationReason: formData.moderationReason,
+                suspendedUntil: formData.suspendedUntil ? new Date(formData.suspendedUntil) : undefined,
             });
 
             if (result.success) {
@@ -277,23 +279,44 @@ export default function UserEditDrawer({
                                 <strong className="font-bold">Atención:</strong> Estas acciones pueden restringir el acceso del usuario al sistema.
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
                                     Estado del Usuario
                                 </label>
                                 <select
-                                    className="w-full rounded border border-stroke bg-gray-50 px-3 py-2 text-black focus:border-red-500 focus-visible:outline-none dark:border-strokedark dark:bg-meta-4 dark:text-white"
+                                    className="w-full rounded-xl border border-meteorite-200 bg-meteorite-50/30 px-3 py-2 text-black focus:border-red-500 focus-visible:outline-none"
                                     defaultValue={user.status || "ACTIVE"}
                                     onChange={(e) => setFormData({ ...formData, status: e.target.value })}
                                 >
                                     {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
                                 </select>
                             </div>
+
+                            {/* Date Picker for Suspension */}
+                            {(formData.status === "SUSPENDED" || (user.status === "SUSPENDED" && !formData.status)) && (
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        Suspender hasta
+                                    </label>
+                                    <input
+                                        type="date"
+                                        className="w-full rounded-xl border border-meteorite-200 bg-meteorite-50/30 px-3 py-2 text-black focus:border-red-500 focus-visible:outline-none"
+                                        defaultValue={
+                                            user.suspendedUntil ? new Date(user.suspendedUntil).toISOString().split('T')[0] : ""
+                                        }
+                                        onChange={(e) => setFormData({ ...formData, suspendedUntil: e.target.value })}
+                                        min={new Date().toISOString().split('T')[0]} // Prevent past dates
+                                    />
+                                    <p className="text-xs text-gray-500 mt-1">
+                                        El usuario no podrá acceder hasta esta fecha.
+                                    </p>
+                                </div>
+                            )}
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
                                     Justificación (Obligatoria)
                                 </label>
                                 <textarea
-                                    className="w-full rounded border border-stroke bg-gray-50 px-3 py-2 text-black focus:border-red-500 focus-visible:outline-none dark:border-strokedark dark:bg-meta-4 dark:text-white"
+                                    className="w-full rounded-xl border border-meteorite-200 bg-meteorite-50/30 px-3 py-2 text-black focus:border-red-500 focus-visible:outline-none"
                                     placeholder="Explique la razón de la sanción o reactivación..."
                                     defaultValue={user.moderationReason || ""}
                                     onChange={(e) => setFormData({ ...formData, moderationReason: e.target.value })}

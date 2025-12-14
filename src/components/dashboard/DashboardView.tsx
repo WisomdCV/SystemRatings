@@ -19,7 +19,9 @@ import {
     ChevronRight,
     GraduationCap,
     User as UserIcon,
+    LogOut,
 } from "lucide-react";
+import { logoutAction } from "@/server/actions/auth.actions";
 import {
     Chart as ChartJS,
     RadialLinearScale,
@@ -200,27 +202,35 @@ export default function DashboardView({ user }: DashboardViewProps) {
                     </nav>
                 </div>
 
-                {/* Perfil Mini */}
                 <div className="relative z-10 p-4 border-t border-meteorite-800/50 bg-meteorite-900/30">
-                    <div className="flex items-center p-2 rounded-xl hover:bg-meteorite-800 cursor-pointer transition-colors">
-                        {user.image ? (
-                            <img
-                                src={user.image}
-                                alt="User"
-                                className="w-10 h-10 rounded-full border-2 border-meteorite-400"
-                            />
-                        ) : (
-                            <div className="w-10 h-10 rounded-full bg-meteorite-700 flex items-center justify-center border-2 border-meteorite-400">
-                                <UserIcon className="text-white w-5 h-5" />
+                    <div className="flex items-center justify-between p-2 rounded-xl hover:bg-meteorite-800 transition-colors group">
+                        <div className="flex items-center cursor-pointer">
+                            {user.image ? (
+                                <img
+                                    src={user.image}
+                                    alt="User"
+                                    className="w-10 h-10 rounded-full border-2 border-meteorite-400"
+                                />
+                            ) : (
+                                <div className="w-10 h-10 rounded-full bg-meteorite-700 flex items-center justify-center border-2 border-meteorite-400">
+                                    <UserIcon className="text-white w-5 h-5" />
+                                </div>
+                            )}
+                            <div className="ml-3 overflow-hidden">
+                                <p className="text-sm font-semibold text-white truncate">{user.name}</p>
+                                <p className="text-xs text-meteorite-300 truncate">
+                                    {/* Roles would come from extended session */}
+                                    {(user as any).role || "Miembro"}
+                                </p>
                             </div>
-                        )}
-                        <div className="ml-3 overflow-hidden">
-                            <p className="text-sm font-semibold text-white truncate">{user.name}</p>
-                            <p className="text-xs text-meteorite-300 truncate">
-                                {/* Roles would come from extended session */}
-                                {(user as any).role || "Miembro"}
-                            </p>
                         </div>
+                        <button
+                            onClick={async () => await logoutAction()}
+                            className="text-meteorite-400 hover:text-red-400 transition-colors p-2"
+                            title="Cerrar Sesión"
+                        >
+                            <LogOut className="w-5 h-5" />
+                        </button>
                     </div>
                 </div>
             </aside>
@@ -281,6 +291,12 @@ export default function DashboardView({ user }: DashboardViewProps) {
                             />
                         )}
 
+                        <button
+                            onClick={async () => await logoutAction()}
+                            className="lg:hidden w-9 h-9 rounded-xl bg-white shadow-sm border border-meteorite-200 text-meteorite-600 hover:text-red-500 flex items-center justify-center transition-colors"
+                        >
+                            <LogOut className="w-5 h-5" />
+                        </button>
                     </div>
                 </header>
 

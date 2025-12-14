@@ -35,6 +35,7 @@ export const ModerateUserSchema = z.object({
     userId: z.string().uuid(),
     status: z.enum(STATUSES),
     moderationReason: z.string().min(5, "Debes especificar una razón de moderación"),
+    suspendedUntil: z.date().optional(), // New field
 });
 
 // Types export

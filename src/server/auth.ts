@@ -42,6 +42,30 @@ export const {
         }),
     ],
     callbacks: {
+        async signIn({ user }) {
+            if (!user.id) return false;
+
+            // Check status directly from DB to ensure it's fresh
+            const dbUser = await db.query.users.findFirst({
+                where: eq(users.id, user.id),
+                columns: { status: true, suspendedUntil: true }
+            });
+
+            if (!dbUser) return true; // Allow new users (they are created after this check usually, or we assume active)
+
+            if (dbUser.status === "BANNED") return false;
+
+            if (dbUser.status === "SUSPENDED") {
+                if (dbUser.suspendedUntil && new Date() < dbUser.suspendedUntil) {
+                    return false; // Still suspended
+                }
+                // If suspension expired, we could theoretically update status to ACTIVE here, 
+                // but for now just allowing login is safer/simpler or we can handle it.
+                // Let's just block if strictly suspended.
+            }
+
+            return true;
+        },
         async jwt({ token, user, trigger, session }) {
             // 1. On Initial Sign In: Merge user data into token
             if (user) {

@@ -33,6 +33,7 @@ export const users = sqliteTable("user", {
   // --- MODERACIÓN ---
   status: text("status").default("ACTIVE"), // 'ACTIVE', 'BANNED', 'SUSPENDED', 'WARNED'
   moderationReason: text("moderation_reason"),
+  suspendedUntil: integer("suspended_until", { mode: "timestamp" }),
 
   createdAt: integer("created_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
   updatedAt: integer("updated_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
@@ -46,6 +47,7 @@ export const positionHistory = sqliteTable("position_history", {
   role: text("role"),
 
   semesterId: text("semester_id").references(() => semesters.id),
+  reason: text("reason"), // Motivo del cambio (Audit)
   startDate: integer("start_date", { mode: "timestamp" }).default(sql`(unixepoch())`),
   endDate: integer("end_date", { mode: "timestamp" }),
 });
