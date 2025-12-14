@@ -95,7 +95,7 @@ export const areas = sqliteTable("area", {
 
 export const semesters = sqliteTable("semester", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-  name: text("name").notNull(),
+  name: text("name").notNull().unique(),
   isActive: integer("is_active", { mode: "boolean" }).default(false),
   startDate: integer("start_date", { mode: "timestamp" }),
   endDate: integer("end_date", { mode: "timestamp" }),
