@@ -27,6 +27,14 @@ export const {
         Google({
             clientId: process.env.GOOGLE_CLIENT_ID,
             clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+            authorization: {
+                params: {
+                    scope: "openid email profile https://www.googleapis.com/auth/calendar.events",
+                    prompt: "consent",
+                    access_type: "offline",
+                    response_type: "code"
+                }
+            },
             profile(profile) {
                 return {
                     id: profile.sub,
@@ -59,14 +67,11 @@ export const {
                 if (dbUser.suspendedUntil && new Date() < dbUser.suspendedUntil) {
                     return false; // Still suspended
                 }
-                // If suspension expired, we could theoretically update status to ACTIVE here, 
-                // but for now just allowing login is safer/simpler or we can handle it.
-                // Let's just block if strictly suspended.
             }
 
             return true;
         },
-        async jwt({ token, user, trigger, session }) {
+        async jwt({ token, user, account, trigger, session }) {
             // 1. On Initial Sign In: Merge user data into token
             if (user) {
                 token.id = user.id;
@@ -74,15 +79,16 @@ export const {
                 token.currentAreaId = user.currentAreaId;
             }
 
+            // Capture Access Token and Refresh Token from Google Provider
+            if (account) {
+                token.accessToken = account.access_token;
+                token.refreshToken = account.refresh_token;
+            }
+
             // 2. On Update (e.g. client side update() call): Merge updates
             if (trigger === "update" && session) {
                 token = { ...token, ...session };
             }
-
-            // 3. Optional: Refresh data from DB on every access (slower but fresher)
-            // or just trust the token for performance. 
-            // For now, let's keep it simple. If you promote a user, 
-            // they might need to re-login or we implement a token refresh logic.
 
             return token;
         },
@@ -91,6 +97,9 @@ export const {
                 session.user.id = token.id as string;
                 session.user.role = token.role as string | null;
                 session.user.currentAreaId = token.currentAreaId as string | null;
+
+                // Pass access token to the client/session for API calls
+                session.accessToken = token.accessToken as string | undefined;
             }
             return session;
         },

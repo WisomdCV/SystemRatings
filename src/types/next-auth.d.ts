@@ -6,6 +6,7 @@ declare module 'next-auth' {
    * Extiende el objeto Session para incluir nuestras propiedades personalizadas.
    */
   interface Session {
+    accessToken?: string;
     user: {
       id: string;
       role: string | null;
@@ -30,5 +31,7 @@ declare module 'next-auth/jwt' {
     id?: string;
     role?: string | null;
     currentAreaId?: string | null;
+    accessToken?: string;
+    refreshToken?: string;
   }
 }
