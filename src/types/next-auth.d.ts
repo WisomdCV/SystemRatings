@@ -8,15 +8,17 @@ declare module 'next-auth' {
   interface Session {
     user: {
       id: string;
-      role: number;
-    } & DefaultSession['user']; // Mantiene las propiedades por defecto (name, email, image)
+      role: string | null;
+      currentAreaId: string | null;
+    } & DefaultSession['user'];
   }
 
   /**
    * Extiende el objeto User por defecto.
    */
   interface User {
-    role?: number;
+    role?: string | null;
+    currentAreaId?: string | null;
   }
 }
 
@@ -26,6 +28,7 @@ declare module 'next-auth/jwt' {
    */
   interface JWT {
     id?: string;
-    role?: number;
+    role?: string | null;
+    currentAreaId?: string | null;
   }
 }

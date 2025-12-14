@@ -1,3 +1,3 @@
-import { GET, POST } from "@/server/auth"; // Importas desde tu configuración central
+import { GET, POST } from "@/server/auth";
 
 export { GET, POST };

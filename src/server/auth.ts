@@ -1,41 +1,50 @@
 import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
 import { DrizzleAdapter } from "@auth/drizzle-adapter";
-import { db } from "@/db"; // Tu cliente de Turso/SQLite
-import { authConfig } from "@/auth.config"; // Importamos la config del paso 2
+import { db } from "@/db";
+import { authConfig } from "../../auth.config";
+import { accounts, sessions, users, verificationTokens } from "@/db/schema";
 
 export const {
     handlers: { GET, POST },
     auth,
     signIn,
-    signOut
+    signOut,
 } = NextAuth({
-    ...authConfig, // Hereda la config de Edge
-    adapter: DrizzleAdapter(db), // Conecta tu DB
+    ...authConfig,
+    adapter: DrizzleAdapter(db, {
+        usersTable: users,
+        accountsTable: accounts,
+        sessionsTable: sessions,
+        verificationTokensTable: verificationTokens,
+    }),
     session: { strategy: "database" },
     providers: [
         Google({
             clientId: process.env.GOOGLE_CLIENT_ID,
             clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-            authorization: {
-                params: {
-                    prompt: "consent",
-                    access_type: "offline",
-                    response_type: "code",
-                    // AQUÍ PIDES EL PERMISO PARA MEET
-                    scope: "openid email profile https://www.googleapis.com/auth/meetings.space.created"
-                },
+            profile(profile) {
+                return {
+                    id: profile.sub,
+                    name: profile.name,
+                    firstName: profile.given_name,
+                    lastName: profile.family_name,
+                    email: profile.email,
+                    image: profile.picture,
+                    emailVerified: profile.email_verified,
+                };
             },
+            allowDangerousEmailAccountLinking: true,
         }),
     ],
     callbacks: {
         async session({ session, user }) {
-            // Aquí pasas el ID y el Rol a la sesión para usarlo en el frontend
             if (session.user) {
                 session.user.id = user.id;
-                // session.user.role = user.role; // Si extiendes el tipo
+                session.user.role = user.role;
+                session.user.currentAreaId = user.currentAreaId;
             }
             return session;
-        }
-    }
+        },
+    },
 });
