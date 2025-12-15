@@ -118,7 +118,13 @@ export default async function EventsPage() {
 
             {/* Main Content Grid */}
             <div className="space-y-8">
-                <EventsList events={eventsData as any[]} />
+                <EventsList
+                    events={eventsData as any[]}
+                    userRole={role}
+                    userAreaId={currentAreaId}
+                    userAreaName={userAreaName}
+                    areas={areasList}
+                />
             </div>
         </div>
     );

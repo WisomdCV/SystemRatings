@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { CreateEventSchema, CreateEventDTO } from "@/lib/validators/event";
-import { createEventAction } from "@/server/actions/event.actions";
+import { createEventAction, updateEventAction } from "@/server/actions/event.actions";
 import {
     Calendar,
     Clock,
@@ -15,6 +15,7 @@ import {
     AlertCircle,
     Loader2
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 interface Area {
     id: string;
@@ -25,8 +26,11 @@ interface CreateEventFormProps {
     userRole: string;
     userAreaId: string | null;
     userAreaName: string | null;
-    areas: Area[]; // List of areas for admin selection
-    onSuccess: () => void;
+    areas: any[]; // List of areas for admin selection
+    onSuccess?: () => void;
+    initialData?: any; // Should be stricter, but EventItem is fine
+    eventId?: string;
+    isEditing?: boolean;
 }
 
 export default function CreateEventForm({
@@ -34,44 +38,66 @@ export default function CreateEventForm({
     userAreaId,
     userAreaName,
     areas,
-    onSuccess
+    onSuccess,
+    initialData,
+    eventId,
+    isEditing = false
 }: CreateEventFormProps) {
-    const [isPending, startTransition] = useTransition();
+    const router = useRouter();
+    const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitError, setSubmitError] = useState<string | null>(null);
 
-    const isDirector = userRole === "DIRECTOR";
-    const canSelectArea = ["DEV", "PRESIDENT"].includes(userRole);
+    // Determine default values
+    const defaultValues = isEditing && initialData ? {
+        title: initialData.title,
+        description: initialData.description || "",
+        targetAreaId: initialData.targetAreaId || "", // null -> "" for select
+        date: new Date(initialData.date).toISOString().split('T')[0], // Ensure YYYY-MM-DD format for input type="date"
+        startTime: initialData.startTime,
+        endTime: initialData.endTime,
+        isVirtual: initialData.isVirtual
+    } : {
+        title: "",
+        description: "",
+        targetAreaId: userRole === "DIRECTOR" && userAreaId ? userAreaId : "",
+        date: undefined,
+        startTime: "",
+        endTime: "",
+        isVirtual: true
+    };
 
     const form = useForm<CreateEventDTO>({
         resolver: zodResolver(CreateEventSchema),
-        defaultValues: {
-            title: "",
-            description: "",
-            date: undefined,
-            startTime: "",
-            endTime: "",
-            isVirtual: true,
-            targetAreaId: isDirector ? userAreaId : null, // Director defaults to their area, Admin defaults to Null (General)
-        },
+        defaultValues: defaultValues
     });
 
-    const onSubmit = (data: CreateEventDTO) => {
-        setSubmitError(null);
-        startTransition(async () => {
-            // Security Override: Director always submits for their area
-            if (isDirector && userAreaId) {
-                data.targetAreaId = userAreaId;
-            }
+    const isVirtual = form.watch("isVirtual");
+    const canSelectArea = ["DEV", "PRESIDENT", "SECRETARY"].includes(userRole);
 
-            const result = await createEventAction(data);
+    const onSubmit = async (data: CreateEventDTO) => {
+        setIsSubmitting(true);
+        setSubmitError(null);
+
+        try {
+            let result;
+            if (isEditing && eventId) {
+                result = await updateEventAction(eventId, data);
+            } else {
+                result = await createEventAction(data);
+            }
 
             if (result.success) {
-                form.reset();
-                onSuccess();
+                if (!isEditing) form.reset();
+                if (onSuccess) onSuccess();
+                router.refresh();
             } else {
-                setSubmitError(result.error || "Error desconocido al crear evento.");
+                setSubmitError(result.error || "Error al guardar el evento.");
             }
-        });
+        } catch (error) {
+            setSubmitError("Error inesperado. Inténtalo de nuevo.");
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     const handleQuickTime = (minutes: number) => {
@@ -110,9 +136,11 @@ export default function CreateEventForm({
                     <Calendar className="w-5 h-5" />
                 </div>
                 <div>
-                    <h4 className="font-bold text-meteorite-900 text-sm">Nuevo Evento</h4>
+                    <h4 className="font-bold text-meteorite-900 text-sm">{isEditing ? "Editar Evento" : "Nuevo Evento"}</h4>
                     <p className="text-xs text-meteorite-500 mt-1">
-                        Programar una nueva reunión o actividad. Se sincronizará automáticamente con Google Calendar.
+                        {isEditing
+                            ? "Modifica los detalles del evento. Se sincronizará con Google."
+                            : "Programar una nueva reunión o actividad. Se sincronizará automáticamente con Google Calendar."}
                     </p>
                 </div>
             </div>
@@ -315,20 +343,24 @@ export default function CreateEventForm({
             )}
 
             {/* Submit Button */}
-            <button
-                type="submit"
-                disabled={isPending}
-                className="w-full py-3 px-4 bg-gradient-to-r from-meteorite-600 to-meteorite-700 hover:from-meteorite-700 hover:to-meteorite-800 text-white font-bold rounded-xl shadow-lg shadow-meteorite-600/20 active:scale-[0.98] transition-all flex items-center justify-center disabled:opacity-70 disabled:cursor-not-allowed"
-            >
-                {isPending ? (
-                    <>
-                        <Loader2 className="w-5 h-5 animate-spin mr-2" />
-                        Sincronizando con Google...
-                    </>
-                ) : (
-                    "Programar Evento"
-                )}
-            </button>
+            <div className="pt-2">
+                <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="w-full py-3 px-4 bg-gradient-to-r from-meteorite-600 to-meteorite-800 hover:from-meteorite-700 hover:to-meteorite-900 text-white font-bold rounded-xl shadow-lg shadow-meteorite-500/20 active:scale-[0.98] transition-all flex items-center justify-center disabled:opacity-70 disabled:cursor-not-allowed"
+                >
+                    {isSubmitting ? (
+                        <>
+                            <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                            {isEditing ? "Guardando..." : "Programando..."}
+                        </>
+                    ) : (
+                        <>
+                            {isEditing ? "Guardar Cambios" : "Programar Evento"}
+                        </>
+                    )}
+                </button>
+            </div>
         </form>
     );
 }

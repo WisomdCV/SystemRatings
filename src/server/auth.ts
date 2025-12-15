@@ -6,6 +6,45 @@ import { authConfig } from "../../auth.config";
 import { accounts, sessions, users, verificationTokens } from "@/db/schema";
 import { eq } from "drizzle-orm";
 
+
+// Helper to refresh Google Access Token
+async function refreshAccessToken(token: any) {
+    try {
+        const url = "https://oauth2.googleapis.com/token";
+        const response = await fetch(url, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/x-www-form-urlencoded",
+            },
+            body: new URLSearchParams({
+                client_id: process.env.GOOGLE_CLIENT_ID!,
+                client_secret: process.env.GOOGLE_CLIENT_SECRET!,
+                grant_type: "refresh_token",
+                refresh_token: token.refreshToken,
+            }),
+        });
+
+        const refreshedTokens = await response.json();
+
+        if (!response.ok) {
+            throw refreshedTokens;
+        }
+
+        return {
+            ...token,
+            accessToken: refreshedTokens.access_token,
+            expiresAt: Date.now() + refreshedTokens.expires_in * 1000,
+            refreshToken: refreshedTokens.refresh_token ?? token.refreshToken,
+        };
+    } catch (error) {
+        console.error("Error refreshing access token", error);
+        return {
+            ...token,
+            error: "RefreshAccessTokenError",
+        };
+    }
+}
+
 export const {
     handlers: { GET, POST },
     auth,
@@ -21,7 +60,7 @@ export const {
     }),
     session: {
         strategy: "jwt",
-        maxAge: 7 * 24 * 60 * 60, // 7 days in seconds
+        maxAge: 7 * 24 * 60 * 60, // 7 days
     },
     providers: [
         Google({
@@ -53,44 +92,53 @@ export const {
         async signIn({ user }) {
             if (!user.id) return false;
 
-            // Check status directly from DB to ensure it's fresh
             const dbUser = await db.query.users.findFirst({
                 where: eq(users.id, user.id),
                 columns: { status: true, suspendedUntil: true }
             });
 
-            if (!dbUser) return true; // Allow new users (they are created after this check usually, or we assume active)
+            if (!dbUser) return true;
 
             if (dbUser.status === "BANNED") return false;
 
             if (dbUser.status === "SUSPENDED") {
                 if (dbUser.suspendedUntil && new Date() < dbUser.suspendedUntil) {
-                    return false; // Still suspended
+                    return false;
                 }
             }
 
             return true;
         },
         async jwt({ token, user, account, trigger, session }) {
-            // 1. On Initial Sign In: Merge user data into token
-            if (user) {
+            // 1. Initial Sign In
+            if (account && user) {
+                // Save DB fields
                 token.id = user.id;
                 token.role = user.role;
                 token.currentAreaId = user.currentAreaId;
-            }
 
-            // Capture Access Token and Refresh Token from Google Provider
-            if (account) {
+                // Save Provider tokens
                 token.accessToken = account.access_token;
                 token.refreshToken = account.refresh_token;
+                // Google "expires_at" is seconds, we need ms for comparison
+                token.expiresAt = (account.expires_at as number) * 1000;
+
+                return token;
             }
 
-            // 2. On Update (e.g. client side update() call): Merge updates
+            // 2. Client side update (e.g. update())
             if (trigger === "update" && session) {
                 token = { ...token, ...session };
             }
 
-            return token;
+            // 3. Return previous token if the access token has not expired yet
+            // Give a 10 second buffer
+            if (Date.now() < (token.expiresAt as number) - 10000) {
+                return token;
+            }
+
+            // 4. Access token has expired, try to update it
+            return refreshAccessToken(token);
         },
         async session({ session, token }) {
             if (session.user && token) {
@@ -98,8 +146,8 @@ export const {
                 session.user.role = token.role as string | null;
                 session.user.currentAreaId = token.currentAreaId as string | null;
 
-                // Pass access token to the client/session for API calls
                 session.accessToken = token.accessToken as string | undefined;
+                session.error = token.error as string | undefined; // Pass error to client if needed
             }
             return session;
         },

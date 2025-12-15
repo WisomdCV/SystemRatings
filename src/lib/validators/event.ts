@@ -69,3 +69,59 @@ export const CreateEventSchema = z.object({
 });
 
 export type CreateEventDTO = z.infer<typeof CreateEventSchema>;
+
+export const UpdateEventSchema = CreateEventSchema.partial().extend({
+    // Podríamos añadir validaciones específicas si es necesario
+    // Al ser partial, todas las validaciones (min chars, regex) se mantienen SI el campo está presente.
+    // La validación superRefine de CreateEventSchema fallará si falta date/start/end cuando se intenta validar cruzado.
+    // Necesitamos un superRefine adaptado o requerir el bloque completo de tiempo si se edita algo.
+}).superRefine((data, ctx) => {
+    // Si se envía CUALQUIER dato de tiempo, requerimos TODOS para validar consistencia
+    const hasTimeChange = data.date || data.startTime || data.endTime;
+
+    if (hasTimeChange) {
+        if (!data.date || !data.startTime || !data.endTime) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: "Al editar fecha u hora, debes confirmar todos los campos de tiempo.",
+                path: ["date"], // Flag general
+            });
+            return;
+        }
+
+        // Copiamos la lógica de CreateEventSchema
+        const now = new Date();
+        const dateStr = data.date.toISOString().split('T')[0];
+        const eventDateTime = new Date(`${dateStr}T${data.startTime}:00`);
+
+        // En Update, permitimos editar eventos pasados? O moverlos al pasado?
+        // Asumiremos que se aplican las mismas reglas de futuro: "Mínimo 3 min".
+        // Salvo que sea un evento ya creado que se quiere corregir levemente, pero la regla de negocio fue estricta.
+        const minTime = new Date(now.getTime() + 3 * 60 * 1000);
+
+        if (isNaN(eventDateTime.getTime())) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: "Fecha inválida",
+                path: ["startTime"],
+            });
+        } else if (eventDateTime < minTime) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: "No puedes mover el evento al pasado (min 3 min).",
+                path: ["startTime"],
+            });
+        }
+
+        const eventEndDateTime = new Date(`${dateStr}T${data.endTime}:00`);
+        if (eventEndDateTime <= eventDateTime) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: "Fin debe ser posterior a Inicio",
+                path: ["endTime"],
+            });
+        }
+    }
+});
+
+export type UpdateEventDTO = z.infer<typeof UpdateEventSchema>;

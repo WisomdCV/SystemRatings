@@ -1,0 +1,136 @@
+import { db } from "@/db";
+import { attendanceRecords, events, users } from "@/db/schema";
+import { eq, and, inArray } from "drizzle-orm";
+
+export type AttendanceStatus = "PRESENT" | "ABSENT" | "LATE" | "EXCUSED";
+
+export interface AttendanceSheetItem {
+    user: {
+        id: string;
+        name: string | null;
+        image: string | null;
+        email: string;
+        currentAreaId: string | null;
+    };
+    record: {
+        id: string;
+        status: string; // 'PRESENT', 'ABSENT', 'LATE', 'EXCUSED'
+        justificationStatus: string | null;
+    } | null;
+}
+
+export async function getAttendanceSheetDAO(eventId: string): Promise<AttendanceSheetItem[]> {
+    // 1. Get Event to know targetAreaId
+    const event = await db.query.events.findFirst({
+        where: eq(events.id, eventId),
+        columns: {
+            id: true,
+            targetAreaId: true,
+        }
+    });
+
+    if (!event) throw new Error("Evento no encontrado");
+
+    // 2. Search Eligible Users
+    // If targetAreaId is NULL -> General -> All ACTIVE users
+    // If targetAreaId is SET -> Area -> Active users of that area
+    // Using simple query based on conditions
+
+    let eligibleUsers;
+
+    if (!event.targetAreaId) {
+        // Evento General
+        eligibleUsers = await db.query.users.findMany({
+            where: eq(users.status, "ACTIVE"),
+            columns: {
+                id: true,
+                name: true,
+                image: true,
+                email: true,
+                currentAreaId: true
+            },
+            orderBy: (users, { asc }) => [asc(users.name)]
+        });
+    } else {
+        // Evento de Área
+        eligibleUsers = await db.query.users.findMany({
+            where: and(
+                eq(users.status, "ACTIVE"),
+                eq(users.currentAreaId, event.targetAreaId)
+            ),
+            columns: {
+                id: true,
+                name: true,
+                image: true,
+                email: true,
+                currentAreaId: true
+            },
+            orderBy: (users, { asc }) => [asc(users.name)]
+        });
+    }
+
+    // 3. Get existing records for this event
+    const existingRecords = await db.query.attendanceRecords.findMany({
+        where: eq(attendanceRecords.eventId, eventId),
+        columns: {
+            id: true,
+            userId: true,
+            status: true,
+            justificationStatus: true
+        }
+    });
+
+    // 4. Map and Merge
+    // Create a Map for faster lookup
+    const recordsMap = new Map(existingRecords.map(r => [r.userId, r]));
+
+    const sheet: AttendanceSheetItem[] = eligibleUsers.map(user => {
+        const record = recordsMap.get(user.id);
+        return {
+            user: {
+                id: user.id,
+                name: user.name,
+                image: user.image,
+                email: user.email,
+                currentAreaId: user.currentAreaId,
+            },
+            record: record ? {
+                id: record.id,
+                status: record.status,
+                justificationStatus: record.justificationStatus
+            } : null
+        };
+    });
+
+    return sheet;
+}
+
+export async function batchUpsertAttendanceDAO(eventId: string, records: { userId: string, status: AttendanceStatus }[]) {
+    return await db.transaction(async (tx) => {
+        for (const rec of records) {
+            // Check if exists
+            const existing = await tx.query.attendanceRecords.findFirst({
+                where: and(
+                    eq(attendanceRecords.eventId, eventId),
+                    eq(attendanceRecords.userId, rec.userId)
+                ),
+                columns: { id: true }
+            });
+
+            if (existing) {
+                // Update
+                await tx.update(attendanceRecords)
+                    .set({ status: rec.status })
+                    .where(eq(attendanceRecords.id, existing.id));
+            } else {
+                // Insert
+                await tx.insert(attendanceRecords).values({
+                    eventId: eventId,
+                    userId: rec.userId,
+                    status: rec.status,
+                    justificationStatus: "NONE"
+                });
+            }
+        }
+    });
+}

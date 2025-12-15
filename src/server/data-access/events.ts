@@ -33,3 +33,37 @@ export async function createEventDAO(
         status: "SCHEDULED"
     }).returning();
 }
+
+export async function getEventByIdDAO(eventId: string) {
+    return await db.query.events.findFirst({
+        where: eq(events.id, eventId),
+        with: {
+            targetArea: true, // Was 'area' (incorrect)
+            createdBy: {      // Was 'creator' (incorrect)
+                columns: {
+                    name: true,
+                    role: true,
+                    email: true
+                }
+            }
+        }
+    });
+}
+
+export async function updateEventDAO(eventId: string, data: Partial<CreateEventDTO>) {
+    return await db.update(events).set({
+        title: data.title,
+        description: data.description,
+        targetAreaId: data.targetAreaId,
+        date: data.date,
+        startTime: data.startTime,
+        endTime: data.endTime,
+        isVirtual: data.isVirtual,
+        // No actualizamos googleEventId ni meetLink aquí usualmente, salvo que cambien externamente
+        updatedAt: new Date()
+    }).where(eq(events.id, eventId)).returning();
+}
+
+export async function deleteEventDAO(eventId: string) {
+    return await db.delete(events).where(eq(events.id, eventId)).returning();
+}
