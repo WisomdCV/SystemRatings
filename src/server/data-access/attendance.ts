@@ -16,6 +16,8 @@ export interface AttendanceSheetItem {
         id: string;
         status: string; // 'PRESENT', 'ABSENT', 'LATE', 'EXCUSED'
         justificationStatus: string | null;
+        justificationReason?: string | null;
+        justificationLink?: string | null;
     } | null;
 }
 
@@ -76,7 +78,9 @@ export async function getAttendanceSheetDAO(eventId: string): Promise<Attendance
             id: true,
             userId: true,
             status: true,
-            justificationStatus: true
+            justificationStatus: true,
+            justificationReason: true,
+            justificationLink: true
         }
     });
 
@@ -97,7 +101,9 @@ export async function getAttendanceSheetDAO(eventId: string): Promise<Attendance
             record: record ? {
                 id: record.id,
                 status: record.status,
-                justificationStatus: record.justificationStatus
+                justificationStatus: record.justificationStatus,
+                justificationReason: record.justificationReason,
+                justificationLink: record.justificationLink
             } : null
         };
     });
@@ -131,6 +137,69 @@ export async function batchUpsertAttendanceDAO(eventId: string, records: { userI
                     justificationStatus: "NONE"
                 });
             }
+            // ... existing code ...
+        }
+    });
+}
+
+export async function getUserAttendanceHistoryDAO(userId: string) {
+    // Fetch records with event details
+    // We want records where user was ABSENT, LATE, or EXCUSED (or even PRESENT to show history)
+    // Ordered by event date descending
+    return await db.query.attendanceRecords.findMany({
+        where: eq(attendanceRecords.userId, userId),
+        with: {
+            event: {
+                columns: {
+                    id: true,
+                    title: true,
+                    date: true,
+                    startTime: true,
+                    endTime: true,
+                    isVirtual: true
+                }
+            },
+            reviewedBy: {
+                columns: {
+                    name: true
+                }
+            }
+        },
+        // orderBy: [desc(events.date)] // Cannot sort by joined table easily in query builder without raw sql or careful relations
+        // We'll sort in JS or use records ID if they are chronological (they aren't)
+        // Actually, Drizzle allows sorting by relation fields in findMany sometimes, but let's just fetch and sort in JS for safety or use simple ID sort if UUID (random).
+        // Let's explicitly try to order by event date if possible using raw query style if builder fails. 
+        // For simplicity: Fetch all, sort in JS. Data volume per user is low (~20 events/semester).
+    });
+}
+
+export async function updateAttendanceRecordDAO(recordId: string, data: {
+    justificationStatus?: string;
+    justificationReason?: string | null;
+    justificationLink?: string | null;
+    status?: string;
+    adminFeedback?: string | null;
+    reviewedById?: string | null;
+}) {
+    // 1. Check if record exists
+    const record = await db.query.attendanceRecords.findFirst({
+        where: eq(attendanceRecords.id, recordId),
+        columns: { userId: true }
+    });
+
+    if (!record) throw new Error("Registro de asistencia no encontrado");
+
+    return await db.update(attendanceRecords)
+        .set(data)
+        .where(eq(attendanceRecords.id, recordId))
+        .returning();
+}
+
+export async function getAttendanceRecordByIdDAO(recordId: string) {
+    return await db.query.attendanceRecords.findFirst({
+        where: eq(attendanceRecords.id, recordId),
+        with: {
+            event: true
         }
     });
 }

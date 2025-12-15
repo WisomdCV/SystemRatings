@@ -1,10 +1,10 @@
 "use client";
 
+import ReviewJustificationModal from "./ReviewJustificationModal";
+import { AlertTriangle, Loader2, Check, X, Clock, Save, User as UserIcon, FileText } from "lucide-react";
 import { AttendanceSheetItem, AttendanceStatus } from "@/server/data-access/attendance";
 import { saveAttendanceAction } from "@/server/actions/attendance.actions";
 import { useState, useTransition } from "react";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"; // Assuming these exist or use standardimg
-import { Loader2, Check, X, Clock, Save, User as UserIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 interface AttendanceTrackerProps {
@@ -18,6 +18,9 @@ export default function AttendanceTracker({ eventId, initialSheet }: AttendanceT
     const [isPending, startTransition] = useTransition();
     const [hasChanges, setHasChanges] = useState(false);
 
+    // Review Modal State
+    const [reviewRecord, setReviewRecord] = useState<AttendanceSheetItem | null>(null);
+
     const handleStatusChange = (userId: string, newStatus: AttendanceStatus) => {
         setSheet(prev => prev.map(item => {
             if (item.user.id === userId) {
@@ -26,7 +29,9 @@ export default function AttendanceTracker({ eventId, initialSheet }: AttendanceT
                     record: {
                         id: item.record?.id || "temp",
                         status: newStatus,
-                        justificationStatus: item.record?.justificationStatus || "NONE"
+                        justificationStatus: item.record?.justificationStatus || "NONE",
+                        justificationReason: item.record?.justificationReason,
+                        justificationLink: item.record?.justificationLink
                     }
                 };
             }
@@ -65,13 +70,14 @@ export default function AttendanceTracker({ eventId, initialSheet }: AttendanceT
         present: sheet.filter(i => i.record?.status === "PRESENT").length,
         absent: sheet.filter(i => i.record?.status === "ABSENT").length,
         late: sheet.filter(i => i.record?.status === "LATE").length,
+        excused: sheet.filter(i => i.record?.status === "EXCUSED").length,
         total: sheet.length
     };
 
     return (
         <div className="space-y-6">
             {/* Stats Bar */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
                 <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex flex-col items-center">
                     <span className="text-2xl font-black text-meteorite-900">{stats.total}</span>
                     <span className="text-xs text-gray-500 font-bold uppercase">Total</span>
@@ -88,6 +94,10 @@ export default function AttendanceTracker({ eventId, initialSheet }: AttendanceT
                     <span className="text-2xl font-black text-yellow-700">{stats.late}</span>
                     <span className="text-xs text-yellow-600 font-bold uppercase">Tardanzas</span>
                 </div>
+                <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 shadow-sm flex flex-col items-center col-span-2 lg:col-span-1">
+                    <span className="text-2xl font-black text-blue-700">{stats.excused}</span>
+                    <span className="text-xs text-blue-600 font-bold uppercase">Justificados</span>
+                </div>
             </div>
 
             {/* List */}
@@ -99,11 +109,14 @@ export default function AttendanceTracker({ eventId, initialSheet }: AttendanceT
                                 <th className="p-4 font-bold text-gray-600">Miembro</th>
                                 <th className="p-4 font-bold text-gray-600 hidden md:table-cell">Email</th>
                                 <th className="p-4 font-bold text-gray-600 text-center">Estado</th>
+                                <th className="p-4 font-bold text-gray-600 text-center">Justificaciones</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
                             {sheet.map((item) => {
                                 const status = item.record?.status;
+                                const isJustificationPending = item.record?.justificationStatus === "PENDING";
+
                                 return (
                                     <tr key={item.user.id} className="hover:bg-gray-50/50 transition-colors">
                                         <td className="p-4">
@@ -118,6 +131,10 @@ export default function AttendanceTracker({ eventId, initialSheet }: AttendanceT
                                                 <div>
                                                     <p className="font-bold text-gray-900">{item.user.name || "Sin nombre"}</p>
                                                     <p className="text-xs text-gray-500 md:hidden">{item.user.email}</p>
+
+                                                    {status === "EXCUSED" && (
+                                                        <span className="md:hidden inline-flex mt-1 items-center px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-700">Justificado</span>
+                                                    )}
                                                 </div>
                                             </div>
                                         </td>
@@ -125,43 +142,73 @@ export default function AttendanceTracker({ eventId, initialSheet }: AttendanceT
                                             {item.user.email}
                                         </td>
                                         <td className="p-4 text-center">
-                                            <div className="flex items-center justify-center gap-2">
-                                                {/* Present */}
-                                                <button
-                                                    onClick={() => handleStatusChange(item.user.id, "PRESENT")}
-                                                    className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all ${status === "PRESENT"
+                                            {status === "EXCUSED" ? (
+                                                <div className="inline-flex items-center px-3 py-1 bg-blue-100 text-blue-700 rounded-lg text-sm font-bold">
+                                                    Justificado
+                                                </div>
+                                            ) : (
+                                                <div className="flex items-center justify-center gap-2">
+                                                    {/* Present */}
+                                                    <button
+                                                        onClick={() => handleStatusChange(item.user.id, "PRESENT")}
+                                                        className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all ${status === "PRESENT"
                                                             ? "bg-green-500 text-white shadow-lg shadow-green-500/30 scale-105"
                                                             : "bg-gray-100 text-gray-400 hover:bg-green-100 hover:text-green-600"
-                                                        }`}
-                                                    title="Presente"
-                                                >
-                                                    <Check className="w-5 h-5" />
-                                                </button>
+                                                            }`}
+                                                        title="Presente"
+                                                    >
+                                                        <Check className="w-5 h-5" />
+                                                    </button>
 
-                                                {/* Late */}
-                                                <button
-                                                    onClick={() => handleStatusChange(item.user.id, "LATE")}
-                                                    className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all ${status === "LATE"
+                                                    {/* Late */}
+                                                    <button
+                                                        onClick={() => handleStatusChange(item.user.id, "LATE")}
+                                                        className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all ${status === "LATE"
                                                             ? "bg-yellow-500 text-white shadow-lg shadow-yellow-500/30 scale-105"
                                                             : "bg-gray-100 text-gray-400 hover:bg-yellow-100 hover:text-yellow-600"
-                                                        }`}
-                                                    title="Tardanza"
-                                                >
-                                                    <Clock className="w-5 h-5" />
-                                                </button>
+                                                            }`}
+                                                        title="Tardanza"
+                                                    >
+                                                        <Clock className="w-5 h-5" />
+                                                    </button>
 
-                                                {/* Absent */}
-                                                <button
-                                                    onClick={() => handleStatusChange(item.user.id, "ABSENT")}
-                                                    className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all ${status === "ABSENT"
+                                                    {/* Absent */}
+                                                    <button
+                                                        onClick={() => handleStatusChange(item.user.id, "ABSENT")}
+                                                        className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all ${status === "ABSENT"
                                                             ? "bg-red-500 text-white shadow-lg shadow-red-500/30 scale-105"
                                                             : "bg-gray-100 text-gray-400 hover:bg-red-100 hover:text-red-600"
-                                                        }`}
-                                                    title="Falta"
+                                                            }`}
+                                                        title="Falta"
+                                                    >
+                                                        <X className="w-5 h-5" />
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </td>
+                                        <td className="p-4 text-center">
+                                            {isJustificationPending ? (
+                                                <button
+                                                    onClick={() => setReviewRecord(item)}
+                                                    className="inline-flex items-center px-3 py-1.5 bg-orange-100 text-orange-700 hover:bg-orange-200 rounded-lg text-xs font-bold transition-colors animate-pulse"
                                                 >
-                                                    <X className="w-5 h-5" />
+                                                    <AlertTriangle className="w-4 h-4 mr-1.5" />
+                                                    Revisar
                                                 </button>
-                                            </div>
+                                            ) : (item.record?.justificationStatus === "APPROVED" || item.record?.justificationStatus === "REJECTED") ? (
+                                                <button
+                                                    onClick={() => setReviewRecord(item)}
+                                                    className={`inline-flex items-center px-3 py-1.5 border rounded-lg text-xs font-medium transition-colors ${item.record?.justificationStatus === "REJECTED"
+                                                        ? "bg-red-50 text-red-700 border-red-200 hover:bg-red-100"
+                                                        : "bg-gray-50 text-gray-600 hover:bg-gray-100 border-gray-200"
+                                                        }`}
+                                                >
+                                                    <FileText className="w-3.5 h-3.5 mr-1.5" />
+                                                    {item.record?.justificationStatus === "REJECTED" ? "Ver (R)" : "Ver"}
+                                                </button>
+                                            ) : (
+                                                <span className="text-gray-300">-</span>
+                                            )}
                                         </td>
                                     </tr>
                                 );
@@ -171,11 +218,11 @@ export default function AttendanceTracker({ eventId, initialSheet }: AttendanceT
                 </div>
             </div>
 
-            {/* Floating Action Buffer to prevent content hiding behind FAB (if we use FAB) */}
+            {/* Floating Action Buffer */}
             <div className="h-20"></div>
 
             {/* Save Floating Bar */}
-            <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 bg-white/90 backdrop-blur-md border border-gray-200 shadow-2xl rounded-2xl p-4 flex items-center gap-4 transition-transform duration-300 z-50 ${hasChanges ? "translate-y-0 opacity-100" : "translate-y-20 opacity-0 pointer-events-none"
+            <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 bg-white/90 backdrop-blur-md border border-gray-200 shadow-2xl rounded-2xl p-4 flex items-center gap-4 transition-transform duration-300 z-40 ${hasChanges ? "translate-y-0 opacity-100" : "translate-y-20 opacity-0 pointer-events-none"
                 }`}>
                 <div className="text-sm font-medium text-gray-600 hidden sm:block">
                     Tienes cambios sin guardar
@@ -198,6 +245,18 @@ export default function AttendanceTracker({ eventId, initialSheet }: AttendanceT
                     )}
                 </button>
             </div>
+
+            {/* Review Modal */}
+            {reviewRecord && reviewRecord.record && (
+                <ReviewJustificationModal
+                    isOpen={!!reviewRecord}
+                    onClose={() => setReviewRecord(null)}
+                    recordId={reviewRecord.record.id}
+                    studentName={reviewRecord.user.name || "Estudiante"}
+                    reason={reviewRecord.record.justificationReason || null}
+                    link={reviewRecord.record.justificationLink || null}
+                />
+            )}
         </div>
     );
 }
