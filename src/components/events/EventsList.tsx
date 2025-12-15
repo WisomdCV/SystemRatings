@@ -25,6 +25,10 @@ type EventItem = {
     } | null;
     createdAt?: Date;
     updatedAt?: Date;
+    createdBy?: {
+        name: string | null;
+        role: string | null;
+    } | null;
 };
 
 interface EventsListProps {
@@ -143,7 +147,14 @@ export default function EventsList({ events, userRole, userAreaId, userAreaName,
                             </div>
 
                             {/* Details */}
-                            <div className="space-y-2 text-sm text-gray-500 mb-5">
+                            <div className="space-y-3 text-sm text-gray-500 mb-5">
+                                {/* Description (if exists) */}
+                                {event.description && (
+                                    <div className="bg-gray-50 p-3 rounded-lg border border-gray-100 italic text-gray-600 text-xs mb-2">
+                                        "{event.description}"
+                                    </div>
+                                )}
+
                                 <div className="flex items-center">
                                     <div className="w-5 flex justify-center mr-2"><Calendar className="w-4 h-4 text-meteorite-400" /></div>
                                     <span>
@@ -156,6 +167,16 @@ export default function EventsList({ events, userRole, userAreaId, userAreaName,
                                     </div>
                                     <span className="truncate">
                                         {event.isVirtual ? "Virtual (Google Meet)" : "Presencial"}
+                                    </span>
+                                </div>
+                                <div className="flex items-center">
+                                    <div className="w-5 flex justify-center mr-2">
+                                        <div className="w-4 h-4 bg-meteorite-100 rounded-full flex items-center justify-center text-[8px] font-bold text-meteorite-600">
+                                            {event.createdBy?.name?.charAt(0) || "U"}
+                                        </div>
+                                    </div>
+                                    <span className="text-xs text-gray-400">
+                                        Creado por: <span className="font-medium text-gray-600">{event.createdBy?.name || event.createdBy?.role || "Desconocido"}</span>
                                     </span>
                                 </div>
                             </div>

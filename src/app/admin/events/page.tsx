@@ -38,7 +38,13 @@ export default async function EventsPage() {
                 where: eq(events.semesterId, activeSemester.id),
                 orderBy: [desc(events.date)],
                 with: {
-                    targetArea: true
+                    targetArea: true,
+                    createdBy: {
+                        columns: {
+                            name: true,
+                            role: true
+                        }
+                    }
                 }
             });
 
@@ -68,7 +74,13 @@ export default async function EventsPage() {
                 ),
                 orderBy: [desc(events.date)],
                 with: {
-                    targetArea: true
+                    targetArea: true,
+                    createdBy: {
+                        columns: {
+                            name: true,
+                            role: true
+                        }
+                    }
                 }
             });
         }
