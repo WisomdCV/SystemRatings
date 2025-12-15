@@ -126,6 +126,9 @@ export const events = sqliteTable("event", {
   googleEventId: text("google_event_id"),
 
   status: text("status").default("SCHEDULED"),
+
+  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
 });
 
 export const attendanceRecords = sqliteTable("attendance_record", {

@@ -23,7 +23,7 @@ export async function createEventAction(input: CreateEventDTO) {
         // Validación de Schema
         const validated = CreateEventSchema.safeParse(input);
         if (!validated.success) {
-            return { success: false, error: validated.error.errors[0].message };
+            return { success: false, error: validated.error.issues[0].message };
         }
         const data = validated.data;
 
@@ -144,7 +144,7 @@ export async function updateEventAction(eventId: string, input: UpdateEventDTO) 
         // Validación
         const validated = UpdateEventSchema.safeParse(input);
         if (!validated.success) {
-            return { success: false, error: validated.error.errors[0].message };
+            return { success: false, error: validated.error.issues[0].message };
         }
         const data = validated.data;
 

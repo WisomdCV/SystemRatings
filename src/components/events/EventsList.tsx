@@ -1,6 +1,6 @@
 "use client";
 
-import { Zap, Video, Calendar, MapPin, MoreVertical, Edit, Trash2, X } from "lucide-react";
+import { Zap, Video, Calendar, MapPin, MoreVertical, Edit, Trash2, X, Clock } from "lucide-react";
 import { useState } from "react";
 import { deleteEventAction } from "@/server/actions/event.actions";
 import { useRouter } from "next/navigation";
@@ -23,6 +23,8 @@ type EventItem = {
         name: string;
         code: string | null;
     } | null;
+    createdAt?: Date;
+    updatedAt?: Date;
 };
 
 interface EventsListProps {
@@ -122,6 +124,18 @@ export default function EventsList({ events, userRole, userAreaId, userAreaName,
                                             {event.targetArea?.name}
                                         </span>
                                     )}
+
+                                    {/* Edited Badge */}
+                                    {event.updatedAt && (!event.createdAt || new Date(event.updatedAt).getTime() > new Date(event.createdAt).getTime() + 1000) && (
+                                        <span
+                                            className="ml-2 inline-flex items-center text-[10px] font-medium text-gray-400 bg-gray-50 px-2 py-0.5 rounded-full border border-gray-100"
+                                            title={`Actualizado: ${new Date(event.updatedAt).toISOString().split('T')[0]}`}
+                                            suppressHydrationWarning
+                                        >
+                                            <Clock className="w-3 h-3 mr-1" />
+                                            Actualizado
+                                        </span>
+                                    )}
                                 </div>
                                 <h3 className="font-bold text-lg text-gray-800 leading-tight group-hover:text-meteorite-700 transition-colors">
                                     {event.title}
@@ -187,6 +201,9 @@ export default function EventsList({ events, userRole, userAreaId, userAreaName,
                                     Asistencia
                                 </a>
                             </div>
+
+                            {/* Edited Timestamp */}
+                            {/* Removed from bottom */}
                         </div>
                     );
                 })}

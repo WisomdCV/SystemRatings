@@ -7,6 +7,7 @@ declare module 'next-auth' {
    */
   interface Session {
     accessToken?: string;
+    error?: string; // Add error property
     user: {
       id: string;
       role: string | null;

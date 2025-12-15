@@ -9,17 +9,17 @@ import { db } from "@/db";
 import { events } from "@/db/schema";
 import { eq } from "drizzle-orm";
 
+type Params = Promise<{ id: string }>;
+
 interface AttendancePageProps {
-    params: {
-        id: string;
-    }
+    params: Params;
 }
 
 export default async function AttendancePage({ params }: AttendancePageProps) {
     const session = await auth();
     if (!session?.user) redirect("/login");
 
-    const eventId = params.id;
+    const { id: eventId } = await params;
 
     // Fetch basic event info for Header (Separate from sheet action to ensure we have title)
     // Could also get it from sheet action if revised, but safer to get purely here.
