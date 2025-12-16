@@ -63,14 +63,40 @@ export default async function AttendancePage({ params }: AttendancePageProps) {
             <div className="relative z-10 max-w-5xl mx-auto">
                 {/* Header */}
                 <div className="mb-8">
-                    <Link href="/admin/events" className="inline-flex items-center text-sm font-bold text-meteorite-500 hover:text-meteorite-700 transition-colors mb-4">
-                        <ArrowLeft className="w-4 h-4 mr-1" />
-                        Volver a Eventos
-                    </Link>
-                    <div className="bg-white/80 backdrop-blur-sm border border-meteorite-100 p-6 rounded-2xl shadow-sm">
-                        <div className="flex items-start justify-between">
+                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+                        <div className="flex items-center gap-4">
+                            <Link
+                                href="/admin/events"
+                                className="bg-white p-2.5 rounded-full text-meteorite-600 hover:text-meteorite-800 hover:bg-meteorite-100 transition-all shadow-sm border border-meteorite-100 shrink-0"
+                                title="Volver a Eventos"
+                            >
+                                <ArrowLeft className="w-5 h-5" />
+                            </Link>
                             <div>
-                                <h1 className="text-3xl font-black text-meteorite-950 mb-2">{event.title}</h1>
+                                <h2 className="text-xl font-bold text-meteorite-900 block md:hidden">
+                                    Detalle de Asistencia
+                                </h2>
+                                <p className="text-meteorite-500 text-sm hidden md:block">
+                                    Gestión de Asistencia
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="hidden md:block">
+                            <Link
+                                href="/admin/events"
+                                className="flex items-center gap-2 px-4 py-2 bg-white text-meteorite-700 text-sm font-bold rounded-xl border border-meteorite-200 shadow-sm hover:shadow-md hover:border-meteorite-300 transition-all group"
+                            >
+                                <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
+                                Volver a Eventos
+                            </Link>
+                        </div>
+                    </div>
+
+                    <div className="bg-white/80 backdrop-blur-sm border border-meteorite-100 p-6 rounded-2xl shadow-sm">
+                        <div className="flex items-start justify-between flex-wrap gap-4">
+                            <div>
+                                <h1 className="text-2xl md:text-3xl font-black text-meteorite-950 mb-2 leading-tight">{event.title}</h1>
                                 <div className="flex items-center text-meteorite-600 font-medium">
                                     <Calendar className="w-5 h-5 mr-2" />
                                     <span>{new Date(event.date).toLocaleDateString('es-ES', { dateStyle: 'full', timeZone: 'UTC' })}</span>

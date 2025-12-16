@@ -15,7 +15,8 @@ import {
     Trash2,
     Zap,
     X,
-    User
+    User,
+    ArrowLeft
 } from "lucide-react";
 import CreateEventForm from "@/components/events/CreateEventForm";
 import NewEventModal from "@/components/events/NewEventModal";
@@ -108,14 +109,23 @@ export default function EventsView({
             <div className="relative z-10">
                 {/* Header Row */}
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
-                    <div>
-                        <h1 className="text-3xl font-black text-meteorite-950 flex items-center">
-                            <CalendarCheck className="mr-3 w-8 h-8 text-meteorite-600" />
-                            Agenda & Eventos
-                        </h1>
-                        <p className="text-meteorite-600 mt-2 font-medium">
-                            Gestión de actividades para el semestre {activeSemesterName}
-                        </p>
+                    <div className="flex items-center gap-4">
+                        <Link
+                            href="/dashboard"
+                            className="bg-white p-2.5 rounded-full text-meteorite-600 hover:text-meteorite-800 hover:bg-meteorite-100 transition-all shadow-sm border border-meteorite-100 shrink-0"
+                            title="Volver al Dashboard"
+                        >
+                            <ArrowLeft className="w-5 h-5" />
+                        </Link>
+                        <div>
+                            <h1 className="text-3xl font-black text-meteorite-950 flex items-center">
+                                <CalendarCheck className="mr-3 w-8 h-8 text-meteorite-600 hidden sm:block" />
+                                Agenda & Eventos
+                            </h1>
+                            <p className="text-meteorite-600 mt-1 font-medium text-sm sm:text-base">
+                                Gestión de actividades para el semestre {activeSemesterName}
+                            </p>
+                        </div>
                     </div>
 
                     {/* Actions & Toggles */}
@@ -281,7 +291,7 @@ function EventCardGrid({ event, isDeleting, onEdit, onDelete }: { event: EventIt
             </div>
 
             <div className="mb-2">
-                <Tag isGeneral={isGeneral} isBoard={isBoard} areaName={event.targetArea?.name} />
+                <Tag isGeneral={isGeneral} isBoard={isBoard} areaName={event.targetArea?.name} areaCode={event.targetArea?.code} />
             </div>
 
             <h3 className="text-xl font-bold text-gray-900 mb-3 leading-tight mobile-title-clamp">{event.title}</h3>
@@ -360,7 +370,7 @@ function EventCardList({ event, isDeleting, onEdit, onDelete }: { event: EventIt
                 <div className="flex flex-col md:flex-row md:items-center gap-2 mb-1">
                     <h3 className="text-lg font-bold text-gray-900 leading-tight">{event.title}</h3>
                     <div className="flex justify-center md:justify-start">
-                        <Tag isGeneral={isGeneral} isBoard={isBoard} areaName={event.targetArea?.name} />
+                        <Tag isGeneral={isGeneral} isBoard={isBoard} areaName={event.targetArea?.name} areaCode={event.targetArea?.code} />
                     </div>
                 </div>
 
@@ -379,9 +389,9 @@ function EventCardList({ event, isDeleting, onEdit, onDelete }: { event: EventIt
                     </div>
                     <div className="flex items-center hidden lg:flex">
                         <div className="w-4 h-4 rounded-full bg-meteorite-100 text-meteorite-700 flex items-center justify-center text-[9px] font-bold mr-1.5">
-                            {event.createdBy?.name?.charAt(0) || "U"}
+                            {(event.createdBy?.name || event.createdBy?.role || "U").charAt(0)}
                         </div>
-                        <span>{event.createdBy?.name || "Desconocido"}</span>
+                        <span>{event.createdBy?.name || event.createdBy?.role || "Desconocido"}</span>
                     </div>
                 </div>
             </div>
@@ -418,12 +428,30 @@ function EventCardList({ event, isDeleting, onEdit, onDelete }: { event: EventIt
     );
 }
 
-function Tag({ isGeneral, isBoard, areaName }: { isGeneral: boolean, isBoard: boolean, areaName?: string }) {
+function getAreaStyle(code?: string | null) {
+    if (!code) return "bg-meteorite-100 text-meteorite-700 border-meteorite-200";
+    switch (code) {
+        case "LO": return "bg-blue-100 text-blue-700 border-blue-200";
+        case "MK": return "bg-red-100 text-red-700 border-red-200";
+        case "PM": return "bg-slate-100 text-slate-700 border-slate-200";
+        case "TH": return "bg-pink-100 text-pink-700 border-pink-200";
+        case "TI": return "bg-cyan-100 text-cyan-700 border-cyan-200";
+        case "MC": return "bg-emerald-100 text-emerald-700 border-emerald-200";
+        case "RP": return "bg-purple-100 text-purple-700 border-purple-200";
+        case "IN": return "bg-orange-100 text-orange-700 border-orange-200";
+        case "MD": return "bg-amber-100 text-amber-700 border-amber-200";
+        default: return "bg-meteorite-100 text-meteorite-700 border-meteorite-200";
+    }
+}
+
+function Tag({ isGeneral, isBoard, areaName, areaCode }: { isGeneral: boolean, isBoard: boolean, areaName?: string, areaCode?: string | null }) {
     if (isGeneral) {
         return <span className="inline-block px-2 py-0.5 rounded-md bg-gray-100 text-gray-600 text-[10px] font-bold uppercase tracking-wide border border-gray-200">General</span>;
     }
+    // Board is handled by areaCode MD usually, but keep specific check if needed
     if (isBoard) {
-        return <span className="inline-block px-2 py-0.5 rounded-md bg-amber-100 text-amber-700 text-[10px] font-bold uppercase tracking-wide border border-amber-200">Mesa Directiva</span>;
+        return <span className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide border ${getAreaStyle("MD")}`}>Mesa Directiva</span>;
     }
-    return <span className="inline-block px-2 py-0.5 rounded-md bg-meteorite-100 text-meteorite-700 text-[10px] font-bold uppercase tracking-wide border border-meteorite-200">{areaName}</span>;
+    const style = getAreaStyle(areaCode);
+    return <span className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide border ${style}`}>{areaName}</span>;
 }
