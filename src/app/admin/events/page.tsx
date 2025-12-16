@@ -107,55 +107,15 @@ export default async function EventsPage() {
     }
 
     return (
-        <div className="p-6 lg:p-10 min-h-screen bg-meteorite-50 relative overflow-hidden">
-            {/* Background Orbs */}
-            <div className="absolute top-0 left-0 w-full h-96 bg-gradient-to-b from-white to-transparent pointer-events-none z-0"></div>
-            <div className="absolute -top-20 -right-20 w-96 h-96 bg-meteorite-200 rounded-full mix-blend-multiply filter blur-3xl opacity-50"></div>
-            <div className="absolute top-20 -left-20 w-72 h-72 bg-meteorite-300 rounded-full mix-blend-multiply filter blur-3xl opacity-50 animation-delay-2000"></div>
-
-            <div className="relative z-10">
-                {/* Header */}
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
-                    <div>
-                        <h1 className="text-3xl font-black text-meteorite-950 flex items-center">
-                            <CalendarCheck className="mr-3 w-8 h-8 text-meteorite-600" />
-                            Agenda & Eventos
-                        </h1>
-                        <p className="text-meteorite-600 mt-2 font-medium">
-                            Gestión de actividades para el semestre {activeSemester?.name || "Sin Semestre"}
-                        </p>
-                    </div>
-
-                    {/* Actions */}
-                    <div className="flex gap-3">
-                        <button className="flex items-center px-4 py-2 bg-white border border-meteorite-200 text-meteorite-700 font-bold rounded-xl hover:bg-meteorite-50 transition-colors shadow-sm">
-                            <Filter className="w-4 h-4 mr-2" />
-                            Filtrar
-                        </button>
-
-                        {/* Modal Trigger Component */}
-                        <NewEventModal
-                            userRole={role}
-                            userAreaId={currentAreaId}
-                            userAreaName={userAreaName}
-                            areas={areasList}
-                        />
-                    </div>
-                </div>
-
-                {/* Main Content Grid */}
-                <div className="space-y-8">
-                    <EventsList
-                        events={eventsData as any[]}
-                        userRole={role}
-                        userAreaId={currentAreaId}
-                        userAreaName={userAreaName}
-                        areas={areasList}
-                    />
-                </div>
-            </div>
-        </div>
+        <EventsView
+            events={eventsData as any[]}
+            activeSemesterName={activeSemester?.name || "Sin Semestre"}
+            userRole={role}
+            userAreaId={currentAreaId}
+            userAreaName={userAreaName}
+            areas={areasList}
+        />
     );
 }
 
-import NewEventModal from "@/components/events/NewEventModal";
+import EventsView from "@/components/events/EventsView";

@@ -28,7 +28,7 @@ export async function getUsersAction(
 
         const result = await getUsersListService(
             { search, role, status },
-            { page, limit: 10 }
+            { page, limit: 20 }
         );
 
         return { success: true, data: result };
