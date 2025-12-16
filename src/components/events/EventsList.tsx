@@ -80,113 +80,95 @@ export default function EventsList({ events, userRole, userAreaId, userAreaName,
 
     return (
         <>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-8">
                 {events.map((event) => {
                     const isGeneral = !event.targetArea;
                     const dateObj = new Date(event.date);
                     const day = dateObj.toLocaleDateString('es-ES', { day: '2-digit', timeZone: 'UTC' });
-                    const month = dateObj.toLocaleDateString('es-ES', { month: 'short', timeZone: 'UTC' }).toUpperCase();
-
-                    // Permission Check (Should match server logic visually)
-                    // DEV/PRESI can edit all. DIRECTOR can edit ONLY own.
-                    // We don't have 'currentUserId' easily here unless we pass it or check logic.
-                    // Assuming server handles security, we show buttons. 
-                    // Best effort: Pass currentUserId? Or just let server fail.
-                    // Let's rely on server failure but maybe hide if clearly not owner? 
-                    // For now, allow click, let action fail if unauthorized.
+                    const month = dateObj.toLocaleDateString('es-ES', { month: 'short', timeZone: 'UTC' }).toUpperCase().replace('.', '');
+                    const isBoard = event.targetArea?.code === "MD";
 
                     return (
                         <div
                             key={event.id}
-                            className="group relative bg-white/70 backdrop-blur-lg border border-meteorite-100 rounded-2xl p-5 hover:shadow-xl hover:shadow-meteorite-900/5 hover:-translate-y-1 transition-all duration-300 overflow-hidden"
+                            className={`bg-white border rounded-2xl p-5 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col h-full relative overflow-hidden ${isBoard ? 'border-amber-200 bg-amber-50/30' : 'border-meteorite-100'}`}
                         >
-                            {/* Decorative Gradient Line */}
-                            <div className={`absolute top-0 left-0 w-full h-1.5 ${isGeneral ? 'bg-gradient-to-r from-green-400 to-emerald-500' : 'bg-gradient-to-r from-meteorite-500 to-meteorite-700'}`}></div>
+                            {/* Decorative Strip for Board */}
+                            {isBoard && <div className="absolute top-0 left-0 w-full h-1 bg-amber-400"></div>}
 
-                            <div className="flex items-start justify-between mb-4">
+                            {/* Header: Date + Options */}
+                            <div className="flex justify-between items-start mb-4">
                                 {/* Date Badge */}
-                                <div className="flex flex-col items-center justify-center w-14 h-14 bg-meteorite-50 rounded-2xl border border-meteorite-100 group-hover:bg-meteorite-100 transition-colors">
-                                    <span className="text-xs font-bold text-meteorite-400 uppercase tracking-wider">{month}</span>
-                                    <span className="text-xl font-black text-meteorite-800 leading-none">{day}</span>
+                                <div className="bg-white border border-gray-100 rounded-xl shadow-sm text-center py-2 px-3 min-w-[60px]">
+                                    <span className="block text-[10px] font-bold text-meteorite-400 uppercase tracking-wider">{month}</span>
+                                    <span className="block text-2xl font-black text-meteorite-950 leading-none">{day}</span>
                                 </div>
 
-                                {/* Options Button (Visual only for now) */}
-                                <button className="text-meteorite-300 hover:text-meteorite-600 transition-colors p-1">
+                                {/* Options Button */}
+                                <button
+                                    onClick={() => setEditingEvent(event)}
+                                    className="text-gray-300 hover:text-meteorite-600 p-1 rounded-full hover:bg-meteorite-50 transition-colors"
+                                >
                                     <MoreVertical className="w-5 h-5" />
                                 </button>
                             </div>
 
-                            {/* Title & Area */}
-                            <div className="mb-4">
-                                <div className="flex items-center mb-2">
-                                    {isGeneral ? (
-                                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-green-100 text-green-700 border border-green-200">
-                                            GENERAL
-                                        </span>
-                                    ) : (
-                                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-meteorite-100 text-meteorite-700 border border-meteorite-200">
-                                            {event.targetArea?.name}
-                                        </span>
-                                    )}
-
-                                    {/* Edited Badge */}
-                                    {event.updatedAt && (!event.createdAt || new Date(event.updatedAt).getTime() > new Date(event.createdAt).getTime() + 1000) && (
-                                        <span
-                                            className="ml-2 inline-flex items-center text-[10px] font-medium text-gray-400 bg-gray-50 px-2 py-0.5 rounded-full border border-gray-100"
-                                            title={`Actualizado: ${new Date(event.updatedAt).toISOString().split('T')[0]}`}
-                                            suppressHydrationWarning
-                                        >
-                                            <Clock className="w-3 h-3 mr-1" />
-                                            Actualizado
-                                        </span>
-                                    )}
-                                </div>
-                                <h3 className="font-bold text-lg text-gray-800 leading-tight group-hover:text-meteorite-700 transition-colors">
-                                    {event.title}
-                                </h3>
-                            </div>
-
-                            {/* Details */}
-                            <div className="space-y-3 text-sm text-gray-500 mb-5">
-                                {/* Description (if exists) */}
-                                {event.description && (
-                                    <div className="bg-gray-50 p-3 rounded-lg border border-gray-100 italic text-gray-600 text-xs mb-2">
-                                        "{event.description}"
-                                    </div>
+                            {/* Tag */}
+                            <div className="mb-2">
+                                {isGeneral ? (
+                                    <span className="inline-block px-3 py-1 rounded-lg bg-gray-100 text-gray-600 text-[10px] font-bold uppercase tracking-wide border border-gray-200">
+                                        General
+                                    </span>
+                                ) : isBoard ? (
+                                    <span className="inline-block px-3 py-1 rounded-lg bg-amber-100 text-amber-700 text-[10px] font-bold uppercase tracking-wide border border-amber-200">
+                                        Mesa Directiva
+                                    </span>
+                                ) : (
+                                    <span className="inline-block px-3 py-1 rounded-lg bg-meteorite-100 text-meteorite-700 text-[10px] font-bold uppercase tracking-wide border border-meteorite-200">
+                                        {event.targetArea?.name}
+                                    </span>
                                 )}
+                            </div>
 
-                                <div className="flex items-center">
-                                    <div className="w-5 flex justify-center mr-2"><Calendar className="w-4 h-4 text-meteorite-400" /></div>
-                                    <span>
-                                        {event.startTime} - {event.endTime}
-                                    </span>
+                            {/* Title */}
+                            <h3 className="text-xl font-bold text-gray-900 mb-3 leading-tight">
+                                {event.title}
+                            </h3>
+
+                            {/* Description Box */}
+                            {event.description && (
+                                <div className="bg-slate-50 border border-slate-100 rounded-xl p-3 mb-4 text-sm text-slate-500 italic">
+                                    "{event.description}"
                                 </div>
-                                <div className="flex items-center">
-                                    <div className="w-5 flex justify-center mr-2">
-                                        {event.isVirtual ? <Video className="w-4 h-4 text-meteorite-400" /> : <MapPin className="w-4 h-4 text-meteorite-400" />}
-                                    </div>
-                                    <span className="truncate">
-                                        {event.isVirtual ? "Virtual (Google Meet)" : "Presencial"}
-                                    </span>
+                            )}
+
+                            {/* Details List */}
+                            <div className="space-y-3 flex-1 mb-6">
+                                <div className="flex items-center text-sm text-gray-600">
+                                    <Clock className="w-5 h-5 text-meteorite-400 mr-2" />
+                                    <span className="font-medium">{event.startTime} - {event.endTime}</span>
                                 </div>
-                                <div className="flex items-center">
-                                    <div className="w-5 flex justify-center mr-2">
-                                        <div className="w-4 h-4 bg-meteorite-100 rounded-full flex items-center justify-center text-[8px] font-bold text-meteorite-600">
-                                            {event.createdBy?.name?.charAt(0) || "U"}
-                                        </div>
+                                <div className="flex items-center text-sm text-gray-600">
+                                    {event.isVirtual ? <Video className="w-5 h-5 text-meteorite-400 mr-2" /> : <MapPin className="w-5 h-5 text-meteorite-400 mr-2" />}
+                                    <span className="truncate">{event.isVirtual ? "Virtual (Google Meet)" : "Presencial"}</span>
+                                </div>
+                                <div className="flex items-center text-sm text-gray-500 mt-3 pt-3 border-t border-gray-50">
+                                    <div className="w-5 h-5 rounded-full bg-meteorite-100 text-meteorite-700 flex items-center justify-center text-[10px] font-bold mr-2">
+                                        {event.createdBy?.name?.charAt(0) || "U"}
                                     </div>
-                                    <span className="text-xs text-gray-400">
-                                        Creado por: <span className="font-medium text-gray-600">{event.createdBy?.name || event.createdBy?.role || "Desconocido"}</span>
+                                    <span className="text-xs">
+                                        Creado por: <span className="font-bold text-gray-700">{event.createdBy?.name || event.createdBy?.role || "Desconocido"}</span>
                                     </span>
                                 </div>
                             </div>
 
-                            {/* Footer Actions */}
-                            <div className="flex items-center justify-between pt-4 border-t border-meteorite-100/50">
-                                <div className="flex space-x-2">
+                            {/* Footer / Actions */}
+                            <div className="flex items-center justify-between mt-auto pt-4 border-t border-gray-50">
+                                {/* Left Actions (Edit/Delete) */}
+                                <div className="flex space-x-1">
                                     <button
                                         onClick={() => setEditingEvent(event)}
-                                        className="p-2 rounded-lg text-gray-400 hover:bg-meteorite-50 hover:text-meteorite-600 transition-colors"
+                                        className="w-9 h-9 flex items-center justify-center rounded-lg text-gray-400 hover:text-meteorite-600 hover:bg-meteorite-50 transition-colors"
                                         title="Editar"
                                     >
                                         <Edit className="w-4 h-4" />
@@ -194,37 +176,35 @@ export default function EventsList({ events, userRole, userAreaId, userAreaName,
                                     <button
                                         onClick={() => handleDelete(event.id)}
                                         disabled={isDeleting === event.id}
-                                        className="p-2 rounded-lg text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors disabled:opacity-50"
+                                        className="w-9 h-9 flex items-center justify-center rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors disabled:opacity-50"
                                         title="Eliminar"
                                     >
                                         {isDeleting === event.id ? <div className="w-4 h-4 animate-spin rounded-full border-2 border-red-500 border-t-transparent"></div> : <Trash2 className="w-4 h-4" />}
                                     </button>
                                 </div>
 
-                                {event.isVirtual && event.meetLink && (
+                                {/* Right Actions (Buttons) */}
+                                <div className="flex space-x-2">
+                                    {event.isVirtual && event.meetLink && (
+                                        <a
+                                            href={event.meetLink}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="flex items-center px-4 py-2 bg-meteorite-600 hover:bg-meteorite-700 text-white text-sm font-bold rounded-xl transition-all shadow-md shadow-meteorite-600/20"
+                                        >
+                                            <Video className="w-3.5 h-3.5 mr-2" />
+                                            Unirse
+                                        </a>
+                                    )}
                                     <a
-                                        href={event.meetLink}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="flex items-center px-3 py-2 bg-meteorite-600 text-white text-xs font-bold rounded-xl hover:bg-meteorite-700 hover:shadow-lg hover:shadow-meteorite-600/30 transition-all"
+                                        href={`/admin/events/${event.id}/attendance`}
+                                        className="flex items-center px-3 py-2 bg-white border border-meteorite-200 hover:border-meteorite-400 text-meteorite-700 text-sm font-bold rounded-xl transition-all"
                                     >
-                                        <Video className="w-3 h-3 mr-2" />
-                                        Unirse
+                                        <Zap className="w-3.5 h-3.5 mr-2 text-meteorite-500" />
+                                        Asistencia
                                     </a>
-                                )}
-
-                                {/* Attendance Button */}
-                                <a
-                                    href={`/admin/events/${event.id}/attendance`}
-                                    className="flex items-center px-3 py-2 bg-white border border-meteorite-200 text-meteorite-700 text-xs font-bold rounded-xl hover:bg-meteorite-50 transition-colors ml-2"
-                                >
-                                    <Zap className="w-3 h-3 mr-2" />
-                                    Asistencia
-                                </a>
+                                </div>
                             </div>
-
-                            {/* Edited Timestamp */}
-                            {/* Removed from bottom */}
                         </div>
                     );
                 })}

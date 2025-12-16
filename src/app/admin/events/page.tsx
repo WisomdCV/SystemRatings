@@ -50,8 +50,7 @@ export default async function EventsPage() {
 
             areasList = await db.select({ id: areas.id, name: areas.name }).from(areas);
 
-        } else if (role === "DIRECTOR") {
-            // B. Director: Fetch Own Events + General Events
+            // B. Director/Subdirector: Fetch Own Events + General Events + BOARD (MD) Events
             // And fetch their own area name
 
             // Fetch Area Name
@@ -63,14 +62,31 @@ export default async function EventsPage() {
                 if (areaObj) userAreaName = areaObj.name;
             }
 
+            // Fetch MD Area ID to include its events
+            const mdArea = await db.query.areas.findFirst({
+                where: eq(areas.code, "MD"), // Looking for "Mesa Directiva" by code
+                columns: { id: true }
+            });
+
             // Fetch Events
+            // Visible:
+            // 1. General (targetAreaId IS NULL)
+            // 2. My Area (targetAreaId == currentAreaId)
+            // 3. Board (targetAreaId == mdArea.id)
+
+            const visibilityConditions = [
+                isNull(events.targetAreaId), // General
+                eq(events.targetAreaId, currentAreaId || "impossible_id") // Own Area
+            ];
+
+            if (mdArea) {
+                visibilityConditions.push(eq(events.targetAreaId, mdArea.id));
+            }
+
             eventsData = await db.query.events.findMany({
                 where: and(
                     eq(events.semesterId, activeSemester.id),
-                    or(
-                        isNull(events.targetAreaId), // General
-                        eq(events.targetAreaId, currentAreaId || "impossible_id") // Own Area
-                    )
+                    or(...visibilityConditions)
                 ),
                 orderBy: [desc(events.date)],
                 with: {

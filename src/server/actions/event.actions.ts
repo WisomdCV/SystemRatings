@@ -14,9 +14,9 @@ export async function createEventAction(input: CreateEventDTO) {
             return { success: false, error: "No autenticado" };
         }
 
-        // Permisos: DEV, PRESIDENT, DIRECTOR
+        // Permisos: DEV, PRESIDENT, DIRECTOR, SUBDIRECTOR
         const role = session.user.role;
-        if (!["DEV", "PRESIDENT", "DIRECTOR"].includes(role || "")) {
+        if (!["DEV", "PRESIDENT", "DIRECTOR", "SUBDIRECTOR"].includes(role || "")) {
             return { success: false, error: "No tienes permisos para crear eventos." };
         }
 
@@ -27,14 +27,12 @@ export async function createEventAction(input: CreateEventDTO) {
         }
         const data = validated.data;
 
-        // Regla: DIRECTOR solo crea para SU área
-        if (role === "DIRECTOR") {
+        // Regla: DIRECTOR/SUBDIRECTOR solo crea para SU área
+        if (role === "DIRECTOR" || role === "SUBDIRECTOR") {
             const currentAreaId = session.user.currentAreaId;
-            if (!currentAreaId) return { success: false, error: "Director sin área asignada." };
+            if (!currentAreaId) return { success: false, error: "Usuario sin área asignada." };
 
             // Forzamos que sea para su área
-            // Si el input traía 'null' (General) o otra área, lo corregimos o lanzamos error.
-            // Aquí lo corregimos por seguridad:
             data.targetAreaId = currentAreaId;
         }
 
@@ -91,10 +89,13 @@ export async function deleteEventAction(eventId: string) {
         // 2. Permissions
         const role = session.user.role;
         const isDevOrPresi = ["DEV", "PRESIDENT"].includes(role || "");
-        const isDirectorOwner = role === "DIRECTOR" && event.createdById === session.user.id;
+        const isDirectorOrSub = ["DIRECTOR", "SUBDIRECTOR"].includes(role || "");
 
-        if (!isDevOrPresi && !isDirectorOwner) {
-            return { success: false, error: "No tienes permisos para eliminar este evento." };
+        if (!isDevOrPresi) {
+            if (!isDirectorOrSub) return { success: false, error: "No tienes permisos." };
+            if (event.targetAreaId !== session.user.currentAreaId) {
+                return { success: false, error: "No puedes eliminar eventos de otras áreas." };
+            }
         }
 
         // 3. Google Sync (Delete)
@@ -135,10 +136,15 @@ export async function updateEventAction(eventId: string, input: UpdateEventDTO) 
         // Permisos
         const role = session.user.role;
         const isDevOrPresi = ["DEV", "PRESIDENT"].includes(role || "");
-        const isDirectorOwner = role === "DIRECTOR" && event.createdById === session.user.id; // Edit only own events? Standard rule.
+        const isDirectorOrSub = ["DIRECTOR", "SUBDIRECTOR"].includes(role || "");
+        const isAreaOwner = isDirectorOrSub && event.createdById === session.user.id; // Or simple Area Guard below
 
-        if (!isDevOrPresi && !isDirectorOwner) {
-            return { success: false, error: "No tienes permisos para editar este evento." };
+        if (!isDevOrPresi) {
+            if (!isDirectorOrSub) return { success: false, error: "No tienes permisos." };
+            // Strict Area Check:
+            if (event.targetAreaId !== session.user.currentAreaId) {
+                return { success: false, error: "Solo puedes gestionar eventos de tu área." };
+            }
         }
 
         // Validación

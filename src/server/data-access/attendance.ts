@@ -22,12 +22,17 @@ export interface AttendanceSheetItem {
 }
 
 export async function getAttendanceSheetDAO(eventId: string): Promise<AttendanceSheetItem[]> {
-    // 1. Get Event to know targetAreaId
+    // 1. Get Event to know targetAreaId and Code
     const event = await db.query.events.findFirst({
         where: eq(events.id, eventId),
         columns: {
             id: true,
             targetAreaId: true,
+        },
+        with: {
+            targetArea: {
+                columns: { code: true }
+            }
         }
     });
 
@@ -35,8 +40,8 @@ export async function getAttendanceSheetDAO(eventId: string): Promise<Attendance
 
     // 2. Search Eligible Users
     // If targetAreaId is NULL -> General -> All ACTIVE users
+    // If targetArea.code === 'MD' -> Board -> Director, Subdirector, Treasurer
     // If targetAreaId is SET -> Area -> Active users of that area
-    // Using simple query based on conditions
 
     let eligibleUsers;
 
@@ -53,8 +58,24 @@ export async function getAttendanceSheetDAO(eventId: string): Promise<Attendance
             },
             orderBy: (users, { asc }) => [asc(users.name)]
         });
+    } else if (event.targetArea?.code === "MD") {
+        // Lógica Mesa Directiva: Presidenta toma lista a sus líderes
+        eligibleUsers = await db.query.users.findMany({
+            where: and(
+                eq(users.status, "ACTIVE"),
+                inArray(users.role, ["DIRECTOR", "SUBDIRECTOR", "TREASURER"])
+            ),
+            columns: {
+                id: true,
+                name: true,
+                image: true,
+                email: true,
+                currentAreaId: true
+            },
+            orderBy: (users, { asc }) => [asc(users.name)]
+        });
     } else {
-        // Evento de Área
+        // Evento Normal de Área
         eligibleUsers = await db.query.users.findMany({
             where: and(
                 eq(users.status, "ACTIVE"),
