@@ -187,26 +187,25 @@ export default function DashboardView({ user }: DashboardViewProps) {
                             <span className="ml-3 font-medium">Dashboard</span>
                         </a>
 
-                        {/* 2. Mi Equipo (Leaders Only - Placeholder for now) */}
+                        {/* 2. Equipo IISE */}
                         {["DEV", "PRESIDENT", "DIRECTOR", "SUBDIRECTOR"].includes((user as any).role) && (
                             <a
-                                href="#"
+                                href="/admin/users"
                                 className="flex items-center px-4 py-3 text-meteorite-200 hover:bg-meteorite-900 hover:text-white rounded-xl transition-all group"
                             >
                                 <Users className="text-meteorite-400 group-hover:text-white transition-colors w-5 h-5" />
-                                <span className="ml-3 font-medium">Mi Equipo</span>
+                                <span className="ml-3 font-medium">Equipo IISE</span>
                             </a>
                         )}
 
-                        {/* 3. Agenda / Eventos */}
-                        {/* Leaders -> /admin/events, Members -> /dashboard (or # for now as Member View is incomplete) */}
+                        {/* 3. Meetings */}
                         {["DEV", "PRESIDENT", "DIRECTOR", "SUBDIRECTOR"].includes((user as any).role) ? (
                             <a
                                 href="/admin/events"
                                 className="flex items-center px-4 py-3 text-meteorite-200 hover:bg-meteorite-900 hover:text-white rounded-xl transition-all group"
                             >
                                 <CalendarCheck className="text-meteorite-400 group-hover:text-white transition-colors w-5 h-5" />
-                                <span className="ml-3 font-medium">Agenda (Admin)</span>
+                                <span className="ml-3 font-medium">Meetings</span>
                             </a>
                         ) : (
                             <a
@@ -214,7 +213,7 @@ export default function DashboardView({ user }: DashboardViewProps) {
                                 className="flex items-center px-4 py-3 text-meteorite-200 hover:bg-meteorite-900 hover:text-white rounded-xl transition-all group"
                             >
                                 <CalendarCheck className="text-meteorite-400 group-hover:text-white transition-colors w-5 h-5" />
-                                <span className="ml-3 font-medium">Agenda</span>
+                                <span className="ml-3 font-medium">Meetings</span>
                             </a>
                         )}
                     </nav>

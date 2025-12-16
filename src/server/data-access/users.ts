@@ -1,6 +1,6 @@
 import { db } from "@/db";
 import { users } from "@/db/schema";
-import { eq, or, like, and, desc, asc, sql } from "drizzle-orm";
+import { eq, or, like, and, desc, asc, sql, ne } from "drizzle-orm";
 import { UpdateUserRoleDTO, UpdateUserProfileDTO, ModerateUserDTO } from "@/lib/validators/user";
 
 export type UserFilters = {
@@ -40,6 +40,9 @@ export async function getAllUsers(filters?: UserFilters, pagination?: Pagination
     if (status && status !== "ALL") {
         conditions.push(eq(users.status, status));
     }
+
+    // GHOST MODE: Exclude DEV role always from this list
+    conditions.push(ne(users.role, "DEV"));
 
     // Execute Query
     const data = await db.query.users.findMany({

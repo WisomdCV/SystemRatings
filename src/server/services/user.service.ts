@@ -47,6 +47,11 @@ export async function promoteUserService(
         throw new Error("Un Director o Subdirector debe pertenecer a un Área.");
     }
 
+    // 4. Seguridad: No se puede asignar el rol DEV
+    if (data.role === "DEV") {
+        throw new Error("Acción prohibida: No se puede asignar el rol de Desarrollador.");
+    }
+
     // 4. Verificar si realmente hay cambios
     if (targetUser.role === data.role && targetUser.currentAreaId === data.areaId) {
         return targetUser; // No op
