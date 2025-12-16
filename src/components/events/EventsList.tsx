@@ -81,16 +81,19 @@ export default function EventsList({ events, userRole, userAreaId, userAreaName,
     const [viewMode, setViewMode] = useState<"upcoming" | "history">("upcoming");
 
     // Filter events based on viewMode
-    const now = new Date();
-    // Reset time to 00:00:00 to include events from today in "Upcoming" properly? 
-    // Usually "Upcoming" includes Today. 
-    now.setHours(0, 0, 0, 0);
+    // We compare strings (YYYY-MM-DD) to ensure we respect the Local Calendar Day
+    // vs the Stored UTC Date.
+    const nowStr = new Date().toLocaleDateString('en-CA');
 
     const filteredEvents = events.filter(e => {
+        // e.date comes as Date object or string usually normalized to UTC midnight
+        // We want the UTC date string part "YYYY-MM-DD"
         const eventDate = new Date(e.date);
-        // Normalize event date time too if needed, but db usually stores date at midnight or specific time.
-        // If event date >= now -> Upcoming
-        return viewMode === "upcoming" ? eventDate >= now : eventDate < now;
+        const eventDateStr = eventDate.toISOString().split('T')[0];
+
+        // If today is 2025-12-16. Event is 2025-12-16.
+        // Upcoming >= Today. History < Today.
+        return viewMode === "upcoming" ? eventDateStr >= nowStr : eventDateStr < nowStr;
     });
 
     return (

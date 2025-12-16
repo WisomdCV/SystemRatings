@@ -107,56 +107,52 @@ export default async function EventsPage() {
     }
 
     return (
-        <div className="p-6 lg:p-10 min-h-screen bg-meteorite-50/50">
-            {/* Header */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
-                <div>
-                    <h1 className="text-3xl font-black text-meteorite-950 flex items-center">
-                        <CalendarCheck className="mr-3 w-8 h-8 text-meteorite-600" />
-                        Agenda & Eventos
-                    </h1>
-                    <p className="text-meteorite-600 mt-2 font-medium">
-                        Gestión de actividades para el semestre {activeSemester?.name || "Sin Semestre"}
-                    </p>
+        <div className="p-6 lg:p-10 min-h-screen bg-meteorite-50 relative overflow-hidden">
+            {/* Background Orbs */}
+            <div className="absolute top-0 left-0 w-full h-96 bg-gradient-to-b from-white to-transparent pointer-events-none z-0"></div>
+            <div className="absolute -top-20 -right-20 w-96 h-96 bg-meteorite-200 rounded-full mix-blend-multiply filter blur-3xl opacity-50"></div>
+            <div className="absolute top-20 -left-20 w-72 h-72 bg-meteorite-300 rounded-full mix-blend-multiply filter blur-3xl opacity-50 animation-delay-2000"></div>
+
+            <div className="relative z-10">
+                {/* Header */}
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+                    <div>
+                        <h1 className="text-3xl font-black text-meteorite-950 flex items-center">
+                            <CalendarCheck className="mr-3 w-8 h-8 text-meteorite-600" />
+                            Agenda & Eventos
+                        </h1>
+                        <p className="text-meteorite-600 mt-2 font-medium">
+                            Gestión de actividades para el semestre {activeSemester?.name || "Sin Semestre"}
+                        </p>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex gap-3">
+                        <button className="flex items-center px-4 py-2 bg-white border border-meteorite-200 text-meteorite-700 font-bold rounded-xl hover:bg-meteorite-50 transition-colors shadow-sm">
+                            <Filter className="w-4 h-4 mr-2" />
+                            Filtrar
+                        </button>
+
+                        {/* Modal Trigger Component */}
+                        <NewEventModal
+                            userRole={role}
+                            userAreaId={currentAreaId}
+                            userAreaName={userAreaName}
+                            areas={areasList}
+                        />
+                    </div>
                 </div>
 
-                {/* Actions */}
-                <div className="flex gap-3">
-                    <button className="flex items-center px-4 py-2 bg-white border border-meteorite-200 text-meteorite-700 font-bold rounded-xl hover:bg-meteorite-50 transition-colors shadow-sm">
-                        <Filter className="w-4 h-4 mr-2" />
-                        Filtrar
-                    </button>
-
-                    {/* The Prompt asks for a Form in a Modal/Drawer. 
-                        For simplicity in this step, we will put the form in a simplified Dialog or just a standard "Create New" section.
-                        To make it polished, we can use a Client Component Wrapper for a Dialog/Modal.
-                        For now, let's use a standard 'New Event' button that toggles a visible form or similar if requested, 
-                        BUT the user asked for "Formulario de Creación... (ej. en un Modal/Drawer)".
-                        I will verify if I should implement a Drawer. The user gave me 'CreateEventForm.tsx'. 
-                        I will put it inside a <details> or a simple container for now, typically I'd make a 'NewEventButton' client component.
-                        Let's use a standard pattern: A "Create" button that behaves as a Trigger for a Dialog.
-                        However, since I don't have a UI library installed (shadcn/ui), I will implement a custom 'ModalWrapper' or simply put the form inline for now to ensure functionality first.
-                        Wait, the safest bet is to create a Client Component 'NewEventDialog' that wraps 'CreateEventForm'.
-                    */}
-                    {/* Modal Trigger Component */}
-                    <NewEventModal
+                {/* Main Content Grid */}
+                <div className="space-y-8">
+                    <EventsList
+                        events={eventsData as any[]}
                         userRole={role}
                         userAreaId={currentAreaId}
                         userAreaName={userAreaName}
                         areas={areasList}
                     />
                 </div>
-            </div>
-
-            {/* Main Content Grid */}
-            <div className="space-y-8">
-                <EventsList
-                    events={eventsData as any[]}
-                    userRole={role}
-                    userAreaId={currentAreaId}
-                    userAreaName={userAreaName}
-                    areas={areasList}
-                />
             </div>
         </div>
     );
