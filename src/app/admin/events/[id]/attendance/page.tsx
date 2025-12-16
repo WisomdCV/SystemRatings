@@ -54,15 +54,20 @@ export default async function AttendancePage({ params }: AttendancePageProps) {
     }
 
     return (
-        <div className="min-h-screen bg-meteorite-50/50 p-4 md:p-8 pb-32">
-            <div className="max-w-5xl mx-auto">
+        <div className="min-h-screen bg-meteorite-50 relative overflow-hidden p-4 md:p-8 pb-32">
+            {/* Background Orbs */}
+            <div className="absolute top-0 left-0 w-full h-96 bg-gradient-to-b from-white to-transparent pointer-events-none z-0"></div>
+            <div className="absolute -top-20 -right-20 w-96 h-96 bg-meteorite-200 rounded-full mix-blend-multiply filter blur-3xl opacity-50"></div>
+            <div className="absolute top-20 -left-20 w-72 h-72 bg-meteorite-300 rounded-full mix-blend-multiply filter blur-3xl opacity-50 animation-delay-2000"></div>
+
+            <div className="relative z-10 max-w-5xl mx-auto">
                 {/* Header */}
                 <div className="mb-8">
                     <Link href="/admin/events" className="inline-flex items-center text-sm font-bold text-meteorite-500 hover:text-meteorite-700 transition-colors mb-4">
                         <ArrowLeft className="w-4 h-4 mr-1" />
                         Volver a Eventos
                     </Link>
-                    <div className="bg-white border border-meteorite-100 p-6 rounded-2xl shadow-sm">
+                    <div className="bg-white/80 backdrop-blur-sm border border-meteorite-100 p-6 rounded-2xl shadow-sm">
                         <div className="flex items-start justify-between">
                             <div>
                                 <h1 className="text-3xl font-black text-meteorite-950 mb-2">{event.title}</h1>
