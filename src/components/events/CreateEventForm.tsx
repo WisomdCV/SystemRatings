@@ -59,7 +59,7 @@ export default function CreateEventForm({
     } : {
         title: "",
         description: "",
-        targetAreaId: userRole === "DIRECTOR" && userAreaId ? userAreaId : "",
+        targetAreaId: userRole === "DIRECTOR" || userRole === "SUBDIRECTOR" ? (userAreaId || "") : "",
         date: undefined,
         startTime: "",
         endTime: "",
@@ -67,8 +67,8 @@ export default function CreateEventForm({
     };
 
     const form = useForm<CreateEventDTO>({
-        resolver: zodResolver(CreateEventSchema),
-        defaultValues: defaultValues
+        resolver: zodResolver(CreateEventSchema) as any, // Cast resolver to stricter/looser type to avoid optional/required mismatch
+        defaultValues: defaultValues as any // Cast default values to avoid Date vs string strictness issues
     });
 
     const isVirtual = form.watch("isVirtual");
@@ -168,7 +168,12 @@ export default function CreateEventForm({
                         Área Destino
                     </label>
 
-                    {canSelectArea ? (
+                    {/* Logic: 
+                        - PRESI/DEV/SECRETARY: Full Select
+                        - TREASURER: Select (General + MD)
+                        - DIRECTOR/SUBDIRECTOR: Fixed Badge (Own Area)
+                    */}
+                    {["DEV", "PRESIDENT", "SECRETARY", "TREASURER"].includes(userRole) ? (
                         <select
                             {...form.register("targetAreaId")}
                             className="w-full px-4 py-2.5 rounded-xl border border-gray-200 bg-gray-50/50 focus:bg-white focus:border-meteorite-500 focus:ring-2 focus:ring-meteorite-200 transition-all outline-none text-sm font-medium text-gray-700 appearance-none cursor-pointer"
@@ -187,9 +192,9 @@ export default function CreateEventForm({
                         </div>
                     )}
                     <p className="text-[10px] text-gray-400 mt-1 ml-1">
-                        {canSelectArea
-                            ? "Elige si es para todos o un área específica."
-                            : "Como Director, solo puedes crear eventos para tu área."}
+                        {["DIRECTOR", "SUBDIRECTOR"].includes(userRole)
+                            ? `Como ${userRole === "DIRECTOR" ? "Director" : "Subdirector"}, solo puedes crear eventos para tu área.`
+                            : "Elige el alcance del evento."}
                     </p>
                 </div>
             </div>

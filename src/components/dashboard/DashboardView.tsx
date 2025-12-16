@@ -79,7 +79,7 @@ export default function DashboardView({ user }: DashboardViewProps) {
                 angleLines: { color: "#edeafd" },
                 grid: { color: "#edeafd" },
                 pointLabels: {
-                    font: { size: 10, weight: "bold" },
+                    font: { size: 10, weight: "bold" as const },
                     color: "#4a248e",
                 },
                 ticks: { display: false, backdropColor: "transparent" },
@@ -178,27 +178,45 @@ export default function DashboardView({ user }: DashboardViewProps) {
 
                     {/* Menú */}
                     <nav className="mt-8 px-4 space-y-2">
+                        {/* 1. Dashboard (Common) */}
                         <a
-                            href="#"
+                            href="/dashboard"
                             className="flex items-center px-4 py-3 bg-meteorite-800 text-white rounded-xl shadow-lg shadow-meteorite-900/20 transition-all group border border-meteorite-700/50"
                         >
                             <LayoutDashboard className="text-meteorite-300 group-hover:text-white transition-colors w-5 h-5" />
                             <span className="ml-3 font-medium">Dashboard</span>
                         </a>
-                        <a
-                            href="#"
-                            className="flex items-center px-4 py-3 text-meteorite-200 hover:bg-meteorite-900 hover:text-white rounded-xl transition-all group"
-                        >
-                            <Users className="text-meteorite-400 group-hover:text-white transition-colors w-5 h-5" />
-                            <span className="ml-3 font-medium">Mi Equipo</span>
-                        </a>
-                        <a
-                            href="#"
-                            className="flex items-center px-4 py-3 text-meteorite-200 hover:bg-meteorite-900 hover:text-white rounded-xl transition-all group"
-                        >
-                            <CalendarCheck className="text-meteorite-400 group-hover:text-white transition-colors w-5 h-5" />
-                            <span className="ml-3 font-medium">Agenda</span>
-                        </a>
+
+                        {/* 2. Mi Equipo (Leaders Only - Placeholder for now) */}
+                        {["DEV", "PRESIDENT", "DIRECTOR", "SUBDIRECTOR"].includes((user as any).role) && (
+                            <a
+                                href="#"
+                                className="flex items-center px-4 py-3 text-meteorite-200 hover:bg-meteorite-900 hover:text-white rounded-xl transition-all group"
+                            >
+                                <Users className="text-meteorite-400 group-hover:text-white transition-colors w-5 h-5" />
+                                <span className="ml-3 font-medium">Mi Equipo</span>
+                            </a>
+                        )}
+
+                        {/* 3. Agenda / Eventos */}
+                        {/* Leaders -> /admin/events, Members -> /dashboard (or # for now as Member View is incomplete) */}
+                        {["DEV", "PRESIDENT", "DIRECTOR", "SUBDIRECTOR"].includes((user as any).role) ? (
+                            <a
+                                href="/admin/events"
+                                className="flex items-center px-4 py-3 text-meteorite-200 hover:bg-meteorite-900 hover:text-white rounded-xl transition-all group"
+                            >
+                                <CalendarCheck className="text-meteorite-400 group-hover:text-white transition-colors w-5 h-5" />
+                                <span className="ml-3 font-medium">Agenda (Admin)</span>
+                            </a>
+                        ) : (
+                            <a
+                                href="#"
+                                className="flex items-center px-4 py-3 text-meteorite-200 hover:bg-meteorite-900 hover:text-white rounded-xl transition-all group"
+                            >
+                                <CalendarCheck className="text-meteorite-400 group-hover:text-white transition-colors w-5 h-5" />
+                                <span className="ml-3 font-medium">Agenda</span>
+                            </a>
+                        )}
                     </nav>
                 </div>
 
@@ -537,13 +555,23 @@ export default function DashboardView({ user }: DashboardViewProps) {
                         </div>
                         <span className="text-[10px] font-medium opacity-100">Inicio</span>
                     </a>
-                    <a
-                        href="#"
-                        className="flex flex-col items-center justify-center w-full h-full text-meteorite-400 hover:text-white transition-colors"
-                    >
-                        <Calendar className="w-5 h-5 mb-1" />
-                        <span className="text-[10px] font-medium">Agenda</span>
-                    </a>
+                    {["DEV", "PRESIDENT", "DIRECTOR", "SUBDIRECTOR"].includes((user as any).role) ? (
+                        <a
+                            href="/admin/events"
+                            className="flex flex-col items-center justify-center w-full h-full text-meteorite-400 hover:text-white transition-colors"
+                        >
+                            <Calendar className="w-5 h-5 mb-1" />
+                            <span className="text-[10px] font-medium">Agenda</span>
+                        </a>
+                    ) : (
+                        <a
+                            href="#"
+                            className="flex flex-col items-center justify-center w-full h-full text-meteorite-400 hover:text-white transition-colors"
+                        >
+                            <Calendar className="w-5 h-5 mb-1" />
+                            <span className="text-[10px] font-medium">Agenda</span>
+                        </a>
+                    )}
                     <a
                         href="#"
                         className="flex flex-col items-center justify-center w-full h-full text-meteorite-400 hover:text-white transition-colors"

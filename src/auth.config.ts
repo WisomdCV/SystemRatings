@@ -33,7 +33,7 @@ export const authConfig = {
 
         // Check for Role (Assuming role is populated in session)
         const role = (auth.user as any)?.role;
-        if (role !== "DEV" && role !== "PRESIDENT") {
+        if (!["DEV", "PRESIDENT", "DIRECTOR", "SUBDIRECTOR", "TREASURER"].includes(role)) {
           // Redirect to Access Denied error page
           return Response.redirect(new URL('/auth/error?error=AccessDenied', nextUrl));
         }

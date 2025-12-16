@@ -17,7 +17,7 @@ export default async function EventsPage() {
     const currentAreaId = session.user.currentAreaId;
 
     // 1. Role Protection
-    if (!["DEV", "PRESIDENT", "DIRECTOR"].includes(role)) {
+    if (!["DEV", "PRESIDENT", "DIRECTOR", "SUBDIRECTOR", "TREASURER"].includes(role)) {
         return redirect("/dashboard?error=AccessDenied");
     }
 
@@ -32,27 +32,49 @@ export default async function EventsPage() {
     let userAreaName: string | null = null;
 
     if (activeSemester) {
+        // Fetch MD Area ID globally as it's needed for multiple roles
+        const mdArea = await db.query.areas.findFirst({
+            where: eq(areas.code, "MD"),
+            columns: { id: true }
+        });
+
+        // A. Admin (DEV/PRESIDENT): Fetch ALL events and ALL areas
         if (role === "DEV" || role === "PRESIDENT") {
-            // A. Admin: Fetch ALL events and ALL areas
             eventsData = await db.query.events.findMany({
                 where: eq(events.semesterId, activeSemester.id),
                 orderBy: [desc(events.date)],
                 with: {
                     targetArea: true,
-                    createdBy: {
-                        columns: {
-                            name: true,
-                            role: true
-                        }
-                    }
+                    createdBy: { columns: { name: true, role: true } }
                 }
             });
-
             areasList = await db.select({ id: areas.id, name: areas.name }).from(areas);
+        }
 
-            // B. Director/Subdirector: Fetch Own Events + General Events + BOARD (MD) Events
-            // And fetch their own area name
+        // B. Treasurer: Fetch General + MD Only
+        else if (role === "TREASURER") {
+            const visibilityConditions = [isNull(events.targetAreaId)]; // General
+            if (mdArea) visibilityConditions.push(eq(events.targetAreaId, mdArea.id)); // MD
 
+            eventsData = await db.query.events.findMany({
+                where: and(
+                    eq(events.semesterId, activeSemester.id),
+                    or(...visibilityConditions)
+                ),
+                orderBy: [desc(events.date)],
+                with: {
+                    targetArea: true,
+                    createdBy: { columns: { name: true, role: true } }
+                }
+            });
+            // Treasurer might need areas list if allowed to create MD/General events?
+            // The prompt says "Permítele elegir entre General y Mesa Directiva".
+            // So we need to provide MD in areasList or handle it in Form.
+            if (mdArea) areasList = await db.select({ id: areas.id, name: areas.name }).from(areas).where(eq(areas.code, "MD"));
+        }
+
+        // C. Director/Subdirector: Fetch Own Events + General Events + BOARD (MD) Events
+        else if (role === "DIRECTOR" || role === "SUBDIRECTOR") {
             // Fetch Area Name
             if (currentAreaId) {
                 const areaObj = await db.query.areas.findFirst({
@@ -62,23 +84,10 @@ export default async function EventsPage() {
                 if (areaObj) userAreaName = areaObj.name;
             }
 
-            // Fetch MD Area ID to include its events
-            const mdArea = await db.query.areas.findFirst({
-                where: eq(areas.code, "MD"), // Looking for "Mesa Directiva" by code
-                columns: { id: true }
-            });
-
-            // Fetch Events
-            // Visible:
-            // 1. General (targetAreaId IS NULL)
-            // 2. My Area (targetAreaId == currentAreaId)
-            // 3. Board (targetAreaId == mdArea.id)
-
             const visibilityConditions = [
                 isNull(events.targetAreaId), // General
                 eq(events.targetAreaId, currentAreaId || "impossible_id") // Own Area
             ];
-
             if (mdArea) {
                 visibilityConditions.push(eq(events.targetAreaId, mdArea.id));
             }
@@ -91,12 +100,7 @@ export default async function EventsPage() {
                 orderBy: [desc(events.date)],
                 with: {
                     targetArea: true,
-                    createdBy: {
-                        columns: {
-                            name: true,
-                            role: true
-                        }
-                    }
+                    createdBy: { columns: { name: true, role: true } }
                 }
             });
         }
