@@ -131,6 +131,23 @@ export const {
                 token = { ...token, ...session };
             }
 
+            // 2.5 Force Refresh from DB (Real-time Role/Area updates)
+            if (token.id) {
+                try {
+                    const freshUser = await db.query.users.findFirst({
+                        where: eq(users.id, token.id as string),
+                        columns: { role: true, currentAreaId: true }
+                    });
+
+                    if (freshUser) {
+                        token.role = freshUser.role;
+                        token.currentAreaId = freshUser.currentAreaId;
+                    }
+                } catch (error) {
+                    console.error("Error refreshing user data in JWT:", error);
+                }
+            }
+
             // 3. Return previous token if the access token has not expired yet
             // Give a 10 second buffer
             if (Date.now() < (token.expiresAt as number) - 10000) {
