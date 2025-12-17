@@ -1,12 +1,13 @@
 import { auth } from "@/server/auth";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
-import { events, areas, semesters } from "@/db/schema";
-import { desc, eq, and, or, isNull } from "drizzle-orm";
+import { events, areas, semesters, attendanceRecords } from "@/db/schema";
+import { desc, eq, and, or, isNull, inArray } from "drizzle-orm";
 import EventsList from "@/components/events/EventsList";
 import CreateEventForm from "@/components/events/CreateEventForm";
 import { CalendarCheck, Plus, Filter } from "lucide-react";
 import Link from "next/link";
+import EventsView from "@/components/events/EventsView";
 
 export default async function EventsPage() {
     const session = await auth();
@@ -106,9 +107,40 @@ export default async function EventsPage() {
         }
     }
 
+    // 4. Fetch Pending Justifications Count Aggregation
+    const eventIds = eventsData.map(e => e.id);
+    const pendingCounts: Record<string, number> = {};
+
+    if (eventIds.length > 0) {
+        /* 
+           Fetch attendance records for these events. 
+           We filter for PENDING status in memory to avoid complex JSON SQL queries for now.
+        */
+        const allAttendance = await db.query.attendanceRecords.findMany({
+            where: (att, { inArray }) => inArray(att.eventId, eventIds),
+            columns: {
+                eventId: true,
+                justificationStatus: true
+            }
+        });
+
+        for (const att of allAttendance) {
+            // Check if justificationStatus is PENDING
+            if (att.justificationStatus === "PENDING") {
+                pendingCounts[att.eventId] = (pendingCounts[att.eventId] || 0) + 1;
+            }
+        }
+    }
+
+    // Merge counts
+    const eventsWithCounts = eventsData.map(e => ({
+        ...e,
+        pendingJustificationCount: pendingCounts[e.id] || 0
+    }));
+
     return (
         <EventsView
-            events={eventsData as any[]}
+            events={eventsWithCounts}
             activeSemesterName={activeSemester?.name || "Sin Semestre"}
             userRole={role}
             userAreaId={currentAreaId}
@@ -117,5 +149,3 @@ export default async function EventsPage() {
         />
     );
 }
-
-import EventsView from "@/components/events/EventsView";

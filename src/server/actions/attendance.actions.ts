@@ -254,3 +254,26 @@ export async function reviewJustificationAction(
         return { success: false, error: "Error al revisar justificación" };
     }
 }
+
+export async function getPendingJustificationsAction() {
+    const session = await auth();
+    if (!session?.user) return { success: false, error: "No autorizado" };
+
+    try {
+        const history = await getUserAttendanceHistoryDAO(session.user.id);
+
+        // Filter for ABSENT/LATE with justificationStatus === "NONE"
+        const pending = history.filter(record =>
+            (record.status === "ABSENT" || record.status === "LATE") &&
+            record.justificationStatus === "NONE"
+        );
+
+        // Sort by date desc
+        pending.sort((a, b) => new Date(b.event.date).getTime() - new Date(a.event.date).getTime());
+
+        return { success: true, data: pending };
+    } catch (error) {
+        console.error("Error fetching pending justifications:", error);
+        return { success: false, error: "Error al obtener justificaciones pendientes" };
+    }
+}

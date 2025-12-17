@@ -4,7 +4,7 @@ import ReviewJustificationModal from "./ReviewJustificationModal";
 import { AlertTriangle, Loader2, Check, X, Clock, Save, User as UserIcon, FileText } from "lucide-react";
 import { AttendanceSheetItem, AttendanceStatus } from "@/server/data-access/attendance";
 import { saveAttendanceAction } from "@/server/actions/attendance.actions";
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
 interface AttendanceTrackerProps {
@@ -17,6 +17,11 @@ export default function AttendanceTracker({ eventId, initialSheet }: AttendanceT
     const [sheet, setSheet] = useState<AttendanceSheetItem[]>(initialSheet);
     const [isPending, startTransition] = useTransition();
     const [hasChanges, setHasChanges] = useState(false);
+
+    // Sync validation from server after refresh
+    useEffect(() => {
+        setSheet(initialSheet);
+    }, [initialSheet]);
 
     // Review Modal State
     const [reviewRecord, setReviewRecord] = useState<AttendanceSheetItem | null>(null);

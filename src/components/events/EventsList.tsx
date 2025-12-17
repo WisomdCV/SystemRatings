@@ -37,9 +37,10 @@ interface EventsListProps {
     userAreaId: string | null;
     userAreaName: string | null;
     areas: any[];
+    readOnly?: boolean;
 }
 
-export default function EventsList({ events, userRole, userAreaId, userAreaName, areas }: EventsListProps) {
+export default function EventsList({ events, userRole, userAreaId, userAreaName, areas, readOnly = false }: EventsListProps) {
     const router = useRouter();
     const [editingEvent, setEditingEvent] = useState<EventItem | null>(null);
     const [isDeleting, setIsDeleting] = useState<string | null>(null); // ID of event being deleted
@@ -160,12 +161,14 @@ export default function EventsList({ events, userRole, userAreaId, userAreaName,
                                     </div>
 
                                     {/* Options Button */}
-                                    <button
-                                        onClick={() => setEditingEvent(event)}
-                                        className="text-gray-300 hover:text-meteorite-600 p-1 rounded-full hover:bg-meteorite-50 transition-colors"
-                                    >
-                                        <MoreVertical className="w-5 h-5" />
-                                    </button>
+                                    {!readOnly && (
+                                        <button
+                                            onClick={() => setEditingEvent(event)}
+                                            className="text-gray-300 hover:text-meteorite-600 p-1 rounded-full hover:bg-meteorite-50 transition-colors"
+                                        >
+                                            <MoreVertical className="w-5 h-5" />
+                                        </button>
+                                    )}
                                 </div>
 
                                 {/* Tag */}
@@ -221,21 +224,25 @@ export default function EventsList({ events, userRole, userAreaId, userAreaName,
                                 <div className="flex items-center justify-between mt-auto pt-4 border-t border-gray-50">
                                     {/* Left Actions (Edit/Delete) */}
                                     <div className="flex space-x-1">
-                                        <button
-                                            onClick={() => setEditingEvent(event)}
-                                            className="w-9 h-9 flex items-center justify-center rounded-lg text-gray-400 hover:text-meteorite-600 hover:bg-meteorite-50 transition-colors"
-                                            title="Editar"
-                                        >
-                                            <Edit className="w-4 h-4" />
-                                        </button>
-                                        <button
-                                            onClick={() => handleDelete(event.id)}
-                                            disabled={isDeleting === event.id}
-                                            className="w-9 h-9 flex items-center justify-center rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors disabled:opacity-50"
-                                            title="Eliminar"
-                                        >
-                                            {isDeleting === event.id ? <div className="w-4 h-4 animate-spin rounded-full border-2 border-red-500 border-t-transparent"></div> : <Trash2 className="w-4 h-4" />}
-                                        </button>
+                                        {!readOnly && (
+                                            <>
+                                                <button
+                                                    onClick={() => setEditingEvent(event)}
+                                                    className="w-9 h-9 flex items-center justify-center rounded-lg text-gray-400 hover:text-meteorite-600 hover:bg-meteorite-50 transition-colors"
+                                                    title="Editar"
+                                                >
+                                                    <Edit className="w-4 h-4" />
+                                                </button>
+                                                <button
+                                                    onClick={() => handleDelete(event.id)}
+                                                    disabled={isDeleting === event.id}
+                                                    className="w-9 h-9 flex items-center justify-center rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors disabled:opacity-50"
+                                                    title="Eliminar"
+                                                >
+                                                    {isDeleting === event.id ? <div className="w-4 h-4 animate-spin rounded-full border-2 border-red-500 border-t-transparent"></div> : <Trash2 className="w-4 h-4" />}
+                                                </button>
+                                            </>
+                                        )}
                                     </div>
 
                                     {/* Right Actions (Buttons) */}
@@ -251,13 +258,15 @@ export default function EventsList({ events, userRole, userAreaId, userAreaName,
                                                 Unirse
                                             </a>
                                         )}
-                                        <a
-                                            href={`/admin/events/${event.id}/attendance`}
-                                            className="flex items-center px-3 py-2 bg-white border border-meteorite-200 hover:border-meteorite-400 text-meteorite-700 text-sm font-bold rounded-xl transition-all"
-                                        >
-                                            <Zap className="w-3.5 h-3.5 mr-2 text-meteorite-500" />
-                                            Asistencia
-                                        </a>
+                                        {!readOnly && (
+                                            <a
+                                                href={`/admin/events/${event.id}/attendance`}
+                                                className="flex items-center px-3 py-2 bg-white border border-meteorite-200 hover:border-meteorite-400 text-meteorite-700 text-sm font-bold rounded-xl transition-all"
+                                            >
+                                                <Zap className="w-3.5 h-3.5 mr-2 text-meteorite-500" />
+                                                Asistencia
+                                            </a>
+                                        )}
                                     </div>
                                 </div>
                             </div>

@@ -87,7 +87,7 @@ export default function ReviewJustificationModal({ recordId, isOpen, onClose, st
                     <div>
                         <label className="block text-sm font-bold text-gray-700 mb-2">Comentarios del Director (Opcional)</label>
                         <textarea
-                            className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-meteorite-500 focus:ring-4 focus:ring-meteorite-500/10 transition-all outline-none text-sm resize-none h-[80px]"
+                            className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-meteorite-500 focus:ring-4 focus:ring-meteorite-500/10 transition-all outline-none text-sm resize-none h-[80px] text-gray-900"
                             placeholder="Feedback para el estudiante..."
                             value={feedback}
                             onChange={(e) => setFeedback(e.target.value)}

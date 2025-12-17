@@ -41,12 +41,13 @@ type EventItem = {
         name: string;
         code: string | null;
     } | null;
-    createdAt?: Date;
-    updatedAt?: Date;
     createdBy?: {
         name: string | null;
         role: string | null;
     } | null;
+    createdAt?: Date;
+    updatedAt?: Date;
+    pendingJustificationCount?: number;
 };
 
 interface EventsViewProps {
@@ -56,6 +57,7 @@ interface EventsViewProps {
     userAreaId: string | null;
     userAreaName: string | null;
     areas: any[];
+    readOnly?: boolean;
 }
 
 export default function EventsView({
@@ -64,7 +66,8 @@ export default function EventsView({
     userRole,
     userAreaId,
     userAreaName,
-    areas
+    areas,
+    readOnly = false
 }: EventsViewProps) {
     const router = useRouter();
     const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
@@ -120,10 +123,12 @@ export default function EventsView({
                         <div>
                             <h1 className="text-3xl font-black text-meteorite-950 flex items-center">
                                 <CalendarCheck className="mr-3 w-8 h-8 text-meteorite-600 hidden sm:block" />
-                                Agenda & Eventos
+                                {readOnly ? "Agenda de Actividades" : "Agenda & Eventos"}
                             </h1>
                             <p className="text-meteorite-600 mt-1 font-medium text-sm sm:text-base">
-                                Gestión de actividades para el semestre {activeSemesterName}
+                                {readOnly
+                                    ? `Actividades del semestre ${activeSemesterName}`
+                                    : `Gestión de actividades para el semestre ${activeSemesterName}`}
                             </p>
                         </div>
                     </div>
@@ -153,12 +158,14 @@ export default function EventsView({
                             Filtrar
                         </button>
 
-                        <NewEventModal
-                            userRole={userRole}
-                            userAreaId={userAreaId}
-                            userAreaName={userAreaName}
-                            areas={areas}
-                        />
+                        {!readOnly && (
+                            <NewEventModal
+                                userRole={userRole}
+                                userAreaId={userAreaId}
+                                userAreaName={userAreaName}
+                                areas={areas}
+                            />
+                        )}
                     </div>
                 </div>
 
@@ -205,9 +212,9 @@ export default function EventsView({
                         {viewMode === "grid" && (
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-8">
                                 {filteredEvents.map((event) => {
-                                    const canEdit = canManageEvent(userRole, userAreaId, event);
-                                    const canDelete = canManageEvent(userRole, userAreaId, event);
-                                    const canAttendance = canTakeAttendance(userRole, userAreaId, event);
+                                    const canEdit = !readOnly && canManageEvent(userRole, userAreaId, event);
+                                    const canDelete = !readOnly && canManageEvent(userRole, userAreaId, event);
+                                    const canAttendance = !readOnly && canTakeAttendance(userRole, userAreaId, event);
 
                                     return (
                                         <EventCardGrid
@@ -229,9 +236,9 @@ export default function EventsView({
                         {viewMode === "list" && (
                             <div className="space-y-4 pb-8">
                                 {filteredEvents.map((event) => {
-                                    const canEdit = canManageEvent(userRole, userAreaId, event);
-                                    const canDelete = canManageEvent(userRole, userAreaId, event);
-                                    const canAttendance = canTakeAttendance(userRole, userAreaId, event);
+                                    const canEdit = !readOnly && canManageEvent(userRole, userAreaId, event);
+                                    const canDelete = !readOnly && canManageEvent(userRole, userAreaId, event);
+                                    const canAttendance = !readOnly && canTakeAttendance(userRole, userAreaId, event);
 
                                     return (
                                         <EventCardList
@@ -333,11 +340,19 @@ function EventCardGrid({ event, isDeleting, onEdit, onDelete, canEdit, canDelete
                     <span className="block text-[10px] font-bold text-meteorite-400 uppercase tracking-wider">{month}</span>
                     <span className="block text-2xl font-black text-meteorite-950 leading-none">{day}</span>
                 </div>
-                {canEdit && (
-                    <button onClick={onEdit} className="text-gray-300 hover:text-meteorite-600 p-1 rounded-full hover:bg-meteorite-50 transition-colors">
-                        <MoreVertical className="w-5 h-5" />
-                    </button>
-                )}
+                <div className="flex space-x-1">
+                    {canAttendance && (event.pendingJustificationCount || 0) > 0 && (
+                        <div className="bg-amber-100 text-amber-700 font-bold text-[10px] px-2 py-1 rounded-full flex items-center border border-amber-200 animate-pulse" title={`${event.pendingJustificationCount} justificaciones pendientes de revisión`}>
+                            <div className="w-1.5 h-1.5 bg-amber-500 rounded-full mr-1.5"></div>
+                            {event.pendingJustificationCount} pendientes
+                        </div>
+                    )}
+                    {canEdit && (
+                        <button onClick={onEdit} className="text-gray-300 hover:text-meteorite-600 p-1 rounded-full hover:bg-meteorite-50 transition-colors">
+                            <MoreVertical className="w-5 h-5" />
+                        </button>
+                    )}
+                </div>
             </div>
 
             <div className="mb-2">
@@ -425,8 +440,14 @@ function EventCardList({ event, isDeleting, onEdit, onDelete, canEdit, canDelete
             <div className="flex-1 w-full md:w-auto text-center md:text-left">
                 <div className="flex flex-col md:flex-row md:items-center gap-2 mb-1">
                     <h3 className="text-lg font-bold text-gray-900 leading-tight">{event.title}</h3>
-                    <div className="flex justify-center md:justify-start">
+                    <div className="flex justify-center md:justify-start gap-2 items-center">
                         <Tag isGeneral={isGeneral} isBoard={isBoard} areaName={event.targetArea?.name} areaCode={event.targetArea?.code} />
+                        {canAttendance && (event.pendingJustificationCount || 0) > 0 && (
+                            <div className="bg-amber-100 text-amber-700 font-bold text-[10px] px-2 py-0.5 rounded-full flex items-center border border-amber-200" title={`${event.pendingJustificationCount} justificaciones pendientes`}>
+                                <div className="w-1.5 h-1.5 bg-amber-500 rounded-full mr-1.5 animate-pulse"></div>
+                                {event.pendingJustificationCount}
+                            </div>
+                        )}
                     </div>
                 </div>
 

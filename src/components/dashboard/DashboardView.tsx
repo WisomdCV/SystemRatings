@@ -22,6 +22,9 @@ import {
     LogOut,
 } from "lucide-react";
 import { logoutAction } from "@/server/actions/auth.actions";
+import { submitJustificationAction } from "@/server/actions/attendance.actions";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import {
     Chart as ChartJS,
     RadialLinearScale,
@@ -49,10 +52,50 @@ ChartJS.register(
 
 interface DashboardViewProps {
     user: User;
+    upcomingEvents?: any[];
+    pendingJustifications?: any[];
 }
 
-export default function DashboardView({ user }: DashboardViewProps) {
+export default function DashboardView({ user, upcomingEvents = [], pendingJustifications = [] }: DashboardViewProps) {
     const [chartView, setChartView] = useState<"monthly" | "semester">("monthly");
+    const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+    const [isJustifyModalOpen, setIsJustifyModalOpen] = useState(false);
+    const [selectedRecord, setSelectedRecord] = useState<any | null>(null);
+    const [justificationReason, setJustificationReason] = useState("");
+    const [justificationLink, setJustificationLink] = useState("");
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const router = useRouter();
+
+    const handleOpenJustify = (record: any) => {
+        setSelectedRecord(record);
+        setJustificationReason("");
+        setJustificationLink("");
+        setIsJustifyModalOpen(true);
+        setIsDrawerOpen(false); // Close drawer to focus on modal
+    };
+
+    const handleSubmitJustification = async () => {
+        if (!selectedRecord || !justificationReason.trim()) {
+            toast.error("Por favor ingresa un motivo.");
+            return;
+        }
+
+        setIsSubmitting(true);
+        try {
+            const res = await submitJustificationAction(selectedRecord.id, justificationReason, justificationLink);
+            if (res.success) {
+                toast.success("Justificación enviada correctamente.");
+                setIsJustifyModalOpen(false);
+                router.refresh();
+            } else {
+                toast.error(res.error || "Error al enviar.");
+            }
+        } catch (error) {
+            toast.error("Error inesperado.");
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
 
     // --- Radar Data ---
     const radarData = {
@@ -209,7 +252,7 @@ export default function DashboardView({ user }: DashboardViewProps) {
                             </a>
                         ) : (
                             <a
-                                href="#"
+                                href="/dashboard/agenda"
                                 className="flex items-center px-4 py-3 text-meteorite-200 hover:bg-meteorite-900 hover:text-white rounded-xl transition-all group"
                             >
                                 <CalendarCheck className="text-meteorite-400 group-hover:text-white transition-colors w-5 h-5" />
@@ -295,9 +338,14 @@ export default function DashboardView({ user }: DashboardViewProps) {
                             </div>
                         </div>
 
-                        <button className="w-9 h-9 lg:w-10 lg:h-10 rounded-xl bg-white shadow-sm border border-meteorite-200 text-meteorite-600 hover:text-meteorite-800 hover:bg-meteorite-50 flex items-center justify-center transition-all relative">
+                        <button
+                            className="w-9 h-9 lg:w-10 lg:h-10 rounded-xl bg-white shadow-sm border border-meteorite-200 text-meteorite-600 hover:text-meteorite-800 hover:bg-meteorite-50 flex items-center justify-center transition-all relative"
+                            onClick={() => setIsDrawerOpen(!isDrawerOpen)}
+                        >
                             <Bell className="w-5 h-5" />
-                            <span className="absolute top-2 right-2.5 w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
+                            {pendingJustifications.length > 0 && (
+                                <span className="absolute top-2 right-2.5 w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
+                            )}
                         </button>
 
                         {user.image && (
@@ -472,7 +520,7 @@ export default function DashboardView({ user }: DashboardViewProps) {
                                     Próximas Actividades
                                 </h3>
                                 <a
-                                    href="#"
+                                    href="/dashboard/agenda"
                                     className="text-xs font-bold text-meteorite-600 bg-meteorite-50 px-3 py-1.5 rounded-lg hover:bg-meteorite-100 transition-colors"
                                 >
                                     Ver Todo
@@ -480,66 +528,178 @@ export default function DashboardView({ user }: DashboardViewProps) {
                             </div>
 
                             <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                                {/* Event Item 1 */}
-                                <div className="flex items-center p-3 rounded-xl hover:bg-meteorite-50 border border-transparent hover:border-meteorite-100 transition-all group cursor-pointer">
-                                    <div className="w-12 h-12 rounded-xl bg-meteorite-100 text-meteorite-600 flex flex-col items-center justify-center font-bold shadow-sm group-hover:bg-meteorite-200 group-hover:text-meteorite-700 transition-colors">
-                                        <span className="text-[10px] uppercase tracking-wide">
-                                            Hoy
-                                        </span>
-                                        <span className="text-lg leading-none">14</span>
+                                {upcomingEvents.length === 0 ? (
+                                    <div className="text-center py-6 text-gray-400 text-sm">
+                                        No hay actividades próximas.
                                     </div>
-                                    <div className="ml-4 flex-1">
-                                        <div className="flex justify-between items-start">
-                                            <h4 className="font-bold text-gray-800 text-sm group-hover:text-meteorite-700">
-                                                Capacitación de Liderazgo
-                                            </h4>
-                                            <span className="text-[10px] font-bold bg-green-100 text-green-600 px-2 py-0.5 rounded border border-green-200">
-                                                Obligatorio
-                                            </span>
+                                ) : (
+                                    upcomingEvents.map((event) => (
+                                        <div key={event.id} className="flex items-center p-3 rounded-xl hover:bg-meteorite-50 border border-transparent hover:border-meteorite-100 transition-all group cursor-pointer">
+                                            <div className={`w-12 h-12 rounded-xl flex flex-col items-center justify-center font-bold shadow-sm transition-colors ${event.targetAreaId ? 'bg-orange-50 text-orange-600 group-hover:bg-orange-100' : 'bg-meteorite-100 text-meteorite-600 group-hover:bg-meteorite-200'
+                                                }`}>
+                                                <span className="text-[10px] uppercase tracking-wide">
+                                                    {new Date(event.date).toLocaleDateString('es-ES', { month: 'short', timeZone: 'UTC' })}
+                                                </span>
+                                                <span className="text-lg leading-none">
+                                                    {new Date(event.date).getUTCDate()}
+                                                </span>
+                                            </div>
+                                            <div className="ml-4 flex-1">
+                                                <div className="flex justify-between items-start">
+                                                    <h4 className={`font-bold text-sm ${event.targetAreaId ? 'text-gray-800 group-hover:text-orange-700' : 'text-gray-800 group-hover:text-meteorite-700'
+                                                        }`}>
+                                                        {event.title}
+                                                    </h4>
+                                                    {event.isMandatory && (
+                                                        <span className="text-[10px] font-bold bg-green-100 text-green-600 px-2 py-0.5 rounded border border-green-200">
+                                                            Obligatorio
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <div className="flex items-center mt-1 text-xs text-gray-500">
+                                                    <Clock className={`w-3 h-3 mr-1.5 ${event.targetAreaId ? 'text-orange-400' : 'text-meteorite-400'}`} />
+                                                    {event.startTime} - {event.endTime}
+                                                    <span className="mx-2 text-gray-300">|</span>
+                                                    {event.isVirtual ? (
+                                                        <>
+                                                            <Video className={`w-3 h-3 mr-1.5 ${event.targetAreaId ? 'text-orange-400' : 'text-meteorite-400'}`} />
+                                                            Virtual
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <MapPin className={`w-3 h-3 mr-1.5 ${event.targetAreaId ? 'text-orange-400' : 'text-meteorite-400'}`} />
+                                                            Campus
+                                                        </>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            <div className="text-gray-300 group-hover:text-meteorite-500">
+                                                <ChevronRight className="w-4 h-4" />
+                                            </div>
                                         </div>
-                                        <div className="flex items-center mt-1 text-xs text-gray-500">
-                                            <Clock className="w-3 h-3 mr-1.5 text-meteorite-400" />{" "}
-                                            16:00 - 18:00
-                                            <span className="mx-2 text-gray-300">|</span>
-                                            <Video className="w-3 h-3 mr-1.5 text-meteorite-400" />{" "}
-                                            Virtual
-                                        </div>
-                                    </div>
-                                    <div className="text-gray-300 group-hover:text-meteorite-500">
-                                        <ChevronRight className="w-4 h-4" />
-                                    </div>
-                                </div>
-
-                                {/* Event Item 2 */}
-                                <div className="flex items-center p-3 rounded-xl hover:bg-meteorite-50 border border-transparent hover:border-meteorite-100 transition-all group cursor-pointer">
-                                    <div className="w-12 h-12 rounded-xl bg-orange-50 text-orange-600 flex flex-col items-center justify-center font-bold shadow-sm group-hover:bg-orange-100 transition-colors">
-                                        <span className="text-[10px] uppercase tracking-wide">
-                                            Mar
-                                        </span>
-                                        <span className="text-lg leading-none">16</span>
-                                    </div>
-                                    <div className="ml-4 flex-1">
-                                        <div className="flex justify-between items-start">
-                                            <h4 className="font-bold text-gray-800 text-sm group-hover:text-orange-700">
-                                                Integración Presencial
-                                            </h4>
-                                            <span className="text-[10px] font-bold bg-orange-100 text-orange-600 px-2 py-0.5 rounded border border-orange-200">
-                                                Social
-                                            </span>
-                                        </div>
-                                        <div className="flex items-center mt-1 text-xs text-gray-500">
-                                            <Clock className="w-3 h-3 mr-1.5 text-orange-400" />{" "}
-                                            10:00 - 13:00
-                                            <span className="mx-2 text-gray-300">|</span>
-                                            <MapPin className="w-3 h-3 mr-1.5 text-orange-400" />{" "}
-                                            Campus
-                                        </div>
-                                    </div>
-                                </div>
+                                    ))
+                                )}
                             </div>
                         </div>
                     </div>
                 </div>
+
+                {/* --- NOTIFICATION DRAWER --- */}
+                {isDrawerOpen && (
+                    <>
+                        <div
+                            className="fixed inset-0 bg-black/20 backdrop-blur-sm z-50 lg:hidden"
+                            onClick={() => setIsDrawerOpen(false)}
+                        ></div>
+                        <div className="fixed top-20 right-4 w-80 bg-white rounded-2xl shadow-2xl border border-meteorite-100 z-50 overflow-hidden animate-in slide-in-from-top-5 duration-200">
+                            <div className="p-4 border-b border-meteorite-100 bg-meteorite-50/50 flex justify-between items-center">
+                                <h3 className="font-bold text-meteorite-900">Avisos Importantes</h3>
+                                <span className="bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
+                                    {pendingJustifications.length}
+                                </span>
+                            </div>
+                            <div className="max-h-96 overflow-y-auto p-2">
+                                {pendingJustifications.length === 0 ? (
+                                    <div className="p-8 text-center text-gray-400 text-sm">
+                                        ¡Estás al día! No tienes faltas pendientes.
+                                    </div>
+                                ) : (
+                                    pendingJustifications.map((item) => {
+                                        const isLate = item.status === 'LATE';
+                                        const containerClasses = isLate
+                                            ? "bg-amber-50 border-amber-100 hover:bg-amber-100"
+                                            : "bg-red-50 border-red-100 hover:bg-red-100";
+                                        const titleClasses = isLate ? "text-amber-800" : "text-red-800";
+                                        const badgeClasses = isLate ? "text-amber-600 border-amber-200" : "text-red-600 border-red-200";
+                                        const statusTextClasses = isLate ? "text-amber-600" : "text-red-600";
+                                        const buttonClasses = isLate
+                                            ? "text-amber-600 border-amber-200 hover:bg-amber-600"
+                                            : "text-red-600 border-red-200 hover:bg-red-600";
+
+                                        return (
+                                            <div key={item.id} className={`p-3 mb-2 rounded-xl border transition-colors ${containerClasses}`}>
+                                                <div className="flex justify-between items-start mb-1">
+                                                    <h4 className={`font-bold text-xs ${titleClasses}`}>{item.event.title}</h4>
+                                                    <span className={`text-[10px] font-bold bg-white px-1.5 rounded border ${badgeClasses}`}>
+                                                        {new Date(item.event.date).toLocaleDateString()}
+                                                    </span>
+                                                </div>
+                                                <p className={`text-[11px] mb-2 ${statusTextClasses}`}>
+                                                    Estado: {isLate ? 'Tardanza' : 'Falta'} sin justificar.
+                                                </p>
+                                                <button
+                                                    onClick={() => handleOpenJustify(item)}
+                                                    className={`w-full py-1.5 bg-white rounded-lg text-xs font-bold hover:text-white transition-all shadow-sm border ${buttonClasses}`}
+                                                >
+                                                    Justificar Ahora
+                                                </button>
+                                            </div>
+                                        );
+                                    })
+                                )}
+                            </div>
+                        </div>
+                    </>
+                )}
+
+                {/* --- JUSTIFICATION MODAL --- */}
+                {isJustifyModalOpen && selectedRecord && (
+                    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
+                        <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+                            <div className="p-6 border-b border-gray-100">
+                                <h3 className="text-xl font-black text-meteorite-950">Justificar Faltas</h3>
+                                <p className="text-sm text-gray-500 mt-1">
+                                    {selectedRecord.event.title} • {new Date(selectedRecord.event.date).toLocaleDateString()}
+                                </p>
+                            </div>
+                            <div className="p-6 space-y-4">
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-700 mb-1.5 uppercase tracking-wide">Motivo de la falta</label>
+                                    <textarea
+                                        className="w-full p-3 rounded-xl border border-gray-200 focus:border-meteorite-500 focus:ring-2 focus:ring-meteorite-200 outline-none transition-all text-sm resize-none h-24"
+                                        placeholder="Explica brevemente por qué no pudiste asistir..."
+                                        value={justificationReason}
+                                        onChange={(e) => setJustificationReason(e.target.value)}
+                                    ></textarea>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-700 mb-1.5 uppercase tracking-wide">Enlace de Prueba (Opcional)</label>
+                                    <input
+                                        type="url"
+                                        className="w-full p-3 rounded-xl border border-gray-200 focus:border-meteorite-500 focus:ring-2 focus:ring-meteorite-200 outline-none transition-all text-sm"
+                                        placeholder="https://drive.google.com/..."
+                                        value={justificationLink}
+                                        onChange={(e) => setJustificationLink(e.target.value)}
+                                    />
+                                    <p className="text-[10px] text-gray-400 mt-1">Sube tu certificado médico o constancia a Drive y pega el link.</p>
+                                </div>
+                            </div>
+                            <div className="p-4 bg-gray-50 flex justify-end gap-3">
+                                <button
+                                    onClick={() => setIsJustifyModalOpen(false)}
+                                    className="px-4 py-2 text-gray-600 font-bold text-sm hover:bg-gray-100 rounded-xl transition-colors"
+                                    disabled={isSubmitting}
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    onClick={handleSubmitJustification}
+                                    disabled={isSubmitting}
+                                    className="px-6 py-2 bg-meteorite-600 text-white font-bold text-sm rounded-xl hover:bg-meteorite-700 transition-all shadow-lg shadow-meteorite-600/30 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                                >
+                                    {isSubmitting ? (
+                                        <>
+                                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2"></div>
+                                            Enviando...
+                                        </>
+                                    ) : (
+                                        "Enviar Justificación"
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </main>
 
             {/* 3. MOBILE BOTTOM NAV */}
@@ -564,7 +724,7 @@ export default function DashboardView({ user }: DashboardViewProps) {
                         </a>
                     ) : (
                         <a
-                            href="#"
+                            href="/dashboard/agenda"
                             className="flex flex-col items-center justify-center w-full h-full text-meteorite-400 hover:text-white transition-colors"
                         >
                             <Calendar className="w-5 h-5 mb-1" />
