@@ -22,7 +22,7 @@ import {
     LogOut,
 } from "lucide-react";
 import { logoutAction } from "@/server/actions/auth.actions";
-import { submitJustificationAction } from "@/server/actions/attendance.actions";
+import { submitJustificationAction, acknowledgeRejectionAction } from "@/server/actions/attendance.actions";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -200,6 +200,19 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
             },
             x: { grid: { display: false } },
         },
+    };
+
+    const handleAcknowledge = async (recordId: string) => {
+        toast.loading("Procesando...", { id: "ack-loading" });
+        const res = await acknowledgeRejectionAction(recordId);
+        toast.dismiss("ack-loading");
+
+        if (res.success) {
+            toast.success("Notificación descartada");
+            router.refresh();
+        } else {
+            toast.error(res.error || "Error al descartar");
+        }
     };
 
     return (
@@ -598,6 +611,9 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
                                     {pendingJustifications.length}
                                 </span>
                             </div>
+
+
+
                             <div className="max-h-96 overflow-y-auto p-2">
                                 {pendingJustifications.length === 0 ? (
                                     <div className="p-8 text-center text-gray-400 text-sm">
@@ -605,16 +621,23 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
                                     </div>
                                 ) : (
                                     pendingJustifications.map((item) => {
+                                        const isRejected = item.justificationStatus === 'REJECTED';
                                         const isLate = item.status === 'LATE';
-                                        const containerClasses = isLate
+
+                                        // Dynamic Classes based on Status
+                                        let containerClasses = isLate
                                             ? "bg-amber-50 border-amber-100 hover:bg-amber-100"
                                             : "bg-red-50 border-red-100 hover:bg-red-100";
-                                        const titleClasses = isLate ? "text-amber-800" : "text-red-800";
-                                        const badgeClasses = isLate ? "text-amber-600 border-amber-200" : "text-red-600 border-red-200";
-                                        const statusTextClasses = isLate ? "text-amber-600" : "text-red-600";
-                                        const buttonClasses = isLate
-                                            ? "text-amber-600 border-amber-200 hover:bg-amber-600"
-                                            : "text-red-600 border-red-200 hover:bg-red-600";
+                                        let titleClasses = isLate ? "text-amber-800" : "text-red-800";
+                                        let badgeClasses = isLate ? "text-amber-600 border-amber-200" : "text-red-600 border-red-200";
+                                        let statusTextClasses = isLate ? "text-amber-600" : "text-red-600";
+
+                                        if (isRejected) {
+                                            containerClasses = "bg-red-50 border-red-200 hover:bg-red-100";
+                                            titleClasses = "text-red-900";
+                                            badgeClasses = "text-red-700 border-red-300 bg-red-100";
+                                            statusTextClasses = "text-red-700";
+                                        }
 
                                         return (
                                             <div key={item.id} className={`p-3 mb-2 rounded-xl border transition-colors ${containerClasses}`}>
@@ -624,15 +647,43 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
                                                         {new Date(item.event.date).toLocaleDateString()}
                                                     </span>
                                                 </div>
-                                                <p className={`text-[11px] mb-2 ${statusTextClasses}`}>
-                                                    Estado: {isLate ? 'Tardanza' : 'Falta'} sin justificar.
-                                                </p>
-                                                <button
-                                                    onClick={() => handleOpenJustify(item)}
-                                                    className={`w-full py-1.5 bg-white rounded-lg text-xs font-bold hover:text-white transition-all shadow-sm border ${buttonClasses}`}
-                                                >
-                                                    Justificar Ahora
-                                                </button>
+
+                                                <div className={`text-[11px] mb-2 ${statusTextClasses}`}>
+                                                    {isRejected ? (
+                                                        <div className="flex flex-col gap-1">
+                                                            <span className="font-bold">❌ Justificación Rechazada</span>
+                                                            {item.adminFeedback && (
+                                                                <span className="italic opacity-90">"{item.adminFeedback}"</span>
+                                                            )}
+                                                        </div>
+                                                    ) : (
+                                                        <span>Estado: {isLate ? 'Tardanza' : 'Falta'} sin justificar.</span>
+                                                    )}
+                                                </div>
+
+                                                {isRejected ? (
+                                                    <div className="flex gap-2">
+                                                        <button
+                                                            onClick={() => handleOpenJustify(item)}
+                                                            className="flex-1 py-1.5 bg-white rounded-lg text-xs font-bold text-gray-600 border border-gray-200 hover:bg-gray-50 transition-all shadow-sm"
+                                                        >
+                                                            Reintentar
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleAcknowledge(item.id)}
+                                                            className="flex-1 py-1.5 bg-red-600 rounded-lg text-xs font-bold text-white hover:bg-red-700 transition-all shadow-sm"
+                                                        >
+                                                            Entendido
+                                                        </button>
+                                                    </div>
+                                                ) : (
+                                                    <button
+                                                        onClick={() => handleOpenJustify(item)}
+                                                        className={`w-full py-1.5 bg-white rounded-lg text-xs font-bold hover:text-white transition-all shadow-sm border ${isLate ? "text-amber-600 border-amber-200 hover:bg-amber-600" : "text-red-600 border-red-200 hover:bg-red-600"}`}
+                                                    >
+                                                        Justificar Ahora
+                                                    </button>
+                                                )}
                                             </div>
                                         );
                                     })

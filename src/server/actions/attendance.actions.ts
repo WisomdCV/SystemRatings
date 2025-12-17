@@ -262,10 +262,10 @@ export async function getPendingJustificationsAction() {
     try {
         const history = await getUserAttendanceHistoryDAO(session.user.id);
 
-        // Filter for ABSENT/LATE with justificationStatus === "NONE"
+        // Filter for ABSENT/LATE with justificationStatus === "NONE" OR "REJECTED"
         const pending = history.filter(record =>
             (record.status === "ABSENT" || record.status === "LATE") &&
-            record.justificationStatus === "NONE"
+            (record.justificationStatus === "NONE" || record.justificationStatus === "REJECTED")
         );
 
         // Sort by date desc
@@ -275,5 +275,29 @@ export async function getPendingJustificationsAction() {
     } catch (error) {
         console.error("Error fetching pending justifications:", error);
         return { success: false, error: "Error al obtener justificaciones pendientes" };
+    }
+}
+
+export async function acknowledgeRejectionAction(recordId: string) {
+    const session = await auth();
+    if (!session?.user) return { success: false, error: "No autorizado" };
+
+    try {
+        const record = await getAttendanceRecordByIdDAO(recordId);
+        if (!record) return { success: false, error: "Registro no encontrado" };
+
+        if (record.userId !== session.user.id) {
+            return { success: false, error: "No autorizado" };
+        }
+
+        await updateAttendanceRecordDAO(recordId, {
+            justificationStatus: "ACKNOWLEDGED"
+        });
+
+        revalidatePath("/dashboard");
+        return { success: true, message: "Notificación descartada" };
+    } catch (error) {
+        console.error("Error acknowledging rejection:", error);
+        return { success: false, error: "Error al descartar notificación" };
     }
 }
