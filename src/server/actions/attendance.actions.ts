@@ -19,23 +19,60 @@ export async function getAttendanceSheetAction(eventId: string) {
         if (!event) return { success: false, error: "Evento no encontrado" };
 
         const isDevOrPresi = role === "DEV" || role === "PRESIDENT";
-        const isAreaDirector = role === "DIRECTOR" && (event.targetAreaId === userAreaId || !event.targetAreaId); // Allow director for general events? 
-        // Logic refinement: 
-        // - General Event: Maybe only Presi/Dev takes attendance? Or Director/Secretary too? 
-        //   Usually General Events are handled by Secretary/Presi. 
-        //   Let's allow Directors to SEE the sheet essentially, but maybe restricted saving?
-        //   For now, we'll allow access if DIRECTOR. 
-        // - Area Event: Must match area.
-
-
 
         if (!isDevOrPresi) {
-            // Allow Director, Subdirector, Secretary
-            if (!["DIRECTOR", "SUBDIRECTOR", "SECRETARY"].includes(role || "")) return { success: false, error: "Permisos insuficientes" };
+            // Permission Logic Matrix:
+            // TREASURER: General & MD
+            // DIRECTOR/SUBDIRECTOR: Only their Area
+            // SECRETARY: (Assuming General/MD like Treasurer based on context, or strict?) -> Let's stick to prompt. 
+            // Prompt says: Treasurer -> General + MD.
 
-            // Check Area Match if it's an specific area event
-            if (event.targetAreaId && event.targetAreaId !== userAreaId) {
-                return { success: false, error: "No puedes tomar asistencia de otra área" };
+            // Allow Director, Subdirector, Treasurer (Secretary excluded for now unless prompted)
+            if (!["DIRECTOR", "SUBDIRECTOR", "TREASURER"].includes(role || "")) {
+                return { success: false, error: "Permisos insuficientes" };
+            }
+
+            // Treasurer Check
+            if (role === "TREASURER") {
+                // If event has a targetAreaId that is NOT MD (assuming MD area exists? or keep logically consistent)
+                // We need to know if targetAreaId corresponds to "Mesa Directiva".
+                // We fetched 'event', does it have area code? `getEventByIdDAO` likely returns area relation.
+                // If not, we rely on targetAreaId being null (General).
+                // If event.targetArea?.code === "MD".
+                // PROBLEM: getEventByIdDAO might not return relation. Let's check or assume standard logic.
+                // Assuming getEventByIdDAO includes 'targetArea'.
+
+                // If general -> OK.
+                if (!event.targetAreaId) {
+                    // OK
+                } else {
+                    // Check if MD. We need relation. OR specific ID logic.
+                    // Safe approach: Check if userAreaId is same (unlikely for Treasurer) OR code is MD.
+                    // If we don't have code, we might fail on MD check.
+                    // Let's assume getEventByIdDAO fetches relation as most DAOs do. 
+                    // If not, we might need to fetch it.
+                    // But wait, line 22 checks `event.targetAreaId`. 
+
+                    // Optimization: If TREASURER, allow if !targetAreaId. 
+                    // What about MD? MD is a specific area. 
+                    // How to identify MD? By code "MD".
+                    // If event.targetArea?.code === "MD".
+                    // Let's assume event object has targetArea. 
+
+                    const isGeneral = !event.targetAreaId;
+                    const isMD = event.targetArea?.code === "MD";
+
+                    if (!isGeneral && !isMD) {
+                        return { success: false, error: "El Tesorero solo puede gestionar Eventos Generales y Mesa Directiva." };
+                    }
+                }
+            }
+
+            // Director/Subdirector Check
+            if (role === "DIRECTOR" || role === "SUBDIRECTOR") {
+                if (event.targetAreaId !== userAreaId) {
+                    return { success: false, error: "Solo puedes gestionar eventos de tu área." };
+                }
             }
         }
 

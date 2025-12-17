@@ -204,30 +204,48 @@ export default function EventsView({
                         {/* GRID VIEW */}
                         {viewMode === "grid" && (
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-8">
-                                {filteredEvents.map((event) => (
-                                    <EventCardGrid
-                                        key={event.id}
-                                        event={event}
-                                        isDeleting={isDeleting}
-                                        onEdit={() => setEditingEvent(event)}
-                                        onDelete={() => handleDelete(event.id)}
-                                    />
-                                ))}
+                                {filteredEvents.map((event) => {
+                                    const canEdit = canManageEvent(userRole, userAreaId, event);
+                                    const canDelete = canManageEvent(userRole, userAreaId, event);
+                                    const canAttendance = canTakeAttendance(userRole, userAreaId, event);
+
+                                    return (
+                                        <EventCardGrid
+                                            key={event.id}
+                                            event={event}
+                                            isDeleting={isDeleting}
+                                            onEdit={() => setEditingEvent(event)}
+                                            onDelete={() => handleDelete(event.id)}
+                                            canEdit={canEdit}
+                                            canDelete={canDelete}
+                                            canAttendance={canAttendance}
+                                        />
+                                    );
+                                })}
                             </div>
                         )}
 
                         {/* LIST VIEW */}
                         {viewMode === "list" && (
                             <div className="space-y-4 pb-8">
-                                {filteredEvents.map((event) => (
-                                    <EventCardList
-                                        key={event.id}
-                                        event={event}
-                                        isDeleting={isDeleting}
-                                        onEdit={() => setEditingEvent(event)}
-                                        onDelete={() => handleDelete(event.id)}
-                                    />
-                                ))}
+                                {filteredEvents.map((event) => {
+                                    const canEdit = canManageEvent(userRole, userAreaId, event);
+                                    const canDelete = canManageEvent(userRole, userAreaId, event);
+                                    const canAttendance = canTakeAttendance(userRole, userAreaId, event);
+
+                                    return (
+                                        <EventCardList
+                                            key={event.id}
+                                            event={event}
+                                            isDeleting={isDeleting}
+                                            onEdit={() => setEditingEvent(event)}
+                                            onDelete={() => handleDelete(event.id)}
+                                            canEdit={canEdit}
+                                            canDelete={canDelete}
+                                            canAttendance={canAttendance}
+                                        />
+                                    );
+                                })}
                             </div>
                         )}
                     </>
@@ -267,9 +285,39 @@ export default function EventsView({
     );
 }
 
+// --- Helpers ---
+function canManageEvent(role: string, userAreaId: string | null, event: EventItem) {
+    if (role === "DEV" || role === "PRESIDENT") return true; // Start Mode God/Strategic Global
+    if (role === "TREASURER") {
+        // Can manage General and MD events
+        return !event.targetAreaId || event.targetArea?.code === "MD";
+    }
+    if (role === "DIRECTOR" || role === "SUBDIRECTOR") {
+        // Can manage ONLY their area events
+        return event.targetAreaId === userAreaId;
+    }
+    return false;
+}
+
+function canTakeAttendance(role: string, userAreaId: string | null, event: EventItem) {
+    // Logic is identical to management for now based on the matrix
+    // "Tomar Asistencia" vs "Crear Eventos" columns are identical in scope
+    return canManageEvent(role, userAreaId, event);
+}
+
 // --- Sub-components to keep clean ---
 
-function EventCardGrid({ event, isDeleting, onEdit, onDelete }: { event: EventItem, isDeleting: string | null, onEdit: () => void, onDelete: () => void }) {
+interface EventCardProps {
+    event: EventItem;
+    isDeleting: string | null;
+    onEdit: () => void;
+    onDelete: () => void;
+    canEdit: boolean;
+    canDelete: boolean;
+    canAttendance: boolean;
+}
+
+function EventCardGrid({ event, isDeleting, onEdit, onDelete, canEdit, canDelete, canAttendance }: EventCardProps) {
     const isGeneral = !event.targetArea;
     const isBoard = event.targetArea?.code === "MD";
     const dateObj = new Date(event.date);
@@ -285,9 +333,11 @@ function EventCardGrid({ event, isDeleting, onEdit, onDelete }: { event: EventIt
                     <span className="block text-[10px] font-bold text-meteorite-400 uppercase tracking-wider">{month}</span>
                     <span className="block text-2xl font-black text-meteorite-950 leading-none">{day}</span>
                 </div>
-                <button onClick={onEdit} className="text-gray-300 hover:text-meteorite-600 p-1 rounded-full hover:bg-meteorite-50 transition-colors">
-                    <MoreVertical className="w-5 h-5" />
-                </button>
+                {canEdit && (
+                    <button onClick={onEdit} className="text-gray-300 hover:text-meteorite-600 p-1 rounded-full hover:bg-meteorite-50 transition-colors">
+                        <MoreVertical className="w-5 h-5" />
+                    </button>
+                )}
             </div>
 
             <div className="mb-2">
@@ -323,12 +373,16 @@ function EventCardGrid({ event, isDeleting, onEdit, onDelete }: { event: EventIt
 
             <div className="flex items-center justify-between mt-auto pt-4 border-t border-gray-50">
                 <div className="flex space-x-1">
-                    <button onClick={onEdit} className="w-9 h-9 flex items-center justify-center rounded-lg text-gray-400 hover:text-meteorite-600 hover:bg-meteorite-50 transition-colors" title="Editar">
-                        <Edit className="w-4 h-4" />
-                    </button>
-                    <button onClick={onDelete} disabled={isDeleting === event.id} className="w-9 h-9 flex items-center justify-center rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors disabled:opacity-50" title="Eliminar">
-                        {isDeleting === event.id ? <div className="w-4 h-4 animate-spin rounded-full border-2 border-red-500 border-t-transparent"></div> : <Trash2 className="w-4 h-4" />}
-                    </button>
+                    {canEdit && (
+                        <button onClick={onEdit} className="w-9 h-9 flex items-center justify-center rounded-lg text-gray-400 hover:text-meteorite-600 hover:bg-meteorite-50 transition-colors" title="Editar">
+                            <Edit className="w-4 h-4" />
+                        </button>
+                    )}
+                    {canDelete && (
+                        <button onClick={onDelete} disabled={isDeleting === event.id} className="w-9 h-9 flex items-center justify-center rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors disabled:opacity-50" title="Eliminar">
+                            {isDeleting === event.id ? <div className="w-4 h-4 animate-spin rounded-full border-2 border-red-500 border-t-transparent"></div> : <Trash2 className="w-4 h-4" />}
+                        </button>
+                    )}
                 </div>
                 <div className="flex space-x-2">
                     {event.isVirtual && event.meetLink && (
@@ -336,16 +390,18 @@ function EventCardGrid({ event, isDeleting, onEdit, onDelete }: { event: EventIt
                             <Video className="w-3.5 h-3.5 mr-1" /> Unirse
                         </a>
                     )}
-                    <Link href={`/admin/events/${event.id}/attendance`} className="flex items-center px-3 py-2 bg-white border border-meteorite-200 hover:border-meteorite-400 text-meteorite-700 text-xs font-bold rounded-xl transition-all">
-                        <Zap className="w-3.5 h-3.5 mr-1 text-meteorite-500" /> Asistencia
-                    </Link>
+                    {canAttendance && (
+                        <Link href={`/admin/events/${event.id}/attendance`} className="flex items-center px-3 py-2 bg-white border border-meteorite-200 hover:border-meteorite-400 text-meteorite-700 text-xs font-bold rounded-xl transition-all">
+                            <Zap className="w-3.5 h-3.5 mr-1 text-meteorite-500" /> Asistencia
+                        </Link>
+                    )}
                 </div>
             </div>
         </div>
     );
 }
 
-function EventCardList({ event, isDeleting, onEdit, onDelete }: { event: EventItem, isDeleting: string | null, onEdit: () => void, onDelete: () => void }) {
+function EventCardList({ event, isDeleting, onEdit, onDelete, canEdit, canDelete, canAttendance }: EventCardProps) {
     const isGeneral = !event.targetArea;
     const isBoard = event.targetArea?.code === "MD";
     const dateObj = new Date(event.date);
@@ -398,15 +454,18 @@ function EventCardList({ event, isDeleting, onEdit, onDelete }: { event: EventIt
 
             {/* Right: Actions */}
             <div className="flex items-center gap-3 w-full md:w-auto justify-between md:justify-end border-t md:border-none pt-3 md:pt-0 mt-2 md:mt-0">
-                {/* Edit/Delete (Mobile: Left, Desktop: Left of buttons) */}
+                {/* Edit/Delete */}
                 <div className="flex items-center gap-1">
-                    <button onClick={onEdit} className="p-2 text-gray-400 hover:text-meteorite-600 rounded-full hover:bg-meteorite-50 transition-colors">
-                        <Edit className="w-4 h-4" />
-                    </button>
-                    {/* Only show delete if user has permission (handled by parent passing handler but here just UI) */}
-                    <button onClick={onDelete} disabled={isDeleting === event.id} className="p-2 text-gray-400 hover:text-red-500 rounded-full hover:bg-red-50 transition-colors disabled:opacity-50">
-                        {isDeleting === event.id ? <div className="w-4 h-4 animate-spin rounded-full border-2 border-red-500 border-t-transparent"></div> : <Trash2 className="w-4 h-4" />}
-                    </button>
+                    {canEdit && (
+                        <button onClick={onEdit} className="p-2 text-gray-400 hover:text-meteorite-600 rounded-full hover:bg-meteorite-50 transition-colors">
+                            <Edit className="w-4 h-4" />
+                        </button>
+                    )}
+                    {canDelete && (
+                        <button onClick={onDelete} disabled={isDeleting === event.id} className="p-2 text-gray-400 hover:text-red-500 rounded-full hover:bg-red-50 transition-colors disabled:opacity-50">
+                            {isDeleting === event.id ? <div className="w-4 h-4 animate-spin rounded-full border-2 border-red-500 border-t-transparent"></div> : <Trash2 className="w-4 h-4" />}
+                        </button>
+                    )}
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -415,13 +474,12 @@ function EventCardList({ event, isDeleting, onEdit, onDelete }: { event: EventIt
                             Unirse
                         </a>
                     )}
-                    <Link href={`/admin/events/${event.id}/attendance`} className="flex items-center px-4 py-2 bg-white border border-meteorite-200 hover:border-meteorite-400 text-meteorite-700 text-xs font-bold rounded-xl transition-all">
-                        Asistencia
-                    </Link>
-                    {/* More options dots could go here if needed */}
-                    <button className="text-gray-300 hover:text-meteorite-600 p-1 md:hidden">
-                        <MoreVertical className="w-5 h-5" />
-                    </button>
+                    {canAttendance && (
+                        <Link href={`/admin/events/${event.id}/attendance`} className="flex items-center px-4 py-2 bg-white border border-meteorite-200 hover:border-meteorite-400 text-meteorite-700 text-xs font-bold rounded-xl transition-all">
+                            Asistencia
+                        </Link>
+                    )}
+                    {/* More options dots could go here if needed -> Hidden to reduce clutter if actions are limited */}
                 </div>
             </div>
         </div>

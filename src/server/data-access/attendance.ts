@@ -1,6 +1,6 @@
 import { db } from "@/db";
 import { attendanceRecords, events, users } from "@/db/schema";
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, and, inArray, ne } from "drizzle-orm";
 
 export type AttendanceStatus = "PRESENT" | "ABSENT" | "LATE" | "EXCUSED";
 
@@ -28,10 +28,21 @@ export async function getAttendanceSheetDAO(eventId: string): Promise<Attendance
         columns: {
             id: true,
             targetAreaId: true,
+            createdById: true,
         },
         with: {
             targetArea: {
                 columns: { code: true }
+            },
+            createdBy: {
+                columns: {
+                    id: true,
+                    name: true,
+                    image: true,
+                    email: true,
+                    currentAreaId: true,
+                    role: true
+                }
             }
         }
     });
@@ -43,12 +54,21 @@ export async function getAttendanceSheetDAO(eventId: string): Promise<Attendance
     // If targetArea.code === 'MD' -> Board -> Director, Subdirector, Treasurer
     // If targetAreaId is SET -> Area -> Active users of that area
 
-    let eligibleUsers;
+    let eligibleUsers: {
+        id: string;
+        name: string | null;
+        image: string | null;
+        email: string;
+        currentAreaId: string | null;
+    }[];
 
     if (!event.targetAreaId) {
         // Evento General
         eligibleUsers = await db.query.users.findMany({
-            where: eq(users.status, "ACTIVE"),
+            where: and(
+                eq(users.status, "ACTIVE"),
+                ne(users.role, "DEV")
+            ),
             columns: {
                 id: true,
                 name: true,
@@ -60,6 +80,10 @@ export async function getAttendanceSheetDAO(eventId: string): Promise<Attendance
         });
     } else if (event.targetArea?.code === "MD") {
         // Lógica Mesa Directiva: Presidenta toma lista a sus líderes
+        // DEV is excluded implicitly by inArray check below, but explicit check implies intention if roles changed.
+        // Actually, inArray(["DIRECTOR"...]) already excludes "DEV" unless DEV is added to that list. 
+        // So no change needed here strictly, but let's be safe if logic changes later? 
+        // No, strict list is safer.
         eligibleUsers = await db.query.users.findMany({
             where: and(
                 eq(users.status, "ACTIVE"),
@@ -79,7 +103,8 @@ export async function getAttendanceSheetDAO(eventId: string): Promise<Attendance
         eligibleUsers = await db.query.users.findMany({
             where: and(
                 eq(users.status, "ACTIVE"),
-                eq(users.currentAreaId, event.targetAreaId)
+                eq(users.currentAreaId, event.targetAreaId),
+                ne(users.role, "DEV")
             ),
             columns: {
                 id: true,
@@ -90,6 +115,24 @@ export async function getAttendanceSheetDAO(eventId: string): Promise<Attendance
             },
             orderBy: (users, { asc }) => [asc(users.name)]
         });
+    }
+
+    // NEW LOGIC: Always include the Creator (if not DEV and not already in list)
+    if (event.createdBy && event.createdBy.role !== "DEV") {
+        const isAlreadyIncluded = eligibleUsers.some(u => u.id === event.createdBy?.id);
+        if (!isAlreadyIncluded) {
+            // Add creator to the list
+            eligibleUsers.push({
+                id: event.createdBy.id,
+                name: event.createdBy.name,
+                image: event.createdBy.image,
+                email: event.createdBy.email,
+                currentAreaId: event.createdBy.currentAreaId
+            });
+            // Re-sort strictly by name to maintain order? 
+            // Optional, but nice.
+            eligibleUsers.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+        }
     }
 
     // 3. Get existing records for this event

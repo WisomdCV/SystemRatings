@@ -188,7 +188,7 @@ export default function DashboardView({ user }: DashboardViewProps) {
                         </a>
 
                         {/* 2. Equipo IISE */}
-                        {["DEV", "PRESIDENT", "DIRECTOR", "SUBDIRECTOR"].includes((user as any).role) && (
+                        {["DEV", "PRESIDENT", "TREASURER", "DIRECTOR", "SUBDIRECTOR"].includes((user as any).role) && (
                             <a
                                 href="/admin/users"
                                 className="flex items-center px-4 py-3 text-meteorite-200 hover:bg-meteorite-900 hover:text-white rounded-xl transition-all group"
@@ -199,7 +199,7 @@ export default function DashboardView({ user }: DashboardViewProps) {
                         )}
 
                         {/* 3. Meetings */}
-                        {["DEV", "PRESIDENT", "DIRECTOR", "SUBDIRECTOR"].includes((user as any).role) ? (
+                        {["DEV", "PRESIDENT", "TREASURER", "DIRECTOR", "SUBDIRECTOR"].includes((user as any).role) ? (
                             <a
                                 href="/admin/events"
                                 className="flex items-center px-4 py-3 text-meteorite-200 hover:bg-meteorite-900 hover:text-white rounded-xl transition-all group"
@@ -554,7 +554,7 @@ export default function DashboardView({ user }: DashboardViewProps) {
                         </div>
                         <span className="text-[10px] font-medium opacity-100">Inicio</span>
                     </a>
-                    {["DEV", "PRESIDENT", "DIRECTOR", "SUBDIRECTOR"].includes((user as any).role) ? (
+                    {["DEV", "PRESIDENT", "TREASURER", "DIRECTOR", "SUBDIRECTOR"].includes((user as any).role) ? (
                         <a
                             href="/admin/events"
                             className="flex flex-col items-center justify-center w-full h-full text-meteorite-400 hover:text-white transition-colors"
