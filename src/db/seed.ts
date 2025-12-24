@@ -57,11 +57,11 @@ async function main() {
     await db.delete(gradeDefinitions).where(eq(gradeDefinitions.semesterId, semester.id));
 
     await db.insert(gradeDefinitions).values([
-        { semesterId: semester.id, name: "Reunión General", weight: 20, maxScore: 5 },
-        { semesterId: semester.id, name: "Área", weight: 30, maxScore: 5 },
-        { semesterId: semester.id, name: "Proyectos", weight: 35, maxScore: 5 },
-        { semesterId: semester.id, name: "Staff", weight: 15, maxScore: 5 },
-        { semesterId: semester.id, name: "Reunión CD", weight: 15, maxScore: 5, isDirectorOnly: true },
+        { semesterId: semester.id, name: "Reunión General", weight: 0, maxScore: 5 },
+        { semesterId: semester.id, name: "Staff", weight: 0, maxScore: 5 },
+        { semesterId: semester.id, name: "Proyectos", weight: 0, maxScore: 10 },
+        { semesterId: semester.id, name: "Área", weight: 0, maxScore: 15 },
+        { semesterId: semester.id, name: "Liderazgo (CD)", weight: 0, maxScore: 15, isDirectorOnly: true },
     ]);
 
     // 4. PRE-AUTORIZAR TU USUARIO DEV

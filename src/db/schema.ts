@@ -189,6 +189,8 @@ export const kpiMonthlySummaries = sqliteTable("kpi_monthly_summary", {
   finalKpiScore: real("final_kpi_score").default(0),
   attendanceScore: real("attendance_score").default(0),
 
+  appliedRole: text("applied_role"), // Snapshot of role at calculation time (MEMBER vs DIRECTOR)
+
   lastUpdated: integer("last_updated", { mode: "timestamp" }).default(sql`(unixepoch())`),
 });
 
@@ -262,4 +264,10 @@ export const kpiMonthlySummariesRelations = relations(kpiMonthlySummaries, ({ on
 export const areaKpiSummariesRelations = relations(areaKpiSummaries, ({ one }) => ({
   area: one(areas, { fields: [areaKpiSummaries.areaId], references: [areas.id] }),
   semester: one(semesters, { fields: [areaKpiSummaries.semesterId], references: [semesters.id] }),
+}));
+
+export const positionHistoryRelations = relations(positionHistory, ({ one }) => ({
+  user: one(users, { fields: [positionHistory.userId], references: [users.id] }),
+  area: one(areas, { fields: [positionHistory.areaId], references: [areas.id] }),
+  semester: one(semesters, { fields: [positionHistory.semesterId], references: [semesters.id] }),
 }));
