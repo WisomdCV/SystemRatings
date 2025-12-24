@@ -3,13 +3,14 @@
 import { useState } from "react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { Calendar, PlayCircle, StopCircle, RefreshCcw, CheckCircle2, XCircle } from "lucide-react";
+import { Calendar, PlayCircle, StopCircle, RefreshCcw, CheckCircle2, XCircle, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { toggleSemesterStatusAction } from "@/server/actions/semester.actions";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import CreateCycleModal from "./CreateCycleModal";
 
 interface CyclesViewProps {
@@ -28,7 +29,7 @@ export default function CyclesView({ semesters }: CyclesViewProps) {
         const promise = toggleSemesterStatusAction(id, activate);
 
         toast.promise(promise, {
-            loading: activate ? 'Activando ciclo y cerrando anteriores...' : 'Cerrando ciclo...',
+            loading: activate ? 'Activando ciclo...' : 'Cerrando ciclo...',
             success: (data) => {
                 setLoadingId(null);
                 router.refresh();
@@ -42,148 +43,180 @@ export default function CyclesView({ semesters }: CyclesViewProps) {
     };
 
     return (
-        <div className="p-6 max-w-7xl mx-auto space-y-8">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <div>
-                    <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Gestión de Ciclos Académicos</h1>
-                    <p className="text-gray-500 mt-1">Configura y controla los periodos activos del sistema.</p>
-                </div>
-                <CreateCycleModal />
-            </div>
+        <div className="p-6 lg:p-10 min-h-screen bg-meteorite-50 relative overflow-hidden">
+            {/* Background Orbs (Matched from EventsView) */}
+            <div className="absolute top-0 left-0 w-full h-96 bg-gradient-to-b from-white to-transparent pointer-events-none z-0"></div>
+            <div className="absolute -top-20 -right-20 w-96 h-96 bg-meteorite-200 rounded-full mix-blend-multiply filter blur-3xl opacity-50"></div>
+            <div className="absolute top-20 -left-20 w-72 h-72 bg-meteorite-300 rounded-full mix-blend-multiply filter blur-3xl opacity-50 animation-delay-2000"></div>
 
-            {/* Active Cycle Hero Card */}
-            <div className="grid gap-6">
-                <h2 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
-                    <PlayCircle className="w-5 h-5 text-meteorite-600" />
-                    Ciclo Actualmente Activo
-                </h2>
-
-                {activeSemester ? (
-                    <Card className="bg-gradient-to-br from-meteorite-900 to-meteorite-800 border-none text-white shadow-xl relative overflow-hidden">
-                        <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full blur-3xl -translate-y-12 translate-x-12 pointer-events-none"></div>
-                        <CardContent className="p-8 flex flex-col md:flex-row justify-between items-center gap-6 relative z-10">
-                            <div>
-                                <div className="inline-flex items-center gap-2 bg-emerald-500/20 text-emerald-300 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-3 border border-emerald-500/30">
-                                    <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></div>
-                                    En Curso
-                                </div>
-                                <h3 className="text-4xl font-extrabold mb-2">{activeSemester.name}</h3>
-                                <div className="flex items-center gap-6 text-meteorite-200">
-                                    <div className="flex items-center gap-2">
-                                        <Calendar className="w-4 h-4" />
-                                        <span>Inicio: {format(new Date(activeSemester.startDate), "d 'de' MMMM, yyyy", { locale: es })}</span>
-                                    </div>
-                                    {activeSemester.endDate && (
-                                        <div className="flex items-center gap-2 border-l border-meteorite-600 pl-6">
-                                            <Calendar className="w-4 h-4" />
-                                            <span>Fin: {format(new Date(activeSemester.endDate), "d 'de' MMMM, yyyy", { locale: es })}</span>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                            <Button
-                                variant="destructive"
-                                className="bg-red-500/10 hover:bg-red-500/20 text-red-200 border-red-500/30 border"
-                                onClick={() => handleToggle(activeSemester.id, false)}
-                                disabled={!!loadingId}
-                            >
-                                <StopCircle className="w-4 h-4 mr-2" />
-                                Cerrar Ciclo Manualmente
-                            </Button>
-                        </CardContent>
-                    </Card>
-                ) : (
-                    <div className="bg-amber-50 border border-amber-200 rounded-xl p-8 flex flex-col items-center justify-center text-center">
-                        <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center mb-4">
-                            <StopCircle className="w-6 h-6 text-amber-600" />
+            <div className="max-w-7xl mx-auto space-y-10 relative z-10">
+                {/* Header */}
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 py-8 border-b border-meteorite-200/50">
+                    <div className="flex items-center gap-4">
+                        <Link
+                            href="/dashboard"
+                            className="bg-white p-2.5 rounded-full text-meteorite-600 hover:text-meteorite-800 hover:bg-meteorite-100 transition-all shadow-sm border border-meteorite-100 shrink-0"
+                            title="Volver al Dashboard"
+                        >
+                            <ArrowLeft className="w-5 h-5" />
+                        </Link>
+                        <div>
+                            <h1 className="text-3xl font-black text-meteorite-950 tracking-tight">Gestión de Ciclos</h1>
+                            <p className="text-meteorite-600 font-medium mt-1">Configura y controla los periodos académicos activos.</p>
                         </div>
-                        <h3 className="text-xl font-bold text-amber-800">No hay ningún ciclo activo</h3>
-                        <p className="text-amber-600 max-w-md mt-2">
-                            El sistema está en modo "Mantenimiento". No se pueden crear eventos ni registrar asistencias hasta que actives un ciclo.
-                        </p>
                     </div>
-                )}
-            </div>
+                    <CreateCycleModal />
+                </div>
 
-            {/* Inactive Cycles List */}
-            <div className="space-y-4">
-                <h2 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
-                    <RefreshCcw className="w-5 h-5 text-gray-400" />
-                    Historial de Ciclos
-                </h2>
+                {/* Active Cycle Hero Card */}
+                <div className="grid gap-6">
+                    <h2 className="text-lg font-bold text-meteorite-900 flex items-center gap-2">
+                        <PlayCircle className="w-5 h-5 text-meteorite-500" />
+                        Ciclo Activo
+                    </h2>
 
-                <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-                    {semesters.filter(s => !s.isActive).length === 0 ? (
-                        <div className="p-8 text-center text-gray-400">
-                            No hay ciclos inactivos en el historial.
-                        </div>
+                    {activeSemester ? (
+                        <Card className="bg-white border-0 shadow-2xl shadow-emerald-900/5 relative overflow-hidden rounded-3xl ring-1 ring-gray-100 group transition-all hover:shadow-emerald-900/10">
+                            {/* Decorative Elements */}
+                            <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-emerald-400 to-teal-500"></div>
+                            <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-50 rounded-full blur-3xl -translate-y-12 translate-x-12 pointer-events-none transition-all group-hover:bg-emerald-100/50"></div>
+
+                            <CardContent className="p-8 lg:p-10 flex flex-col md:flex-row justify-between items-center gap-8 relative z-10">
+                                <div className="flex-1">
+                                    <div className="inline-flex items-center gap-2 bg-emerald-50 text-emerald-700 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider mb-4 border border-emerald-100 shadow-sm">
+                                        <span className="relative flex h-2 w-2">
+                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                                        </span>
+                                        En Curso
+                                    </div>
+                                    <h3 className="text-4xl lg:text-5xl font-black text-gray-900 mb-4 tracking-tight">{activeSemester.name}</h3>
+
+                                    <div className="flex flex-wrap gap-6 text-gray-500 font-medium">
+                                        <div className="flex items-center gap-2 bg-gray-50 px-4 py-2 rounded-xl border border-gray-100">
+                                            <Calendar className="w-4 h-4 text-meteorite-400" />
+                                            <span className="text-sm">Inicio: <span className="text-gray-900 font-bold">{format(new Date(activeSemester.startDate), "d 'de' MMMM, yyyy", { locale: es })}</span></span>
+                                        </div>
+                                        {activeSemester.endDate && (
+                                            <div className="flex items-center gap-2 bg-gray-50 px-4 py-2 rounded-xl border border-gray-100">
+                                                <Calendar className="w-4 h-4 text-meteorite-400" />
+                                                <span className="text-sm">Fin: <span className="text-gray-900 font-bold">{format(new Date(activeSemester.endDate), "d 'de' MMMM, yyyy", { locale: es })}</span></span>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <Button
+                                    variant="destructive"
+                                    className="h-auto py-3 px-6 rounded-xl bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700 border border-red-100 shadow-sm font-bold transition-all"
+                                    onClick={() => handleToggle(activeSemester.id, false)}
+                                    disabled={!!loadingId}
+                                >
+                                    <StopCircle className="w-4 h-4 mr-2" />
+                                    Finalizar Ciclo
+                                </Button>
+                            </CardContent>
+                        </Card>
                     ) : (
-                        <table className="w-full text-sm text-left">
-                            <thead className="bg-gray-50 text-gray-500 font-medium border-b border-gray-200">
-                                <tr>
-                                    <th className="px-6 py-4">Nombre del Ciclo</th>
-                                    <th className="px-6 py-4">Periodo</th>
-                                    <th className="px-6 py-4">Estado</th>
-                                    <th className="px-6 py-4 text-right">Acciones</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-100">
-                                {semesters.filter(s => !s.isActive).map((sem) => (
-                                    <tr key={sem.id} className="hover:bg-gray-50/50 transition-colors">
-                                        <td className="px-6 py-4 font-bold text-gray-900">{sem.name}</td>
-                                        <td className="px-6 py-4 text-gray-500">
-                                            {format(new Date(sem.startDate), "MMM yyyy", { locale: es })}
-                                            {" - "}
-                                            {sem.endDate ? format(new Date(sem.endDate), "MMM yyyy", { locale: es }) : "..."}
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500 border border-gray-200">
-                                                <XCircle className="w-3 h-3" />
-                                                Inactivo
-                                            </span>
-                                        </td>
-                                        <td className="px-6 py-4 text-right">
-                                            <Button
-                                                size="sm"
-                                                variant="outline"
-                                                className="hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 transition-colors"
-                                                onClick={() => setConfirmActivateId(sem.id)}
-                                                disabled={!!loadingId}
-                                            >
-                                                <CheckCircle2 className="w-4 h-4 mr-2" />
-                                                Activar Ciclo
-                                            </Button>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                        <div className="bg-amber-50/50 border border-amber-100 rounded-3xl p-10 flex flex-col items-center justify-center text-center">
+                            <div className="w-16 h-16 bg-amber-100 rounded-2xl flex items-center justify-center mb-4 transform rotate-3 shadow-sm">
+                                <StopCircle className="w-8 h-8 text-amber-600" />
+                            </div>
+                            <h3 className="text-xl font-bold text-gray-900">Sistema en Pausa</h3>
+                            <p className="text-gray-500 max-w-md mt-2">
+                                Actualmente no hay un ciclo activo. Inicia uno nuevo para habilitar el registro de eventos y asistencia.
+                            </p>
+                        </div>
                     )}
                 </div>
-            </div>
 
-            {/* Alert Dialog for Activation */}
-            <AlertDialog open={!!confirmActivateId} onOpenChange={() => setConfirmActivateId(null)}>
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>¿Está seguro de activar este ciclo?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            Esta acción <strong>desactivará automáticamente</strong> cualquier otro ciclo que esté activo actualmente.
-                            <br /><br />
-                            El sistema pasará a operar bajo el periodo <strong>{semesters.find(s => s.id === confirmActivateId)?.name}</strong>.
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                        <AlertDialogAction
-                            onClick={() => confirmActivateId && handleToggle(confirmActivateId, true)}
-                            className="bg-emerald-600 hover:bg-emerald-700 font-bold"
-                        >
-                            Confirmar Activación
-                        </AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
+                {/* Inactive List */}
+                <div className="space-y-6">
+                    <h2 className="text-lg font-bold text-meteorite-900 flex items-center gap-2">
+                        <RefreshCcw className="w-5 h-5 text-meteorite-500" />
+                        Historial
+                    </h2>
+
+                    <div className="bg-white rounded-3xl border border-gray-100 shadow-xl shadow-gray-200/40 overflow-hidden">
+                        {semesters.filter(s => !s.isActive).length === 0 ? (
+                            <div className="p-12 text-center text-gray-400">
+                                No hay ciclos anteriores registrados.
+                            </div>
+                        ) : (
+                            <table className="w-full text-sm text-left">
+                                <thead className="bg-gray-50/80 text-gray-500 font-semibold border-b border-gray-100 uppercase text-xs tracking-wider">
+                                    <tr>
+                                        <th className="px-8 py-5">Ciclo</th>
+                                        <th className="px-8 py-5">Duración</th>
+                                        <th className="px-8 py-5">Estado</th>
+                                        <th className="px-8 py-5 text-right">Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-50">
+                                    {semesters.filter(s => !s.isActive).map((sem) => (
+                                        <tr key={sem.id} className="hover:bg-gray-50/50 transition-colors group">
+                                            <td className="px-8 py-5">
+                                                <span className="font-bold text-gray-900 text-lg">{sem.name}</span>
+                                            </td>
+                                            <td className="px-8 py-5 text-gray-500 font-medium">
+                                                {format(new Date(sem.startDate), "MMM yyyy", { locale: es })}
+                                                {" - "}
+                                                {sem.endDate ? format(new Date(sem.endDate), "MMM yyyy", { locale: es }) : "..."}
+                                            </td>
+                                            <td className="px-8 py-5">
+                                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-[10px] font-bold bg-gray-100 text-gray-500 border border-gray-200 uppercase tracking-wide">
+                                                    Inactivo
+                                                </span>
+                                            </td>
+                                            <td className="px-8 py-5 text-right opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <Button
+                                                    size="sm"
+                                                    className="bg-white border border-emerald-200 text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 font-bold rounded-lg shadow-sm"
+                                                    onClick={() => setConfirmActivateId(sem.id)}
+                                                    disabled={!!loadingId}
+                                                >
+                                                    <CheckCircle2 className="w-4 h-4 mr-2" />
+                                                    Reactivar
+                                                </Button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        )}
+                    </div>
+                </div>
+
+                {/* Alert Dialog */}
+                <AlertDialog open={!!confirmActivateId} onOpenChange={() => setConfirmActivateId(null)}>
+                    <AlertDialogContent className="bg-white rounded-3xl border-0 shadow-2xl p-0 overflow-hidden max-w-md">
+                        <div className="bg-emerald-50 p-6 flex flex-col items-center justify-center border-b border-emerald-100 text-center">
+                            <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-sm mb-4">
+                                <RefreshCcw className="w-6 h-6 text-emerald-600" />
+                            </div>
+                            <AlertDialogTitle className="text-xl font-black text-emerald-950">Reactivar Ciclo</AlertDialogTitle>
+                        </div>
+
+                        <div className="p-6 text-center">
+                            <AlertDialogDescription className="text-gray-500">
+                                Vas a reactivar el ciclo <strong>{semesters.find(s => s.id === confirmActivateId)?.name}</strong>.
+                                <br />
+                                Esto desactivará el ciclo actual automáticamente.
+                            </AlertDialogDescription>
+                        </div>
+
+                        <AlertDialogFooter className="p-6 pt-0 sm:justify-center gap-3">
+                            <AlertDialogCancel className="rounded-xl border-gray-200 font-bold hover:bg-gray-50 mt-0 text-gray-700">Cancelar</AlertDialogCancel>
+                            <AlertDialogAction
+                                onClick={() => confirmActivateId && handleToggle(confirmActivateId, true)}
+                                className="bg-emerald-600 hover:bg-emerald-700 font-bold rounded-xl shadow-lg shadow-emerald-600/20 text-white"
+                            >
+                                Confirmar Cambio
+                            </AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
+            </div>
         </div>
     );
 }
