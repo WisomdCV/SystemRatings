@@ -20,6 +20,7 @@ import {
     GraduationCap,
     User as UserIcon,
     LogOut,
+    RefreshCcw,
 } from "lucide-react";
 import { logoutAction } from "@/server/actions/auth.actions";
 import { submitJustificationAction, acknowledgeRejectionAction } from "@/server/actions/attendance.actions";
@@ -251,6 +252,17 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
                             >
                                 <Users className="text-meteorite-400 group-hover:text-white transition-colors w-5 h-5" />
                                 <span className="ml-3 font-medium">Equipo IISE</span>
+                            </a>
+                        )}
+
+                        {/* 4. Gestión Ciclos (Cycles) - President Only */}
+                        {["DEV", "PRESIDENT"].includes((user as any).role) && (
+                            <a
+                                href="/admin/cycles"
+                                className="flex items-center px-4 py-3 text-meteorite-200 hover:bg-meteorite-900 hover:text-white rounded-xl transition-all group"
+                            >
+                                <RefreshCcw className="text-meteorite-400 group-hover:text-white transition-colors w-5 h-5" />
+                                <span className="ml-3 font-medium">Gestión Ciclos</span>
                             </a>
                         )}
 
