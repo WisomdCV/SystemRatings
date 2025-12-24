@@ -70,10 +70,10 @@ export async function upsertGradeAction(input: UpsertGradeDTO) {
         }
 
         // 5. TRIGGER RECALCULATION
-        await recalculateUserKPI(targetUserId, pillar.semesterId);
+        const newKpi = await recalculateUserKPI(targetUserId, pillar.semesterId);
 
         revalidatePath("/dashboard/management/grades");
-        return { success: true, message: "Nota guardada correctamente." };
+        return { success: true, message: "Nota guardada correctamente.", newKpi };
 
     } catch (error: any) {
         console.error("Upsert Grade Error:", error);
