@@ -266,6 +266,17 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
                             </a>
                         )}
 
+                        {/* 5. Calificaciones */}
+                        {["DEV", "PRESIDENT", "TREASURER", "DIRECTOR"].includes((user as any).role) && (
+                            <a
+                                href="/dashboard/management/grades"
+                                className="flex items-center px-4 py-3 text-meteorite-200 hover:bg-meteorite-900 hover:text-white rounded-xl transition-all group"
+                            >
+                                <GraduationCap className="text-meteorite-400 group-hover:text-white transition-colors w-5 h-5" />
+                                <span className="ml-3 font-medium">Calificaciones</span>
+                            </a>
+                        )}
+
                         {/* 3. Meetings */}
                         {["DEV", "PRESIDENT", "TREASURER", "DIRECTOR", "SUBDIRECTOR"].includes((user as any).role) ? (
                             <a
