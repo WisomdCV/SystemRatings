@@ -50,40 +50,55 @@ export async function recalculateUserKPI(userId: string, semesterId: string) {
     // Helper to safely get normalized score (default 0 if no grade)
     const getNorm = (name: string) => gradeMap.get(name)?.normalized || 0;
 
-    // 4. Define Weights Based on Role (Business Rule V2.0)
+    // 5. Define Weights Based on Role (Business Rule V2.0 - Dynamic)
     const role = user.role || "MEMBER";
     const isDirectorLevel = ["DIRECTOR", "PRESIDENT", "TREASURER"].includes(role);
 
     let finalKPI = 0;
 
-    // Weights
-    const W_RG = 0.20;      // Reunión General
-    const W_STAFF = 0.15;   // Staff
-    const W_PROY = 0.35;    // Proyectos
+    // We iterate over the definitions found in the user grades (or ideally, all definitions for the semester)
+    // Assuming grades exist for all active pillars (since we upsert 0).
+    // Better Approach: Iterate over the map entries to capture all present grades.
 
-    if (isDirectorLevel) {
-        // --- DIRECTOR FORMULA ---
-        // RG(20%) + Staff(15%) + Proyectos(35%) + Área(15%) + CD(15%)
-        const W_AREA_DIR = 0.15;
-        const W_CD = 0.15;
+    for (const [name, data] of gradeMap.entries()) {
+        const { raw, max, normalized } = data;
 
-        finalKPI =
-            (getNorm("Reunión General") * W_RG) +
-            (getNorm("Staff") * W_STAFF) +
-            (getNorm("Proyectos") * W_PROY) +
-            (getNorm("Área") * W_AREA_DIR) +
-            (getNorm("Liderazgo (CD)") * W_CD);
+        // Find the definition object from the raw grades logic above is tricky without the full object.
+        // Let's retrieve the definition from the original array.
+        const gradeEntry = userGrades.find(g => g.definition.name === name);
+        if (!gradeEntry) continue;
+        const def = gradeEntry.definition;
 
-    } else {
-        // --- MEMBER FORMULA ---
-        // RG(20%) + Staff(15%) + Proyectos(35%) + Área(30%)
-        const W_AREA_MEM = 0.30;
+        // --- RULE 1: EXCLUSION ---
+        // If pilar is Director Only AND user is NOT director => Skip completely.
+        if (def.isDirectorOnly && !isDirectorLevel) {
+            continue;
+        }
 
-        finalKPI =
-            (getNorm("Reunión General") * W_RG) +
-            (getNorm("Staff") * W_STAFF) +
-            (getNorm("Proyectos") * W_PROY) +
-            (getNorm("Área") * W_AREA_MEM);
+        // --- RULE 2: PRIORITY FALLBACK (WEIGHT) ---
+        // If Director AND directorWeight exists => Use directorWeight
+        // Else => Use standard weight
+        let weightToUse = def.weight;
+
+        // Ensure directorWeight is treated as number if present
+        if (isDirectorLevel && def.directorWeight !== null && def.directorWeight !== undefined) {
+            weightToUse = def.directorWeight;
+        }
+
+        // Calculation: Normalized (0-10) * (Weight / 100) -> Contribution to Final (0-10)
+        // Example: Score 10 * (30 / 100) = 3.0 points
+        /* 
+           Wait, logic in previous code was: 
+           (getNorm("RG") * 0.20)
+           Here: 
+           (normalized * (weightToUse / 100))
+           Correct.
+        */
+
+        // Safety: ensure weight is valid number
+        // console.log(`[KPI] Pillar: ${name}, Role: ${isDirectorLevel ? 'DIR' : 'MEM'}, Weight: ${weightToUse}, Score: ${normalized}`);
+
+        finalKPI += (normalized * (weightToUse / 100)); // Divide by 100 as weights are 20, 30, etc.
     }
 
     // 5. Save Snapshot to DB

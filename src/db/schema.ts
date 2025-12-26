@@ -157,8 +157,11 @@ export const gradeDefinitions = sqliteTable("grade_definition", {
 
   name: text("name").notNull(),
   weight: real("weight").notNull(),
-  maxScore: real("max_score").default(5),
 
+  // New column for dual-weight logic (Area: Member 30% vs Director 15%)
+  directorWeight: real("director_weight"),
+
+  maxScore: real("max_score").default(5),
   isDirectorOnly: integer("is_director_only", { mode: "boolean" }).default(false),
 });
 

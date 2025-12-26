@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { Calendar, PlayCircle, StopCircle, RefreshCcw, CheckCircle2, XCircle, ArrowLeft } from "lucide-react";
+import { Calendar, PlayCircle, StopCircle, RefreshCcw, CheckCircle2, XCircle, ArrowLeft, Layers } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -115,6 +115,13 @@ export default function CyclesView({ semesters }: CyclesViewProps) {
                                     <StopCircle className="w-4 h-4 mr-2" />
                                     Finalizar Ciclo
                                 </Button>
+
+                                <Link href={`/admin/cycles/${activeSemester.id}/pillars`}>
+                                    <Button variant="outline" className="h-auto py-3 px-6 rounded-xl bg-white border border-gray-200 text-gray-700 font-bold hover:bg-meteorite-600 hover:text-white hover:border-meteorite-600 transition-all shadow-sm">
+                                        <Layers className="w-4 h-4 mr-2" />
+                                        Gestionar Pilares
+                                    </Button>
+                                </Link>
                             </CardContent>
                         </Card>
                     ) : (
@@ -178,6 +185,11 @@ export default function CyclesView({ semesters }: CyclesViewProps) {
                                                     <CheckCircle2 className="w-4 h-4 mr-2" />
                                                     Reactivar
                                                 </Button>
+                                                <Link href={`/admin/cycles/${sem.id}/pillars`}>
+                                                    <Button size="sm" variant="ghost" className="text-gray-400 hover:text-meteorite-600">
+                                                        <Layers className="w-4 h-4" />
+                                                    </Button>
+                                                </Link>
                                             </td>
                                         </tr>
                                     ))}
