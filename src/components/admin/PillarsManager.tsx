@@ -64,7 +64,10 @@ export function PillarsManager({ semesterId, initialPillars, otherSemesters }: P
         setIsLoading(true);
         try {
             const res = await upsertPillarAction(editingPillar);
-            if (!res.success) throw new Error(res.error);
+            if (!res.success) {
+                // @ts-ignore
+                throw new Error(res.error || "Error al guardar");
+            }
 
             toast.success("Guardado: " + res.message);
             setIsOpen(false);
@@ -81,7 +84,10 @@ export function PillarsManager({ semesterId, initialPillars, otherSemesters }: P
         setIsLoading(true);
         try {
             const res = await deletePillarAction(id, semesterId);
-            if (!res.success) throw new Error(res.error);
+            if (!res.success) {
+                // @ts-ignore
+                throw new Error(res.error || "Error al eliminar");
+            }
             toast.success("Eliminado: " + res.message);
             router.refresh();
         } catch (error: any) {
@@ -98,7 +104,10 @@ export function PillarsManager({ semesterId, initialPillars, otherSemesters }: P
         setIsCloneLoading(true);
         try {
             const res = await clonePillarsAction(cloneSourceId, semesterId);
-            if (!res.success) throw new Error(res.error);
+            if (!res.success) {
+                // @ts-ignore
+                throw new Error(res.error || "Error al clonar");
+            }
             toast.success("Clonado Exitoso: " + res.message);
             router.refresh();
         } catch (error: any) {

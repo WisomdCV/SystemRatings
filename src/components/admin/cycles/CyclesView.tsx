@@ -218,7 +218,7 @@ export default function CyclesView({ semesters }: CyclesViewProps) {
                         </div>
 
                         <AlertDialogFooter className="p-6 pt-0 sm:justify-center gap-3">
-                            <AlertDialogCancel className="rounded-xl border-gray-200 font-bold hover:bg-gray-50 mt-0 text-gray-700">Cancelar</AlertDialogCancel>
+                            <AlertDialogCancel className="rounded-xl bg-white border-gray-200 text-gray-700 font-bold hover:bg-meteorite-600 hover:text-white hover:border-meteorite-600 mt-0 transition-all shadow-sm">Cancelar</AlertDialogCancel>
                             <AlertDialogAction
                                 onClick={() => confirmActivateId && handleToggle(confirmActivateId, true)}
                                 className="bg-emerald-600 hover:bg-emerald-700 font-bold rounded-xl shadow-lg shadow-emerald-600/20 text-white"

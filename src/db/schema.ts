@@ -216,7 +216,8 @@ export const areaKpiSummaries = sqliteTable("area_kpi_summary", {
 export const usersRelations = relations(users, ({ one, many }) => ({
   currentArea: one(areas, { fields: [users.currentAreaId], references: [areas.id] }),
   positionHistory: many(positionHistory),
-  attendanceRecords: many(attendanceRecords),
+  attendanceRecords: many(attendanceRecords, { relationName: "attendee" }),
+  reviewedAttendanceRecords: many(attendanceRecords, { relationName: "reviewer" }),
   grades: many(grades, { relationName: "studentGrades" }), // Notas que recibo
   assignedGrades: many(grades, { relationName: "evaluatorGrades" }), // Notas que pongo
   monthlySummaries: many(kpiMonthlySummaries),
@@ -244,9 +245,10 @@ export const eventsRelations = relations(events, ({ one, many }) => ({
 
 export const attendanceRecordsRelations = relations(attendanceRecords, ({ one }) => ({
   event: one(events, { fields: [attendanceRecords.eventId], references: [events.id] }),
-  user: one(users, { fields: [attendanceRecords.userId], references: [users.id] }),
-  reviewedBy: one(users, { fields: [attendanceRecords.reviewedById], references: [users.id] }),
+  user: one(users, { fields: [attendanceRecords.userId], references: [users.id], relationName: "attendee" }),
+  reviewedBy: one(users, { fields: [attendanceRecords.reviewedById], references: [users.id], relationName: "reviewer" }),
 }));
+
 
 export const gradeDefinitionsRelations = relations(gradeDefinitions, ({ one, many }) => ({
   semester: one(semesters, { fields: [gradeDefinitions.semesterId], references: [semesters.id] }),
