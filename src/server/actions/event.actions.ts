@@ -27,6 +27,13 @@ export async function createEventAction(input: CreateEventDTO) {
         }
         const data = validated.data;
 
+        // TIEMPO FIX: z.coerce.date() parsea "YYYY-MM-DD" como UTC Midnight (ej. 28 Dic 00:00Z).
+        // Si el servidor está en Perú (GMT-5), "Hoy" empieza a las 05:00Z.
+        // 00:00Z (Evento) < 05:00Z (Filtro Dashboard) -> El evento desaparece.
+        // SOLUCIÓN: Reconstruimos la fecha usando los componentes UTC para forzar "Medianoche Local".
+        // Ej: UTC(2025, 11, 28) -> Local(2025, 11, 28) = 28 Dic 00:00 Perú.
+        data.date = new Date(data.date.getUTCFullYear(), data.date.getUTCMonth(), data.date.getUTCDate());
+
         // Regla: DIRECTOR/SUBDIRECTOR solo crea para SU área
         if (role === "DIRECTOR" || role === "SUBDIRECTOR") {
             const currentAreaId = session.user.currentAreaId;
@@ -153,6 +160,11 @@ export async function updateEventAction(eventId: string, input: UpdateEventDTO) 
             return { success: false, error: validated.error.issues[0].message };
         }
         const data = validated.data;
+
+        // TIEMPO FIX: Misma lógica de corrección que en Create
+        if (data.date) {
+            data.date = new Date(data.date.getUTCFullYear(), data.date.getUTCMonth(), data.date.getUTCDate());
+        }
 
         // Google Sync (Update)
         // Check if syncheable fields changed

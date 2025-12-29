@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { User } from "next-auth";
 import {
     Zap,
@@ -8,6 +8,7 @@ import {
     Users,
     CalendarCheck,
     Bell,
+    // Forces HMR update
     ChevronDown,
     Trophy,
     Award,
@@ -25,6 +26,7 @@ import {
 import { logoutAction } from "@/server/actions/auth.actions";
 import { submitJustificationAction, acknowledgeRejectionAction } from "@/server/actions/attendance.actions";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { toast } from "sonner";
 import {
     Chart as ChartJS,
@@ -59,6 +61,81 @@ interface DashboardViewProps {
 
 export default function DashboardView({ user, upcomingEvents = [], pendingJustifications = [] }: DashboardViewProps) {
     const [chartView, setChartView] = useState<"monthly" | "semester">("monthly");
+    const [eventIndex, setEventIndex] = useState(0);
+
+    // Carousel Effect
+    useEffect(() => {
+        if (upcomingEvents.length <= 1) return;
+        const interval = setInterval(() => {
+            setEventIndex((prev) => (prev + 1) % upcomingEvents.length);
+        }, 5000); // 5s rotation
+        return () => clearInterval(interval);
+    }, [upcomingEvents.length]);
+
+
+    // --- Logic for Dynamic UI ---
+    const isManagementRole = ["DEV", "PRESIDENT", "TREASURER", "DIRECTOR", "SUBDIRECTOR"].includes((user as any).role || "");
+    const eventsLink = isManagementRole ? "/admin/events" : "/dashboard/agenda";
+
+
+
+    // We need to parse dates carefully. 
+    // upcomingEvents are sorted by date ASC.
+    // However, the first event might be "In Progress" or "Just Finished" depending on when query ran vs render.
+    // Use current index.
+    const nextEvent = upcomingEvents.length > 0 ? upcomingEvents[eventIndex] : null;
+
+    const getEventStatusLabel = (event: any) => {
+        if (!event) return { label: "", style: "" };
+
+        const now = new Date();
+        const eventDate = new Date(event.date); // Assumes YYYY-MM-DD
+
+        // Parse Start
+        if (!event.startTime) return { label: new Date(event.date).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }), style: "bg-white/20" };
+
+        const [startH, startM] = event.startTime.split(':').map(Number);
+        const startDateTime = new Date(eventDate);
+        startDateTime.setHours(startH, startM, 0, 0);
+
+        // Parse End
+        let endDateTime = new Date(startDateTime);
+        if (event.endTime) {
+            const [endH, endM] = event.endTime.split(':').map(Number);
+            const endDateBase = new Date(eventDate);
+            endDateBase.setHours(endH, endM, 0, 0);
+            endDateTime = endDateBase;
+        } else {
+            endDateTime.setHours(startDateTime.getHours() + 1); // Default 1h duration
+        }
+
+        const diffMs = startDateTime.getTime() - now.getTime();
+
+        // 1. Check In Progress
+        if (now >= startDateTime && now <= endDateTime) {
+            return { label: "🔴 En curso ahora", style: "bg-red-500/90 text-white animate-pulse shadow-lg shadow-red-500/20" };
+        }
+
+        // 2. Check Finished (Shouldn't happen often if filtered by DB, but safe to handle)
+        if (now > endDateTime) {
+            return { label: "Finalizado", style: "bg-gray-500/50" };
+        }
+
+        // 3. Future
+        const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+        const diffDays = Math.floor(diffHours / 24);
+        const diffMinutes = Math.floor(diffMs / 60000);
+
+        if (diffMinutes < 60) return { label: `En ${diffMinutes} min`, style: "bg-amber-400/90 text-amber-950 font-black" };
+        if (diffHours < 24) return { label: `En ${diffHours} horas`, style: "bg-white/20" };
+        if (diffDays === 1) return { label: "Mañana", style: "bg-white/20" };
+        if (diffDays < 7) return { label: `En ${diffDays} días`, style: "bg-white/20" };
+
+        return { label: new Date(event.date).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }), style: "bg-white/20" };
+    };
+
+    const statusObj = getEventStatusLabel(nextEvent);
+
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
     const [isJustifyModalOpen, setIsJustifyModalOpen] = useState(false);
     const [selectedRecord, setSelectedRecord] = useState<any | null>(null);
@@ -473,25 +550,49 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
                         </div>
 
                         {/* Próximo Evento */}
-                        <div className="card-glass p-5 lg:p-6 rounded-2xl min-w-[280px] lg:min-w-0 snap-center relative overflow-hidden group bg-gradient-to-br from-meteorite-600 to-meteorite-800 text-white border-none">
+                        {/* Próximo Evento */}
+                        <div className="card-glass p-5 lg:p-6 rounded-2xl min-w-[280px] lg:min-w-0 snap-center relative overflow-hidden group bg-gradient-to-br from-meteorite-600 to-meteorite-800 text-white border-none transition-all">
                             <div className="absolute right-0 top-0 w-32 h-32 bg-white opacity-10 rounded-bl-full -mr-6 -mt-6"></div>
+
+                            {/* Carousel Content */}
                             <div className="relative z-10 flex flex-col h-full justify-between">
-                                <div>
-                                    <span className="inline-block px-2 py-1 rounded bg-white/20 text-[10px] font-bold mb-2 backdrop-blur-sm">
-                                        En 2 horas
-                                    </span>
-                                    <h3 className="text-lg font-bold leading-tight">
-                                        Reunión Mensual
-                                    </h3>
-                                </div>
-                                <div className="flex items-center mt-4">
-                                    <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center backdrop-blur-sm">
-                                        <Video className="w-4 h-4" />
+                                {nextEvent ? (
+                                    <div key={nextEvent.id} className="animate-in fade-in slide-in-from-right-8 duration-700 h-full flex flex-col justify-between">
+                                        <div>
+                                            <div className="flex justify-between items-start mb-3">
+                                                <span className={`inline-block px-3 py-1 rounded-lg text-[10px] font-bold backdrop-blur-md transition-all ${statusObj.style}`}>
+                                                    {statusObj.label}
+                                                </span>
+                                                {upcomingEvents.length > 1 && (
+                                                    <div className="flex gap-1 mt-1">
+                                                        {upcomingEvents.slice(0, 5).map((_, i) => (
+                                                            <div
+                                                                key={i}
+                                                                className={`w-1.5 h-1.5 rounded-full transition-all ${i === eventIndex ? "bg-white scale-125" : "bg-white/30"}`}
+                                                            />
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <h3 className="text-lg font-bold leading-tight line-clamp-2" title={nextEvent.title}>
+                                                {nextEvent.title}
+                                            </h3>
+                                        </div>
+                                        <div className="flex items-center mt-4">
+                                            <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center backdrop-blur-sm border border-white/10">
+                                                {nextEvent.isVirtual ? <Video className="w-4 h-4" /> : <MapPin className="w-4 h-4" />}
+                                            </div>
+                                            <span className="ml-2 text-sm font-medium opacity-90 truncate">
+                                                {nextEvent.isVirtual ? "Virtual" : "Campus"}
+                                            </span>
+                                        </div>
                                     </div>
-                                    <span className="ml-2 text-sm font-medium opacity-90">
-                                        Google Meet
-                                    </span>
-                                </div>
+                                ) : (
+                                    <div className="flex flex-col items-center justify-center h-full text-center opacity-80">
+                                        <Calendar className="w-8 h-8 mb-2 opacity-50" />
+                                        <p className="text-sm font-bold">Sin eventos próximos</p>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -556,7 +657,7 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
                                     Próximas Actividades
                                 </h3>
                                 <a
-                                    href="/dashboard/agenda"
+                                    href={eventsLink}
                                     className="text-xs font-bold text-meteorite-600 bg-meteorite-50 px-3 py-1.5 rounded-lg hover:bg-meteorite-100 transition-colors"
                                 >
                                     Ver Todo
@@ -609,9 +710,9 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
                                                     )}
                                                 </div>
                                             </div>
-                                            <div className="text-gray-300 group-hover:text-meteorite-500">
+                                            <Link href={eventsLink} className="text-gray-300 group-hover:text-meteorite-500 hover:bg-meteorite-100 p-2 rounded-full transition-all">
                                                 <ChevronRight className="w-4 h-4" />
-                                            </div>
+                                            </Link>
                                         </div>
                                     ))
                                 )}

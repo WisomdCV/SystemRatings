@@ -34,10 +34,22 @@ export default async function DashboardPage() {
             conditions.push(eq(events.targetAreaId, currentAreaId));
         }
 
-        if (role === "TREASURER" || role === "PRESIDENT" || role === "DIRECTOR" || role === "SUBDIRECTOR") {
-            // Leaders might see MD events? 
-            // For now, stick to General + Own Area to keep Dashboard clean.
-            // If we really want MD events: check targetArea.code = 'MD'.
+        if (role) {
+            // Find MD Area ID helper
+            const mdArea = await db.query.areas.findFirst({
+                where: eq(areas.code, "MD"),
+                columns: { id: true }
+            });
+
+            // Logic:
+            // 1. General (All) -> Added by default (isNull)
+            // 2. My Area (All) -> Added by default (currentAreaId)
+            // 3. Mesa Directiva? -> Only for Leaders
+            const isLeader = ["DIRECTOR", "SUBDIRECTOR", "TREASURER", "PRESIDENT", "DEV"].includes(role);
+
+            if (isLeader && mdArea) {
+                conditions.push(eq(events.targetAreaId, mdArea.id));
+            }
         }
 
         upcomingEvents = await db.query.events.findMany({
