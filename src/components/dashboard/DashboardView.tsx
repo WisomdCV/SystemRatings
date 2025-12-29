@@ -89,22 +89,39 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
         if (!event) return { label: "", style: "" };
 
         const now = new Date();
-        const eventDate = new Date(event.date); // Assumes YYYY-MM-DD
+        const eventDateObj = new Date(event.date);
 
         // Parse Start
         if (!event.startTime) return { label: new Date(event.date).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }), style: "bg-white/20" };
 
         const [startH, startM] = event.startTime.split(':').map(Number);
-        const startDateTime = new Date(eventDate);
-        startDateTime.setHours(startH, startM, 0, 0);
+
+        // CRITICAL FIX: Construct LOCAL date using UTC parts from the source.
+        // event.date is stored as UTC Midnight (e.g., 2025-12-28T00:00:00Z) representing "The 28th".
+        // We want "The 28th at 18:00 Local Time".
+        const startDateTime = new Date(
+            eventDateObj.getUTCFullYear(),
+            eventDateObj.getUTCMonth(),
+            eventDateObj.getUTCDate(),
+            startH,
+            startM,
+            0,
+            0
+        );
 
         // Parse End
         let endDateTime = new Date(startDateTime);
         if (event.endTime) {
             const [endH, endM] = event.endTime.split(':').map(Number);
-            const endDateBase = new Date(eventDate);
-            endDateBase.setHours(endH, endM, 0, 0);
-            endDateTime = endDateBase;
+            endDateTime = new Date(
+                eventDateObj.getUTCFullYear(),
+                eventDateObj.getUTCMonth(),
+                eventDateObj.getUTCDate(),
+                endH,
+                endM,
+                0,
+                0
+            );
         } else {
             endDateTime.setHours(startDateTime.getHours() + 1); // Default 1h duration
         }
@@ -670,51 +687,66 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
                                         No hay actividades próximas.
                                     </div>
                                 ) : (
-                                    upcomingEvents.map((event) => (
-                                        <div key={event.id} className="flex items-center p-3 rounded-xl hover:bg-meteorite-50 border border-transparent hover:border-meteorite-100 transition-all group cursor-pointer">
-                                            <div className={`w-12 h-12 rounded-xl flex flex-col items-center justify-center font-bold shadow-sm transition-colors ${event.targetAreaId ? 'bg-orange-50 text-orange-600 group-hover:bg-orange-100' : 'bg-meteorite-100 text-meteorite-600 group-hover:bg-meteorite-200'
+                                    upcomingEvents.map((event) => {
+                                        const status = getEventStatusLabel(event);
+                                        const isInProgress = status.label.includes("En curso");
+
+                                        return (
+                                            <div key={event.id} className={`flex items-center p-3 rounded-xl transition-all group cursor-pointer border ${isInProgress
+                                                ? "bg-red-50/80 border-red-300 shadow-sm animate-pulse-slow"
+                                                : "hover:bg-meteorite-50 border-transparent hover:border-meteorite-100"
                                                 }`}>
-                                                <span className="text-[10px] uppercase tracking-wide">
-                                                    {new Date(event.date).toLocaleDateString('es-ES', { month: 'short', timeZone: 'UTC' })}
-                                                </span>
-                                                <span className="text-lg leading-none">
-                                                    {new Date(event.date).getUTCDate()}
-                                                </span>
-                                            </div>
-                                            <div className="ml-4 flex-1">
-                                                <div className="flex justify-between items-start">
-                                                    <h4 className={`font-bold text-sm ${event.targetAreaId ? 'text-gray-800 group-hover:text-orange-700' : 'text-gray-800 group-hover:text-meteorite-700'
-                                                        }`}>
-                                                        {event.title}
-                                                    </h4>
-                                                    {event.isMandatory && (
-                                                        <span className="text-[10px] font-bold bg-green-100 text-green-600 px-2 py-0.5 rounded border border-green-200">
-                                                            Obligatorio
-                                                        </span>
-                                                    )}
+                                                <div className={`w-12 h-12 rounded-xl flex flex-col items-center justify-center font-bold shadow-sm transition-colors ${isInProgress ? "bg-red-500 text-white" :
+                                                    event.targetAreaId ? 'bg-orange-50 text-orange-600 group-hover:bg-orange-100' : 'bg-meteorite-100 text-meteorite-600 group-hover:bg-meteorite-200'
+                                                    }`}>
+                                                    <span className="text-[10px] uppercase tracking-wide">
+                                                        {new Date(event.date).toLocaleDateString('es-ES', { month: 'short', timeZone: 'UTC' })}
+                                                    </span>
+                                                    <span className="text-lg leading-none">
+                                                        {new Date(event.date).getUTCDate()}
+                                                    </span>
                                                 </div>
-                                                <div className="flex items-center mt-1 text-xs text-gray-500">
-                                                    <Clock className={`w-3 h-3 mr-1.5 ${event.targetAreaId ? 'text-orange-400' : 'text-meteorite-400'}`} />
-                                                    {event.startTime} - {event.endTime}
-                                                    <span className="mx-2 text-gray-300">|</span>
-                                                    {event.isVirtual ? (
-                                                        <>
-                                                            <Video className={`w-3 h-3 mr-1.5 ${event.targetAreaId ? 'text-orange-400' : 'text-meteorite-400'}`} />
-                                                            Virtual
-                                                        </>
-                                                    ) : (
-                                                        <>
-                                                            <MapPin className={`w-3 h-3 mr-1.5 ${event.targetAreaId ? 'text-orange-400' : 'text-meteorite-400'}`} />
-                                                            Campus
-                                                        </>
-                                                    )}
+                                                <div className="ml-4 flex-1">
+                                                    <div className="flex justify-between items-start">
+                                                        <div className="flex flex-col">
+                                                            <h4 className={`font-bold text-sm ${isInProgress ? "text-red-900" : (event.targetAreaId ? 'text-gray-800 group-hover:text-orange-700' : 'text-gray-800 group-hover:text-meteorite-700')}`}>
+                                                                {event.title}
+                                                            </h4>
+                                                            {isInProgress && (
+                                                                <span className="text-[9px] font-black text-red-500 uppercase tracking-wider animate-pulse">
+                                                                    ● En Curso
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        {event.isMandatory && !isInProgress && (
+                                                            <span className="text-[10px] font-bold bg-green-100 text-green-600 px-2 py-0.5 rounded border border-green-200">
+                                                                Obligatorio
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <div className={`flex items-center mt-1 text-xs ${isInProgress ? "text-red-600/80" : "text-gray-500"}`}>
+                                                        <Clock className={`w-3 h-3 mr-1.5 ${isInProgress ? "text-red-500" : (event.targetAreaId ? 'text-orange-400' : 'text-meteorite-400')}`} />
+                                                        {event.startTime} - {event.endTime}
+                                                        <span className={`mx-2 ${isInProgress ? "text-red-300" : "text-gray-300"}`}>|</span>
+                                                        {event.isVirtual ? (
+                                                            <>
+                                                                <Video className={`w-3 h-3 mr-1.5 ${isInProgress ? "text-red-500" : (event.targetAreaId ? 'text-orange-400' : 'text-meteorite-400')}`} />
+                                                                Virtual
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <MapPin className={`w-3 h-3 mr-1.5 ${isInProgress ? "text-red-500" : (event.targetAreaId ? 'text-orange-400' : 'text-meteorite-400')}`} />
+                                                                Campus
+                                                            </>
+                                                        )}
+                                                    </div>
                                                 </div>
+                                                <Link href={eventsLink} className={`p-2 rounded-full transition-all ${isInProgress ? "text-red-400 hover:text-red-600 hover:bg-red-100" : "text-gray-300 group-hover:text-meteorite-500 hover:bg-meteorite-100"}`}>
+                                                    <ChevronRight className="w-4 h-4" />
+                                                </Link>
                                             </div>
-                                            <Link href={eventsLink} className="text-gray-300 group-hover:text-meteorite-500 hover:bg-meteorite-100 p-2 rounded-full transition-all">
-                                                <ChevronRight className="w-4 h-4" />
-                                            </Link>
-                                        </div>
-                                    ))
+                                        );
+                                    })
                                 )}
                             </div>
                         </div>
@@ -746,6 +778,7 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
                                 ) : (
                                     pendingJustifications.map((item) => {
                                         const isRejected = item.justificationStatus === 'REJECTED';
+                                        const isApproved = item.justificationStatus === 'APPROVED';
                                         const isLate = item.status === 'LATE';
 
                                         // Dynamic Classes based on Status
@@ -761,6 +794,11 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
                                             titleClasses = "text-red-900";
                                             badgeClasses = "text-red-700 border-red-300 bg-red-100";
                                             statusTextClasses = "text-red-700";
+                                        } else if (isApproved) {
+                                            containerClasses = "bg-green-50 border-green-200 hover:bg-green-100";
+                                            titleClasses = "text-green-900";
+                                            badgeClasses = "text-green-700 border-green-300 bg-green-100";
+                                            statusTextClasses = "text-green-700";
                                         }
 
                                         return (
@@ -780,22 +818,31 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
                                                                 <span className="italic opacity-90">"{item.adminFeedback}"</span>
                                                             )}
                                                         </div>
+                                                    ) : isApproved ? (
+                                                        <div className="flex flex-col gap-1">
+                                                            <span className="font-bold">✅ Se ha justificado tu falta a {item.event.title}</span>
+                                                            {item.adminFeedback && (
+                                                                <span className="italic opacity-90">"{item.adminFeedback}"</span>
+                                                            )}
+                                                        </div>
                                                     ) : (
                                                         <span>Estado: {isLate ? 'Tardanza' : 'Falta'} sin justificar.</span>
                                                     )}
                                                 </div>
 
-                                                {isRejected ? (
+                                                {isRejected || isApproved ? (
                                                     <div className="flex gap-2">
-                                                        <button
-                                                            onClick={() => handleOpenJustify(item)}
-                                                            className="flex-1 py-1.5 bg-white rounded-lg text-xs font-bold text-gray-600 border border-gray-200 hover:bg-gray-50 transition-all shadow-sm"
-                                                        >
-                                                            Reintentar
-                                                        </button>
+                                                        {isRejected && (
+                                                            <button
+                                                                onClick={() => handleOpenJustify(item)}
+                                                                className="flex-1 py-1.5 bg-white rounded-lg text-xs font-bold text-gray-600 border border-gray-200 hover:bg-gray-50 transition-all shadow-sm"
+                                                            >
+                                                                Reintentar
+                                                            </button>
+                                                        )}
                                                         <button
                                                             onClick={() => handleAcknowledge(item.id)}
-                                                            className="flex-1 py-1.5 bg-red-600 rounded-lg text-xs font-bold text-white hover:bg-red-700 transition-all shadow-sm"
+                                                            className={`flex-1 py-1.5 rounded-lg text-xs font-bold text-white transition-all shadow-sm ${isApproved ? "bg-green-600 hover:bg-green-700" : "bg-red-600 hover:bg-red-700"}`}
                                                         >
                                                             Entendido
                                                         </button>

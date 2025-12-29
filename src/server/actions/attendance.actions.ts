@@ -262,10 +262,13 @@ export async function getPendingJustificationsAction() {
     try {
         const history = await getUserAttendanceHistoryDAO(session.user.id);
 
-        // Filter for ABSENT/LATE with justificationStatus === "NONE" OR "REJECTED"
+        // Filter for:
+        // 1. ABSENT/LATE with justificationStatus === "NONE" OR "REJECTED" (Pending Action)
+        // 2. EXCUSED with justificationStatus === "APPROVED" (Success Notification waiting for Acknowledge)
         const pending = history.filter(record =>
-            (record.status === "ABSENT" || record.status === "LATE") &&
-            (record.justificationStatus === "NONE" || record.justificationStatus === "REJECTED")
+            ((record.status === "ABSENT" || record.status === "LATE") &&
+                (record.justificationStatus === "NONE" || record.justificationStatus === "REJECTED")) ||
+            (record.status === "EXCUSED" && record.justificationStatus === "APPROVED")
         );
 
         // Sort by date desc

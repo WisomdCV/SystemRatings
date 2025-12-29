@@ -18,6 +18,7 @@ export interface AttendanceSheetItem {
         justificationStatus: string | null;
         justificationReason?: string | null;
         justificationLink?: string | null;
+        adminFeedback?: string | null;
     } | null;
 }
 
@@ -144,7 +145,8 @@ export async function getAttendanceSheetDAO(eventId: string): Promise<Attendance
             status: true,
             justificationStatus: true,
             justificationReason: true,
-            justificationLink: true
+            justificationLink: true,
+            adminFeedback: true
         }
     });
 
@@ -167,7 +169,8 @@ export async function getAttendanceSheetDAO(eventId: string): Promise<Attendance
                 status: record.status,
                 justificationStatus: record.justificationStatus,
                 justificationReason: record.justificationReason,
-                justificationLink: record.justificationLink
+                justificationLink: record.justificationLink,
+                adminFeedback: record.adminFeedback
             } : null
         };
     });

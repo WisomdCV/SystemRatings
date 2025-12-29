@@ -36,7 +36,8 @@ export default function AttendanceTracker({ eventId, initialSheet }: AttendanceT
                         status: newStatus,
                         justificationStatus: item.record?.justificationStatus || "NONE",
                         justificationReason: item.record?.justificationReason,
-                        justificationLink: item.record?.justificationLink
+                        justificationLink: item.record?.justificationLink,
+                        adminFeedback: item.record?.adminFeedback // Preserve feedback
                     }
                 };
             }
@@ -192,25 +193,64 @@ export default function AttendanceTracker({ eventId, initialSheet }: AttendanceT
                                             )}
                                         </td>
                                         <td className="p-4 text-center">
-                                            {isJustificationPending ? (
-                                                <button
-                                                    onClick={() => setReviewRecord(item)}
-                                                    className="inline-flex items-center px-3 py-1.5 bg-orange-100 text-orange-700 hover:bg-orange-200 rounded-lg text-xs font-bold transition-colors animate-pulse"
-                                                >
-                                                    <AlertTriangle className="w-4 h-4 mr-1.5" />
-                                                    Revisar
-                                                </button>
-                                            ) : (item.record?.justificationStatus === "APPROVED" || item.record?.justificationStatus === "REJECTED") ? (
-                                                <button
-                                                    onClick={() => setReviewRecord(item)}
-                                                    className={`inline-flex items-center px-3 py-1.5 border rounded-lg text-xs font-medium transition-colors ${item.record?.justificationStatus === "REJECTED"
-                                                        ? "bg-red-50 text-red-700 border-red-200 hover:bg-red-100"
-                                                        : "bg-gray-50 text-gray-600 hover:bg-gray-100 border-gray-200"
-                                                        }`}
-                                                >
-                                                    <FileText className="w-3.5 h-3.5 mr-1.5" />
-                                                    {item.record?.justificationStatus === "REJECTED" ? "Ver (R)" : "Ver"}
-                                                </button>
+                                            {item.record?.justificationStatus && item.record.justificationStatus !== "NONE" ? (
+                                                <div className="flex flex-col gap-2 min-w-[200px] text-left">
+                                                    {/* Card Header: Status & Action */}
+                                                    <div className="flex items-center justify-between">
+                                                        <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded border ${item.record.justificationStatus === "APPROVED" ? "bg-green-50 text-green-700 border-green-200" :
+                                                                item.record.justificationStatus === "REJECTED" ? "bg-red-50 text-red-700 border-red-200" :
+                                                                    "bg-orange-50 text-orange-700 border-orange-200 animate-pulse"
+                                                            }`}>
+                                                            {item.record.justificationStatus === "PENDING" ? "Pendiente" :
+                                                                item.record.justificationStatus === "APPROVED" ? "Aceptada" : "Rechazada"}
+                                                        </span>
+
+                                                        {item.record.justificationStatus === "PENDING" ? (
+                                                            <button
+                                                                onClick={() => setReviewRecord(item)}
+                                                                className="text-[10px] font-bold text-meteorite-600 underline hover:text-meteorite-800"
+                                                            >
+                                                                Revisar
+                                                            </button>
+                                                        ) : (
+                                                            <button
+                                                                onClick={() => setReviewRecord(item)}
+                                                                className="text-[10px] text-gray-400 hover:text-gray-600"
+                                                            >
+                                                                Editar
+                                                            </button>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Content: Reason */}
+                                                    {item.record.justificationReason && (
+                                                        <div className="text-[11px] leading-tight text-gray-600">
+                                                            <span className="font-bold text-gray-700 block mb-0.5">Motivo:</span>
+                                                            "{item.record.justificationReason}"
+                                                        </div>
+                                                    )}
+
+                                                    {/* Content: Admin Feedback (Only if approved/rejected) */}
+                                                    {item.record.adminFeedback && (
+                                                        <div className="text-[11px] leading-tight bg-gray-50 p-1.5 rounded border border-gray-100 italic text-gray-500">
+                                                            <span className="font-bold text-gray-600 not-italic block mb-0.5">Respuesta:</span>
+                                                            "{item.record.adminFeedback}"
+                                                        </div>
+                                                    )}
+
+                                                    {/* Link */}
+                                                    {item.record.justificationLink && (
+                                                        <a
+                                                            href={item.record.justificationLink}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="flex items-center text-[10px] text-blue-500 hover:underline mt-1"
+                                                        >
+                                                            <FileText className="w-3 h-3 mr-1" />
+                                                            Ver Evidencia
+                                                        </a>
+                                                    )}
+                                                </div>
                                             ) : (
                                                 <span className="text-gray-300">-</span>
                                             )}

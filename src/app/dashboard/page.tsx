@@ -59,7 +59,7 @@ export default async function DashboardPage() {
                 or(...conditions)
             ),
             orderBy: [asc(events.date), asc(events.startTime)],
-            limit: 3,
+            limit: 6,
             with: {
                 targetArea: true
             }
