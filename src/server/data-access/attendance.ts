@@ -224,6 +224,13 @@ export async function getUserAttendanceHistoryDAO(userId: string) {
                     startTime: true,
                     endTime: true,
                     isVirtual: true
+                },
+                with: {
+                    semester: {
+                        columns: {
+                            name: true
+                        }
+                    }
                 }
             },
             reviewedBy: {

@@ -22,6 +22,10 @@ import {
     User as UserIcon,
     LogOut,
     RefreshCcw,
+    X,
+    AlertTriangle,
+    CheckCircle2,
+    TrendingUp,
 } from "lucide-react";
 import { logoutAction } from "@/server/actions/auth.actions";
 import { submitJustificationAction, acknowledgeRejectionAction } from "@/server/actions/attendance.actions";
@@ -54,12 +58,19 @@ ChartJS.register(
 );
 
 interface DashboardViewProps {
-    user: User;
+    user: {
+        id: string;
+        name: string | null;
+        image: string | null;
+        email: string;
+        role?: string;
+    };
     upcomingEvents?: any[];
     pendingJustifications?: any[];
+    attendanceHistory?: any[];
 }
 
-export default function DashboardView({ user, upcomingEvents = [], pendingJustifications = [] }: DashboardViewProps) {
+export default function DashboardView({ user, upcomingEvents = [], pendingJustifications = [], attendanceHistory = [] }: DashboardViewProps) {
     const [chartView, setChartView] = useState<"monthly" | "semester">("monthly");
     const [eventIndex, setEventIndex] = useState(0);
 
@@ -524,7 +535,7 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
                             </div>
                         </div>
 
-                        {/* Asistencia */}
+                        {/* Asistencia KPI */}
                         <div className="card-glass p-5 lg:p-6 rounded-2xl min-w-[280px] lg:min-w-0 snap-center relative overflow-hidden group">
                             <div className="absolute right-0 top-0 w-24 h-24 bg-blue-50 rounded-bl-full -mr-4 -mt-4 transition-all group-hover:bg-blue-100"></div>
                             <div className="relative z-10">
@@ -532,15 +543,25 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
                                     <div className="w-10 h-10 lg:w-12 lg:h-12 rounded-xl bg-blue-500 text-white flex items-center justify-center text-lg lg:text-xl shadow-lg shadow-blue-500/30">
                                         <CalendarCheck className="w-5 h-5 lg:w-6 lg:h-6" />
                                     </div>
+                                    <Link href="/dashboard/history" className="text-[10px] font-bold text-blue-600 hover:text-blue-800 bg-white/50 hover:bg-white px-2 py-1 rounded-lg transition-colors">
+                                        Ver Detalle
+                                    </Link>
                                 </div>
                                 <h3 className="text-blue-500 text-xs font-bold uppercase tracking-wider">
                                     Asistencia
                                 </h3>
-                                <p className="text-2xl lg:text-3xl font-bold text-gray-800 mt-1">
-                                    92%
-                                </p>
-                                <div className="w-full bg-blue-100 h-1.5 mt-2 rounded-full">
-                                    <div className="bg-blue-500 h-1.5 rounded-full w-[92%]"></div>
+                                <div className="flex items-baseline gap-2 mt-1">
+                                    <p className="text-2xl lg:text-3xl font-bold text-gray-800">
+                                        {(attendanceHistory && attendanceHistory.length > 0) ? (
+                                            Math.round((attendanceHistory.filter(r => r.status === "PRESENT" || r.status === "EXCUSED").length / attendanceHistory.length) * 100)
+                                        ) : 0}%
+                                    </p>
+                                </div>
+                                <div className="w-full bg-blue-100 h-1.5 mt-2 rounded-full overflow-hidden">
+                                    <div
+                                        className="bg-blue-500 h-1.5 rounded-full transition-all duration-1000"
+                                        style={{ width: `${(attendanceHistory && attendanceHistory.length > 0) ? Math.round((attendanceHistory.filter(r => r.status === "PRESENT" || r.status === "EXCUSED").length / attendanceHistory.length) * 100) : 0}%` }}
+                                    ></div>
                                 </div>
                             </div>
                         </div>

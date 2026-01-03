@@ -4,7 +4,7 @@ import DashboardView from "@/components/dashboard/DashboardView";
 import { db } from "@/db";
 import { events, semesters, areas } from "@/db/schema";
 import { asc, eq, and, or, isNull, gte } from "drizzle-orm";
-import { getPendingJustificationsAction } from "@/server/actions/attendance.actions";
+import { getPendingJustificationsAction, getMyAttendanceHistoryAction } from "@/server/actions/attendance.actions";
 
 export default async function DashboardPage() {
     const session = await auth();
@@ -66,8 +66,14 @@ export default async function DashboardPage() {
         });
     }
 
-    // 2. Fetch Pending Justifications
+    // 2. Fetch Pending Justifications & History
     const { data: pendingJustifications } = await getPendingJustificationsAction();
+    const { data: attendanceHistory } = await getMyAttendanceHistoryAction();
 
-    return <DashboardView user={session.user} upcomingEvents={upcomingEvents} pendingJustifications={pendingJustifications || []} />;
+    return <DashboardView
+        user={session.user}
+        upcomingEvents={upcomingEvents}
+        pendingJustifications={pendingJustifications || []}
+        attendanceHistory={attendanceHistory || []}
+    />;
 }
