@@ -75,5 +75,6 @@ export default async function DashboardPage() {
         upcomingEvents={upcomingEvents}
         pendingJustifications={pendingJustifications || []}
         attendanceHistory={attendanceHistory || []}
+        currentSemester={activeSemester ? { id: activeSemester.id, name: activeSemester.name } : null}
     />;
 }

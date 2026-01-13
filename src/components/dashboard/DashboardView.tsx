@@ -68,9 +68,10 @@ interface DashboardViewProps {
     upcomingEvents?: any[];
     pendingJustifications?: any[];
     attendanceHistory?: any[];
+    currentSemester?: { id: string; name: string } | null;
 }
 
-export default function DashboardView({ user, upcomingEvents = [], pendingJustifications = [], attendanceHistory = [] }: DashboardViewProps) {
+export default function DashboardView({ user, upcomingEvents = [], pendingJustifications = [], attendanceHistory = [], currentSemester }: DashboardViewProps) {
     const [chartView, setChartView] = useState<"monthly" | "semester">("monthly");
     const [eventIndex, setEventIndex] = useState(0);
 
@@ -454,7 +455,7 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
                                 Resumen
                             </h1>
                             <p className="text-[10px] text-meteorite-500 font-bold">
-                                2025 - A
+                                {currentSemester?.name || "Sin ciclo"}
                             </p>
                         </div>
                     </div>
@@ -470,12 +471,9 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
 
                     <div className="flex items-center space-x-3 lg:space-x-4">
                         <div className="relative hidden lg:block">
-                            <select className="appearance-none bg-white pl-4 pr-10 py-2 rounded-xl shadow-sm border border-meteorite-200 text-meteorite-800 font-semibold focus:outline-none focus:ring-2 focus:ring-meteorite-500 cursor-pointer hover:bg-meteorite-50 transition-colors">
-                                <option>2025 - A (Actual)</option>
-                                <option>2024 - B</option>
-                            </select>
-                            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-meteorite-600">
-                                <ChevronDown className="w-4 h-4" />
+                            <div className="bg-white pl-4 pr-4 py-2 rounded-xl shadow-sm border border-meteorite-200 text-meteorite-800 font-semibold flex items-center gap-2">
+                                <span className="text-sm">{currentSemester?.name || "Sin ciclo"}</span>
+                                <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-bold">Actual</span>
                             </div>
                         </div>
 
