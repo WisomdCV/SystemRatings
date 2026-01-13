@@ -34,7 +34,8 @@ export default function CreateCycleModal() {
             const res = await createSemesterAction({
                 name: formData.name,
                 startDate: new Date(formData.startDate),
-                endDate: formData.endDate ? new Date(formData.endDate) : undefined
+                endDate: formData.endDate ? new Date(formData.endDate) : undefined,
+                activateImmediately: false
             });
 
             if (res.success) {

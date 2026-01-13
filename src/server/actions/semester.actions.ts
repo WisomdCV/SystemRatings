@@ -30,9 +30,14 @@ export async function createSemesterAction(input: CreateSemesterDTO) {
         const session = await auth();
         if (!session?.user) return { success: false, error: "No autorizado" };
 
-        // Permission Check (Only President/Dev)
         const role = session.user.role;
-        if (!["PRESIDENT", "DEV"].includes(role || "")) {
+
+        // Check if this is the first semester (special case: anyone can create)
+        const existingSemesters = await db.query.semesters.findFirst();
+        const isFirstSemester = !existingSemesters;
+
+        // Permission Check: Only President/Dev OR first-time setup
+        if (!isFirstSemester && !["PRESIDENT", "DEV"].includes(role || "")) {
             return { success: false, error: "No tienes permisos para crear ciclos." };
         }
 
@@ -42,24 +47,40 @@ export async function createSemesterAction(input: CreateSemesterDTO) {
             return { success: false, error: validated.error.issues[0].message };
         }
 
+        const { activateImmediately, ...semesterData } = validated.data;
+
         // Check Unique Name
         const existing = await db.query.semesters.findFirst({
-            where: eq(semesters.name, validated.data.name)
+            where: eq(semesters.name, semesterData.name)
         });
         if (existing) {
             return { success: false, error: "Ya existe un ciclo con ese nombre." };
         }
 
-        // Insert (Inactive by default)
-        await db.insert(semesters).values({
-            name: validated.data.name,
-            startDate: validated.data.startDate,
-            endDate: validated.data.endDate || null,
-            isActive: false // Always created inactive for safety
-        });
+        // Insert Semester
+        const [newSemester] = await db.insert(semesters).values({
+            name: semesterData.name,
+            startDate: semesterData.startDate,
+            endDate: semesterData.endDate || null,
+            isActive: activateImmediately || false
+        }).returning();
+
+        // If activating immediately, deactivate others
+        if (activateImmediately && newSemester) {
+            await db.update(semesters)
+                .set({ isActive: false })
+                .where(ne(semesters.id, newSemester.id));
+        }
 
         revalidatePath("/admin/cycles");
-        return { success: true, message: "Ciclo creado correctamente (Inactivo)." };
+        revalidatePath("/dashboard");
+        revalidatePath("/setup");
+
+        const message = activateImmediately
+            ? "Ciclo creado y activado correctamente."
+            : "Ciclo creado correctamente (Inactivo).";
+
+        return { success: true, message };
 
     } catch (error: any) {
         console.error("Create Semester Error:", error);
