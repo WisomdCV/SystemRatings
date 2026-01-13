@@ -69,9 +69,23 @@ interface DashboardViewProps {
     pendingJustifications?: any[];
     attendanceHistory?: any[];
     currentSemester?: { id: string; name: string } | null;
+    dashboardData?: {
+        kpi: {
+            current: number;
+            previousMonth: number | null;
+            ranking: { position: number; total: number } | null;
+        };
+        grades: {
+            pillars: Array<{ name: string; score: number; maxScore: number; normalized: number }>;
+        };
+        history: {
+            monthly: Array<{ month: string; year: number; myKpi: number; areaAvg: number | null }>;
+            semesterly: Array<{ semester: string; myKpi: number; areaAvg: number | null }>;
+        };
+    };
 }
 
-export default function DashboardView({ user, upcomingEvents = [], pendingJustifications = [], attendanceHistory = [], currentSemester }: DashboardViewProps) {
+export default function DashboardView({ user, upcomingEvents = [], pendingJustifications = [], attendanceHistory = [], currentSemester, dashboardData }: DashboardViewProps) {
     const [chartView, setChartView] = useState<"monthly" | "semester">("monthly");
     const [eventIndex, setEventIndex] = useState(0);
 
@@ -205,12 +219,20 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
     };
 
     // --- Radar Data ---
+    const hasGradesData = dashboardData?.grades?.pillars && dashboardData.grades.pillars.length > 0;
+    const radarLabels = hasGradesData
+        ? dashboardData.grades.pillars.map(p => p.name)
+        : ["Sin datos"];
+    const radarScores = hasGradesData
+        ? dashboardData.grades.pillars.map(p => p.normalized)
+        : [0];
+
     const radarData = {
-        labels: ["Proyectos", "Asistencia", "Liderazgo", "Staff", "Innovación"],
+        labels: radarLabels,
         datasets: [
             {
                 label: "Mi Nivel",
-                data: [4.8, 4.2, 4.5, 3.8, 5.0],
+                data: radarScores,
                 backgroundColor: "rgba(122, 68, 227, 0.2)",
                 borderColor: "#7a44e3",
                 pointBackgroundColor: "#fff",
@@ -239,18 +261,33 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
     };
 
     // --- Line Data ---
+    const hasHistoryData = dashboardData?.history?.monthly && dashboardData.history.monthly.length > 0;
+    const monthlyLabels = hasHistoryData
+        ? dashboardData.history.monthly.map(h => h.month)
+        : ["Sin datos"];
+    const monthlyKpi = hasHistoryData
+        ? dashboardData.history.monthly.map(h => h.myKpi)
+        : [0];
+    const monthlyAreaAvg = hasHistoryData
+        ? dashboardData.history.monthly.map(h => h.areaAvg || 0)
+        : [0];
+
+    // Fallback for semester view (not yet implemented)
+    const semesterlyLabels = ["2024-A", "2024-B", "2025-A"];
+    const semesterlyKpi = [0, 0, dashboardData?.kpi?.current || 0];
+
     const lineData = {
         labels:
             chartView === "monthly"
-                ? ["Mar", "Abr", "May", "Jun", "Jul", "Ago"]
-                : ["2023-A", "2023-B", "2024-A", "2024-B", "2025-A"],
+                ? monthlyLabels
+                : semesterlyLabels,
         datasets: [
             {
                 label: "Mi KPI",
                 data:
                     chartView === "monthly"
-                        ? [3.8, 4.1, 4.5, 4.4, 4.8, 4.9]
-                        : [3.5, 3.9, 4.1, 4.3, 4.85],
+                        ? monthlyKpi
+                        : semesterlyKpi,
                 borderColor: "#8a65ed",
                 backgroundColor: (context: any) => {
                     const ctx = context.chart.ctx;
@@ -272,8 +309,8 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
                 label: "Promedio Área",
                 data:
                     chartView === "monthly"
-                        ? [3.5, 3.6, 3.8, 3.9, 4.0, 4.1]
-                        : [3.4, 3.8, 4.0, 4.1, 4.2],
+                        ? monthlyAreaAvg
+                        : [0, 0, 0],
                 borderColor: "#cbd5e1",
                 borderWidth: 2,
                 borderDash: [5, 5],
@@ -517,17 +554,32 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
                                     <div className="w-10 h-10 lg:w-12 lg:h-12 rounded-xl bg-meteorite-500 text-white flex items-center justify-center text-lg lg:text-xl shadow-lg shadow-meteorite-500/30">
                                         <Trophy className="w-5 h-5 lg:w-6 lg:h-6" />
                                     </div>
-                                    <span className="text-[10px] lg:text-xs font-bold px-2 py-1 rounded-lg bg-green-100 text-green-700">
-                                        +12% vs mes ant.
-                                    </span>
+                                    {(() => {
+                                        const current = dashboardData?.kpi?.current || 0;
+                                        const prev = dashboardData?.kpi?.previousMonth;
+                                        if (prev === null || prev === undefined || prev === 0) {
+                                            return (
+                                                <span className="text-[10px] lg:text-xs font-bold px-2 py-1 rounded-lg bg-gray-100 text-gray-500">
+                                                    Primer registro
+                                                </span>
+                                            );
+                                        }
+                                        const change = ((current - prev) / prev * 100);
+                                        const isPositive = change >= 0;
+                                        return (
+                                            <span className={`text-[10px] lg:text-xs font-bold px-2 py-1 rounded-lg ${isPositive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                                {isPositive ? '+' : ''}{change.toFixed(0)}% vs mes ant.
+                                            </span>
+                                        );
+                                    })()}
                                 </div>
                                 <h3 className="text-meteorite-500 text-xs font-bold uppercase tracking-wider">
                                     KPI Global
                                 </h3>
                                 <p className="text-2xl lg:text-3xl font-bold text-meteorite-950 mt-1">
-                                    4.85
+                                    {(dashboardData?.kpi?.current || 0).toFixed(2)}
                                     <span className="text-base lg:text-lg text-meteorite-400 font-normal">
-                                        /5.0
+                                        /10
                                     </span>
                                 </p>
                             </div>
@@ -576,12 +628,18 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
                                 <h3 className="text-orange-500 text-xs font-bold uppercase tracking-wider">
                                     Ranking
                                 </h3>
-                                <p className="text-2xl lg:text-3xl font-bold text-gray-800 mt-1">
-                                    #2{" "}
-                                    <span className="text-sm font-normal text-gray-500">
-                                        de 8
-                                    </span>
-                                </p>
+                                {dashboardData?.kpi?.ranking ? (
+                                    <p className="text-2xl lg:text-3xl font-bold text-gray-800 mt-1">
+                                        #{dashboardData.kpi.ranking.position}{" "}
+                                        <span className="text-sm font-normal text-gray-500">
+                                            de {dashboardData.kpi.ranking.total}
+                                        </span>
+                                    </p>
+                                ) : (
+                                    <p className="text-lg font-medium text-gray-400 mt-1">
+                                        Sin datos
+                                    </p>
+                                )}
                             </div>
                         </div>
 

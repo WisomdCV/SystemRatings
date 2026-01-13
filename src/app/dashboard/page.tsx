@@ -5,6 +5,7 @@ import { db } from "@/db";
 import { events, semesters, areas } from "@/db/schema";
 import { asc, eq, and, or, isNull, gte } from "drizzle-orm";
 import { getPendingJustificationsAction, getMyAttendanceHistoryAction } from "@/server/actions/attendance.actions";
+import { getMyDashboardDataAction } from "@/server/actions/dashboard.actions";
 
 export default async function DashboardPage() {
     const session = await auth();
@@ -70,11 +71,16 @@ export default async function DashboardPage() {
     const { data: pendingJustifications } = await getPendingJustificationsAction();
     const { data: attendanceHistory } = await getMyAttendanceHistoryAction();
 
+    // 3. Fetch Dashboard KPI & Grades Data
+    const { data: dashboardData } = await getMyDashboardDataAction();
+
     return <DashboardView
         user={session.user}
         upcomingEvents={upcomingEvents}
         pendingJustifications={pendingJustifications || []}
         attendanceHistory={attendanceHistory || []}
         currentSemester={activeSemester ? { id: activeSemester.id, name: activeSemester.name } : null}
+        dashboardData={dashboardData}
     />;
 }
+
