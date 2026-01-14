@@ -157,7 +157,7 @@ export default function AttendanceHeatmap({ history }: AttendanceHeatmapProps) {
     // Level 0: Very light gray (clearly distinguishable from red/absent)
     const theme: ThemeInput = {
         light: ['#f3f4f6', '#ef4444', '#f59e0b', '#3b82f6', '#10b981'],
-        dark: ['#1f2937', '#ef4444', '#f59e0b', '#3b82f6', '#10b981'],
+        dark: ['#f3f4f6', '#ef4444', '#f59e0b', '#3b82f6', '#10b981'],
     };
 
     return (
