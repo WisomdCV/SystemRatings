@@ -187,7 +187,64 @@ export async function getMyDashboardDataAction(): Promise<{
             };
         }
 
-        // 8. Build and return dashboard data
+
+
+        // 9. Get Semester History (Aggregated)
+        // Fetch all user monthly summaries (not just active semester) to aggregate by cycle
+        // Optimization: limit to last 4 semesters maybe? For now, fetch all.
+        const allUserHistory = await db.query.kpiMonthlySummaries.findMany({
+            where: eq(kpiMonthlySummaries.userId, userId),
+            with: {
+                semester: true
+            }
+        });
+
+        const semesterMap = new Map<string, { total: number; count: number; name: string }>();
+
+        allUserHistory.forEach(h => {
+            const semId = h.semesterId;
+            const semName = h.semester.name;
+
+            if (!semesterMap.has(semId)) {
+                semesterMap.set(semId, { total: 0, count: 0, name: semName });
+            }
+
+            const current = semesterMap.get(semId)!;
+            current.total += h.finalKpiScore || 0;
+            current.count += 1;
+        });
+
+        // Area Semester Averages
+        const areaSemesterMap = new Map<string, number>();
+        if (userAreaId) {
+            const allAreaSummaries = await db.query.areaKpiSummaries.findMany({
+                where: eq(areaKpiSummaries.areaId, userAreaId)
+            });
+            // We need to average the area monthly averages per semester? 
+            // OR use a "semester summary" if it existed.
+            // Let's Average the monthly averages for now.
+            const tempAreaMap = new Map<string, { total: number; count: number }>();
+
+            allAreaSummaries.forEach(a => {
+                if (!tempAreaMap.has(a.semesterId)) {
+                    tempAreaMap.set(a.semesterId, { total: 0, count: 0 });
+                }
+                const cur = tempAreaMap.get(a.semesterId)!;
+                cur.total += a.averageKpi || 0;
+                cur.count += 1;
+            });
+
+            tempAreaMap.forEach((val, key) => {
+                areaSemesterMap.set(key, val.total / val.count); // Average of averages
+            });
+        }
+
+        const semesterlyHistory = Array.from(semesterMap.entries()).map(([semId, data]) => ({
+            semester: data.name,
+            myKpi: data.total / data.count,
+            areaAvg: areaSemesterMap.get(semId) || null
+        })).sort((a, b) => a.semester.localeCompare(b.semester));
+
         const dashboardData: DashboardData = {
             kpi: {
                 current: latestKpi?.finalKpiScore || 0,
@@ -199,7 +256,7 @@ export async function getMyDashboardDataAction(): Promise<{
             },
             history: {
                 monthly: monthlyHistory,
-                semesterly: [] // Can be implemented later for semester view
+                semesterly: semesterlyHistory
             }
         };
 

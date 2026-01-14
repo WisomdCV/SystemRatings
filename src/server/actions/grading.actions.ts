@@ -6,6 +6,7 @@ import { grades, gradeDefinitions, users } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
 import { UpsertGradeDTO, UpsertGradeSchema } from "@/lib/validators/grading";
 import { recalculateUserKPI } from "@/server/services/kpi.service";
+import { recalculateAreaKPIForUser } from "@/server/services/area-kpi.service";
 import { revalidatePath } from "next/cache";
 
 export async function upsertGradeAction(input: UpsertGradeDTO) {
@@ -69,10 +70,25 @@ export async function upsertGradeAction(input: UpsertGradeDTO) {
             });
         }
 
-        // 5. TRIGGER RECALCULATION
+        // 5. TRIGGER USER KPI RECALCULATION
         const newKpi = await recalculateUserKPI(targetUserId, pillar.semesterId);
 
+        // 6. TRIGGER AREA KPI RECALCULATION (non-blocking, wrapped in try-catch)
+        try {
+            const now = new Date();
+            await recalculateAreaKPIForUser(
+                targetUserId,
+                pillar.semesterId,
+                now.getMonth() + 1,
+                now.getFullYear()
+            );
+        } catch (areaError) {
+            console.error("Error calculating area KPI (non-critical):", areaError);
+            // Don't fail the main operation
+        }
+
         revalidatePath("/dashboard/management/grades");
+        revalidatePath("/dashboard/areas");
         return { success: true, message: "Nota guardada correctamente.", newKpi };
 
     } catch (error: any) {
@@ -80,3 +96,4 @@ export async function upsertGradeAction(input: UpsertGradeDTO) {
         return { success: false, error: "Error al guardar la calificación." };
     }
 }
+

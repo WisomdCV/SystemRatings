@@ -26,6 +26,7 @@ import {
     AlertTriangle,
     CheckCircle2,
     TrendingUp,
+    BarChart3,
 } from "lucide-react";
 import { logoutAction } from "@/server/actions/auth.actions";
 import { submitJustificationAction, acknowledgeRejectionAction } from "@/server/actions/attendance.actions";
@@ -273,8 +274,19 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
         : [0];
 
     // Fallback for semester view (not yet implemented)
-    const semesterlyLabels = ["2024-A", "2024-B", "2025-A"];
-    const semesterlyKpi = [0, 0, dashboardData?.kpi?.current || 0];
+    // Semester View Data
+    const hasSemesterData = dashboardData?.history?.semesterly && dashboardData.history.semesterly.length > 0;
+    const semesterlyLabels = hasSemesterData
+        ? dashboardData.history.semesterly.map(h => h.semester)
+        : ["Sin datos"];
+    const semesterlyKpi = hasSemesterData
+        ? dashboardData.history.semesterly.map(h => h.myKpi)
+        : [0];
+
+    // Add Area Avg for Semester
+    const semesterlyAreaAvg = hasSemesterData
+        ? dashboardData.history.semesterly.map(h => h.areaAvg || 0)
+        : [0];
 
     const lineData = {
         labels:
@@ -310,7 +322,7 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
                 data:
                     chartView === "monthly"
                         ? monthlyAreaAvg
-                        : [0, 0, 0],
+                        : semesterlyAreaAvg,
                 borderColor: "#cbd5e1",
                 borderWidth: 2,
                 borderDash: [5, 5],
@@ -417,6 +429,17 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
                             >
                                 <GraduationCap className="text-meteorite-400 group-hover:text-white transition-colors w-5 h-5" />
                                 <span className="ml-3 font-medium">Calificaciones</span>
+                            </a>
+                        )}
+
+                        {/* 6. Comparación de Áreas - Leadership Only */}
+                        {["DEV", "PRESIDENT", "TREASURER", "DIRECTOR", "SUBDIRECTOR"].includes((user as any).role) && (
+                            <a
+                                href="/dashboard/areas"
+                                className="flex items-center px-4 py-3 text-meteorite-200 hover:bg-meteorite-900 hover:text-white rounded-xl transition-all group"
+                            >
+                                <BarChart3 className="text-meteorite-400 group-hover:text-white transition-colors w-5 h-5" />
+                                <span className="ml-3 font-medium">Áreas KPI</span>
                             </a>
                         )}
 
