@@ -2,7 +2,7 @@
 
 import { auth } from "@/server/auth";
 import { db } from "@/db";
-import { gradeDefinitions, semesters } from "@/db/schema";
+import { gradeDefinitions, semesters, grades } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { UpsertPillarSchema } from "@/lib/validators/pillar"; // Assume this path exists or check file structure if unsure
@@ -154,12 +154,26 @@ export async function deletePillarAction(id: string, semesterId: string) {
             return { success: false, error: "No autorizado" };
         }
 
+        // Check if there are any grades assigned to this pillar
+        const existingGrades = await db.query.grades.findFirst({
+            where: eq(grades.definitionId, id)
+        });
+
+        if (existingGrades) {
+            return {
+                success: false,
+                error: "No se puede eliminar este pilar porque ya tiene calificaciones asignadas. Primero elimina las calificaciones asociadas."
+            };
+        }
+
         await db.delete(gradeDefinitions).where(eq(gradeDefinitions.id, id));
         revalidatePath(`/admin/cycles/${semesterId}`);
-        return { success: true, message: "Pilar eliminado." };
+        revalidatePath(`/admin/cycles/${semesterId}/pillars`);
+        return { success: true, message: "Pilar eliminado correctamente." };
 
     } catch (error: any) {
-        return { success: false, error: error.message };
+        console.error("Error deleting pillar:", error);
+        return { success: false, error: "Error al eliminar el pilar." };
     }
 }
 
@@ -179,11 +193,46 @@ export async function clonePillarsAction(sourceSemesterId: string, targetSemeste
             return { success: false, error: "El ciclo origen no tiene pilares." };
         }
 
-        // 2. Check overlap (Target should ideally be empty to avoid duplicates, or we delete existing?)
-        // Safer to Delete Exisiting in Target (Clean Slate Clone)
-        await db.delete(gradeDefinitions).where(eq(gradeDefinitions.semesterId, targetSemesterId));
+        // 2. Get Target Pillars
+        const targetPillars = await db.query.gradeDefinitions.findMany({
+            where: eq(gradeDefinitions.semesterId, targetSemesterId)
+        });
 
-        // 3. Insert Clones
+        // 3. Check if any target pillar has grades assigned
+        if (targetPillars.length > 0) {
+            const targetPillarIds = targetPillars.map(p => p.id);
+
+            // Check for any grades in target pillars
+            const existingGrade = await db.query.grades.findFirst({
+                where: eq(grades.definitionId, targetPillarIds[0]) // Check first one
+            });
+
+            // If first has no grades, check all others
+            let hasGrades = !!existingGrade;
+            if (!hasGrades) {
+                for (const pillarId of targetPillarIds) {
+                    const grade = await db.query.grades.findFirst({
+                        where: eq(grades.definitionId, pillarId)
+                    });
+                    if (grade) {
+                        hasGrades = true;
+                        break;
+                    }
+                }
+            }
+
+            if (hasGrades) {
+                return {
+                    success: false,
+                    error: "No se puede clonar porque el ciclo destino ya tiene pilares con calificaciones asignadas. Primero elimina las calificaciones existentes."
+                };
+            }
+
+            // Safe to delete target pillars (no grades)
+            await db.delete(gradeDefinitions).where(eq(gradeDefinitions.semesterId, targetSemesterId));
+        }
+
+        // 4. Insert Clones
         const clones = sourcePillars.map(p => ({
             semesterId: targetSemesterId,
             name: p.name,
@@ -196,10 +245,12 @@ export async function clonePillarsAction(sourceSemesterId: string, targetSemeste
         await db.insert(gradeDefinitions).values(clones);
 
         revalidatePath(`/admin/cycles/${targetSemesterId}`);
+        revalidatePath(`/admin/cycles/${targetSemesterId}/pillars`);
         return { success: true, message: `Se clonaron ${clones.length} pilares exitosamente.` };
 
     } catch (error: any) {
         console.error("Clone Error:", error);
-        return { success: false, error: error.message };
+        return { success: false, error: "Error al clonar pilares. Intenta nuevamente." };
     }
 }
+
