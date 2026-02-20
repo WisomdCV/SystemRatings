@@ -4,6 +4,7 @@ import { getAreaComparisonAction } from "@/server/actions/area-comparison.action
 import AreaComparison from "@/components/dashboard/AreaComparison";
 import Link from "next/link";
 import { ArrowLeft, BarChart3 } from "lucide-react";
+import { hasPermission } from "@/lib/permissions";
 
 export default async function AreasPage() {
     const session = await auth();
@@ -13,7 +14,7 @@ export default async function AreasPage() {
     }
 
     const role = session.user.role || "";
-    const canViewComparison = ["DEV", "PRESIDENT", "TREASURER", "DIRECTOR", "SUBDIRECTOR"].includes(role);
+    const canViewComparison = hasPermission(role, "dashboard:area_comparison");
 
     if (!canViewComparison) {
         redirect("/dashboard");

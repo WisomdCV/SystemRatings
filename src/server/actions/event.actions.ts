@@ -5,6 +5,7 @@ import { CreateEventDTO, CreateEventSchema } from "@/lib/validators/event";
 import { createGoogleMeeting } from "@/server/services/google-calendar.service";
 import { createEventDAO } from "@/server/data-access/events";
 import { revalidatePath } from "next/cache";
+import { hasPermission, isAdmin, isDirectorLevel } from "@/lib/permissions";
 
 export async function createEventAction(input: CreateEventDTO) {
     try {
@@ -16,7 +17,7 @@ export async function createEventAction(input: CreateEventDTO) {
 
         // Permisos: DEV, PRESIDENT, DIRECTOR, SUBDIRECTOR
         const role = session.user.role;
-        if (!["DEV", "PRESIDENT", "DIRECTOR", "SUBDIRECTOR"].includes(role || "")) {
+        if (!hasPermission(role, "event:create")) {
             return { success: false, error: "No tienes permisos para crear eventos." };
         }
 
@@ -95,11 +96,10 @@ export async function deleteEventAction(eventId: string) {
 
         // 2. Permissions
         const role = session.user.role;
-        const isDevOrPresi = ["DEV", "PRESIDENT"].includes(role || "");
-        const isDirectorOrSub = ["DIRECTOR", "SUBDIRECTOR"].includes(role || "");
+        const canManageAny = hasPermission(role, "event:manage");
 
-        if (!isDevOrPresi) {
-            if (!isDirectorOrSub) return { success: false, error: "No tienes permisos." };
+        if (!canManageAny) {
+            if (!isDirectorLevel(role)) return { success: false, error: "No tienes permisos." };
             if (event.targetAreaId !== session.user.currentAreaId) {
                 return { success: false, error: "No puedes eliminar eventos de otras áreas." };
             }
@@ -142,12 +142,10 @@ export async function updateEventAction(eventId: string, input: UpdateEventDTO) 
 
         // Permisos
         const role = session.user.role;
-        const isDevOrPresi = ["DEV", "PRESIDENT"].includes(role || "");
-        const isDirectorOrSub = ["DIRECTOR", "SUBDIRECTOR"].includes(role || "");
-        const isAreaOwner = isDirectorOrSub && event.createdById === session.user.id; // Or simple Area Guard below
+        const canManageAny = hasPermission(role, "event:manage");
 
-        if (!isDevOrPresi) {
-            if (!isDirectorOrSub) return { success: false, error: "No tienes permisos." };
+        if (!canManageAny) {
+            if (!isDirectorLevel(role)) return { success: false, error: "No tienes permisos." };
             // Strict Area Check:
             if (event.targetAreaId !== session.user.currentAreaId) {
                 return { success: false, error: "Solo puedes gestionar eventos de tu área." };

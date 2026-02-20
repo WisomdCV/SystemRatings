@@ -103,6 +103,14 @@ export const semesters = sqliteTable("semester", {
   endDate: integer("end_date", { mode: "timestamp" }),
 });
 
+export const semesterAreas = sqliteTable("semester_area", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  semesterId: text("semester_id").references(() => semesters.id, { onDelete: "cascade" }).notNull(),
+  areaId: text("area_id").references(() => areas.id, { onDelete: "cascade" }).notNull(),
+  isActive: integer("is_active", { mode: "boolean" }).default(true),
+  createdAt: integer("created_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
+});
+
 // =============================================================================
 // 3. OPERACIONES: EVENTOS Y ASISTENCIA
 // =============================================================================
@@ -228,12 +236,19 @@ export const areasRelations = relations(areas, ({ many }) => ({
   members: many(users),
   events: many(events),
   kpiSummaries: many(areaKpiSummaries),
+  semesterAreas: many(semesterAreas),
 }));
 
 export const semestersRelations = relations(semesters, ({ many }) => ({
   events: many(events),
   gradeDefinitions: many(gradeDefinitions),
   kpiSummaries: many(kpiMonthlySummaries),
+  semesterAreas: many(semesterAreas),
+}));
+
+export const semesterAreasRelations = relations(semesterAreas, ({ one }) => ({
+  semester: one(semesters, { fields: [semesterAreas.semesterId], references: [semesters.id] }),
+  area: one(areas, { fields: [semesterAreas.areaId], references: [areas.id] }),
 }));
 
 export const eventsRelations = relations(events, ({ one, many }) => ({

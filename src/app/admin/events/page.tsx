@@ -8,6 +8,7 @@ import CreateEventForm from "@/components/events/CreateEventForm";
 import { CalendarCheck, Plus, Filter } from "lucide-react";
 import Link from "next/link";
 import EventsView from "@/components/events/EventsView";
+import { hasPermission } from "@/lib/permissions";
 
 export default async function EventsPage() {
     const session = await auth();
@@ -18,7 +19,7 @@ export default async function EventsPage() {
     const currentAreaId = session.user.currentAreaId;
 
     // 1. Role Protection
-    if (!["DEV", "PRESIDENT", "DIRECTOR", "SUBDIRECTOR", "TREASURER"].includes(role)) {
+    if (!hasPermission(role, "admin:access")) {
         return redirect("/dashboard?error=AccessDenied");
     }
 

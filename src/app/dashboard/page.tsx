@@ -6,6 +6,7 @@ import { events, semesters, areas } from "@/db/schema";
 import { asc, eq, and, or, isNull, gte } from "drizzle-orm";
 import { getPendingJustificationsAction, getMyAttendanceHistoryAction } from "@/server/actions/attendance.actions";
 import { getMyDashboardDataAction } from "@/server/actions/dashboard.actions";
+import { hasPermission } from "@/lib/permissions";
 
 export default async function DashboardPage() {
     const session = await auth();
@@ -46,7 +47,7 @@ export default async function DashboardPage() {
             // 1. General (All) -> Added by default (isNull)
             // 2. My Area (All) -> Added by default (currentAreaId)
             // 3. Mesa Directiva? -> Only for Leaders
-            const isLeader = ["DIRECTOR", "SUBDIRECTOR", "TREASURER", "PRESIDENT", "DEV"].includes(role);
+            const isLeader = hasPermission(role, "dashboard:leadership_view");
 
             if (isLeader && mdArea) {
                 conditions.push(eq(events.targetAreaId, mdArea.id));

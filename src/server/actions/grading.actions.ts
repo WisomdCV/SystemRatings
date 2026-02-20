@@ -8,6 +8,7 @@ import { UpsertGradeDTO, UpsertGradeSchema } from "@/lib/validators/grading";
 import { recalculateUserKPI } from "@/server/services/kpi.service";
 import { recalculateAreaKPIForUser } from "@/server/services/area-kpi.service";
 import { revalidatePath } from "next/cache";
+import { hasPermission } from "@/lib/permissions";
 
 export async function upsertGradeAction(input: UpsertGradeDTO) {
     try {
@@ -15,7 +16,7 @@ export async function upsertGradeAction(input: UpsertGradeDTO) {
         if (!session?.user) return { success: false, error: "No autorizado" };
 
         const currentRole = session.user.role || "";
-        const canGrade = ["PRESIDENT", "DIRECTOR", "DEV"].includes(currentRole);
+        const canGrade = hasPermission(currentRole, "grade:assign");
 
         if (!canGrade) {
             return { success: false, error: "No tienes permisos para calificar." };

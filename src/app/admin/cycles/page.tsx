@@ -2,6 +2,7 @@ import { auth } from "@/server/auth";
 import { redirect } from "next/navigation";
 import { getAllSemestersAction } from "@/server/actions/semester.actions";
 import CyclesView from "@/components/admin/cycles/CyclesView";
+import { hasPermission } from "@/lib/permissions";
 
 export default async function CyclesPage() {
     const session = await auth();
@@ -9,7 +10,7 @@ export default async function CyclesPage() {
 
     const role = session.user.role;
     // Strict Access Control: Only President and Dev
-    if (!["PRESIDENT", "DEV"].includes(role || "")) {
+    if (!hasPermission(role, "semester:manage")) {
         return redirect("/dashboard?error=AccessDenied");
     }
 

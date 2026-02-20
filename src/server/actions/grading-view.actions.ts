@@ -2,6 +2,7 @@
 
 import { auth } from "@/server/auth";
 import { db } from "@/db";
+import { hasPermission, isAdmin, isDirectorLevel } from "@/lib/permissions";
 import { users, gradeDefinitions, grades, semesters, areas, kpiMonthlySummaries } from "@/db/schema";
 import { eq, and, ne, desc, asc, inArray } from "drizzle-orm";
 
@@ -11,8 +12,8 @@ export async function getGradingSheetAction() {
         if (!session?.user) return { success: false, error: "No autorizado" };
 
         const { role, currentAreaId, id: userId } = session.user;
-        const isDirector = ["DIRECTOR", "SUBDIRECTOR"].includes(role || "");
-        const isPresidentOrDev = ["PRESIDENT", "DEV"].includes(role || "");
+        const isDirector = isDirectorLevel(role);
+        const isPresidentOrDev = isAdmin(role);
 
         if (!currentAreaId && !isPresidentOrDev) {
             return { success: false, error: "No tienes un área asignada para calificar." };

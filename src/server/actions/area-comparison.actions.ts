@@ -2,8 +2,9 @@
 
 import { auth } from "@/server/auth";
 import { db } from "@/db";
-import { areas, areaKpiSummaries, semesters } from "@/db/schema";
-import { eq, and, asc, desc } from "drizzle-orm";
+import { areas, areaKpiSummaries, semesters, semesterAreas } from "@/db/schema";
+import { eq, and, asc, desc, inArray } from "drizzle-orm";
+import { hasPermission } from "@/lib/permissions";
 
 export interface AreaComparisonData {
     areas: Array<{ id: string; name: string; code: string | null }>;
@@ -31,7 +32,7 @@ export async function getAreaComparisonAction(): Promise<{
 
         // Only allow leadership to see this
         const role = session.user.role || "";
-        const canViewComparison = ["DEV", "PRESIDENT", "TREASURER", "DIRECTOR", "SUBDIRECTOR"].includes(role);
+        const canViewComparison = hasPermission(role, "dashboard:area_comparison");
 
         if (!canViewComparison) {
             return { success: false, error: "No tienes permisos para ver esta información." };
@@ -46,10 +47,28 @@ export async function getAreaComparisonAction(): Promise<{
             return { success: false, error: "No hay un ciclo activo." };
         }
 
-        // 2. Get All Areas (excluding internal/system areas if needed)
-        const allAreas = await db.query.areas.findMany({
-            orderBy: [asc(areas.name)]
+        // 2. Get areas active in this semester (via semesterAreas pivot)
+        const activeSemesterAreas = await db.query.semesterAreas.findMany({
+            where: and(
+                eq(semesterAreas.semesterId, activeSemester.id),
+                eq(semesterAreas.isActive, true),
+            ),
         });
+
+        let allAreas;
+        if (activeSemesterAreas.length > 0) {
+            // Only show areas that are active in this semester
+            const activeAreaIds = activeSemesterAreas.map(sa => sa.areaId);
+            allAreas = await db.query.areas.findMany({
+                where: inArray(areas.id, activeAreaIds),
+                orderBy: [asc(areas.name)],
+            });
+        } else {
+            // Fallback: no semester-area records yet → show all areas
+            allAreas = await db.query.areas.findMany({
+                orderBy: [asc(areas.name)],
+            });
+        }
 
         // 3. Get All Area KPI Summaries for this semester
         const summaries = await db.query.areaKpiSummaries.findMany({

@@ -6,6 +6,7 @@ import { semesters } from "@/db/schema";
 import { CreateSemesterDTO, CreateSemesterSchema } from "@/lib/validators/semester";
 import { eq, desc, ne, and } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { hasPermission } from "@/lib/permissions";
 
 // 1. Get All Semesters
 export async function getAllSemestersAction() {
@@ -37,7 +38,7 @@ export async function createSemesterAction(input: CreateSemesterDTO) {
         const isFirstSemester = !existingSemesters;
 
         // Permission Check: Only President/Dev OR first-time setup
-        if (!isFirstSemester && !["PRESIDENT", "DEV"].includes(role || "")) {
+        if (!isFirstSemester && !hasPermission(role, "semester:manage")) {
             return { success: false, error: "No tienes permisos para crear ciclos." };
         }
 
@@ -95,7 +96,7 @@ export async function toggleSemesterStatusAction(semesterId: string, shouldActiv
         if (!session?.user) return { success: false, error: "No autorizado" };
 
         const role = session.user.role;
-        if (!["PRESIDENT", "DEV"].includes(role || "")) {
+        if (!hasPermission(role, "semester:manage")) {
             return { success: false, error: "No tienes permisos de gestión." };
         }
 

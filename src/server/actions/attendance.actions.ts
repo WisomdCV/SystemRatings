@@ -4,6 +4,7 @@ import { auth } from "@/server/auth";
 import { getAttendanceSheetDAO, batchUpsertAttendanceDAO, AttendanceStatus } from "@/server/data-access/attendance";
 import { getEventByIdDAO } from "@/server/data-access/events"; // Re-using to check event ownership
 import { revalidatePath } from "next/cache";
+import { hasPermission, isAdmin, isDirectorLevel } from "@/lib/permissions";
 
 export async function getAttendanceSheetAction(eventId: string) {
     const session = await auth();
@@ -18,17 +19,11 @@ export async function getAttendanceSheetAction(eventId: string) {
         const event = await getEventByIdDAO(eventId);
         if (!event) return { success: false, error: "Evento no encontrado" };
 
-        const isDevOrPresi = role === "DEV" || role === "PRESIDENT";
+        const isDevOrPresi = isAdmin(role);
 
         if (!isDevOrPresi) {
-            // Permission Logic Matrix:
-            // TREASURER: General & MD
-            // DIRECTOR/SUBDIRECTOR: Only their Area
-            // SECRETARY: (Assuming General/MD like Treasurer based on context, or strict?) -> Let's stick to prompt. 
-            // Prompt says: Treasurer -> General + MD.
-
-            // Allow Director, Subdirector, Treasurer (Secretary excluded for now unless prompted)
-            if (!["DIRECTOR", "SUBDIRECTOR", "TREASURER"].includes(role || "")) {
+            // Allow Director, Subdirector, Treasurer
+            if (!hasPermission(role, "attendance:take")) {
                 return { success: false, error: "Permisos insuficientes" };
             }
 
@@ -97,11 +92,11 @@ export async function saveAttendanceAction(eventId: string, records: { userId: s
         const event = await getEventByIdDAO(eventId);
         if (!event) return { success: false, error: "Evento no encontrado" };
 
-        const isDevOrPresi = role === "DEV" || role === "PRESIDENT";
-        const isDirectorOrSub = role === "DIRECTOR" || role === "SUBDIRECTOR";
+        const isDevOrPresi = isAdmin(role);
+        const isDirLevel = isDirectorLevel(role);
 
         if (!isDevOrPresi) {
-            if (!isDirectorOrSub && role !== "SECRETARY" && role !== "TREASURER") return { success: false, error: "Permisos insuficientes" };
+            if (!isDirLevel && role !== "SECRETARY" && role !== "TREASURER") return { success: false, error: "Permisos insuficientes" };
             if (event.targetAreaId && event.targetAreaId !== userAreaId && event.targetAreaId !== "BOARD" && role !== "TREASURER") {
                 // Logic check: Treasurer can take attendance for BOARD events?
                 // If event.targetAreaId is the "MD" area ID... we don't know it here easily without fetching.
@@ -207,7 +202,7 @@ export async function reviewJustificationAction(
     const role = session.user.role;
 
     try {
-        const isDevOrPresi = role === "DEV" || role === "PRESIDENT";
+        const isDevOrPresi = isAdmin(role);
         // Director can justify? Yes, for their area.
         const record = await getAttendanceRecordByIdDAO(recordId);
         if (!record) return { success: false, error: "Registro no encontrado" };

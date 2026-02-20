@@ -5,13 +5,14 @@ import GradingGrid from "@/components/grading/GradingGrid";
 import { BookOpenCheck, StopCircle, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
+import { hasPermission } from "@/lib/permissions";
 
 export default async function GradingPage() {
     const session = await auth();
     if (!session?.user) redirect("/login");
 
     const role = session.user.role || "";
-    if (!["PRESIDENT", "DIRECTOR", "SUBDIRECTOR", "DEV"].includes(role)) {
+    if (!hasPermission(role, "grade:view_sheet")) {
         redirect("/dashboard");
     }
 
