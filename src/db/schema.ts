@@ -218,7 +218,61 @@ export const areaKpiSummaries = sqliteTable("area_kpi_summary", {
 });
 
 // =============================================================================
-// 6. RELACIONES (DRIZZLE ORM RELATIONS API) - ¡RECUPERADO Y OPTIMIZADO!
+// 6. MÓDULO DE PROYECTOS
+// =============================================================================
+
+export const projects = sqliteTable("project", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  semesterId: text("semester_id").references(() => semesters.id).notNull(),
+  name: text("name").notNull(),
+  description: text("description"),
+  // PLANNING | ACTIVE | PAUSED | COMPLETED | CANCELLED
+  status: text("status").default("PLANNING").notNull(),
+  // LOW | MEDIUM | HIGH | CRITICAL
+  priority: text("priority").default("MEDIUM").notNull(),
+  createdById: text("created_by_id").references(() => users.id).notNull(),
+  startDate: integer("start_date", { mode: "timestamp" }),
+  deadline: integer("deadline", { mode: "timestamp" }),
+  completedAt: integer("completed_at", { mode: "timestamp" }),
+  createdAt: integer("created_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
+});
+
+export const projectMembers = sqliteTable("project_member", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  projectId: text("project_id").references(() => projects.id, { onDelete: "cascade" }).notNull(),
+  userId: text("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  // DIRECTOR | COORDINATOR | MEMBER — sub-rol independiente del rol principal
+  projectRole: text("project_role").default("MEMBER").notNull(),
+  joinedAt: integer("joined_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
+});
+
+export const projectTasks = sqliteTable("project_task", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  projectId: text("project_id").references(() => projects.id, { onDelete: "cascade" }).notNull(),
+  title: text("title").notNull(),
+  description: text("description"),
+  // TODO | IN_PROGRESS | REVIEW | DONE | BLOCKED
+  status: text("status").default("TODO").notNull(),
+  // LOW | MEDIUM | HIGH
+  priority: text("priority").default("MEDIUM").notNull(),
+  createdById: text("created_by_id").references(() => users.id).notNull(),
+  dueDate: integer("due_date", { mode: "timestamp" }),
+  completedAt: integer("completed_at", { mode: "timestamp" }),
+  position: integer("position").default(0),
+  createdAt: integer("created_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
+});
+
+export const taskAssignments = sqliteTable("task_assignment", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  taskId: text("task_id").references(() => projectTasks.id, { onDelete: "cascade" }).notNull(),
+  userId: text("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  assignedAt: integer("assigned_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
+});
+
+// =============================================================================
+// 7. RELACIONES (DRIZZLE ORM RELATIONS API)
 // =============================================================================
 
 export const usersRelations = relations(users, ({ one, many }) => ({
@@ -226,10 +280,13 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   positionHistory: many(positionHistory),
   attendanceRecords: many(attendanceRecords, { relationName: "attendee" }),
   reviewedAttendanceRecords: many(attendanceRecords, { relationName: "reviewer" }),
-  grades: many(grades, { relationName: "studentGrades" }), // Notas que recibo
-  assignedGrades: many(grades, { relationName: "evaluatorGrades" }), // Notas que pongo
+  grades: many(grades, { relationName: "studentGrades" }),
+  assignedGrades: many(grades, { relationName: "evaluatorGrades" }),
   monthlySummaries: many(kpiMonthlySummaries),
   createdEvents: many(events, { relationName: "creator" }),
+  projectMemberships: many(projectMembers),
+  createdProjects: many(projects, { relationName: "projectCreator" }),
+  taskAssignments: many(taskAssignments),
 }));
 
 export const areasRelations = relations(areas, ({ many }) => ({
@@ -244,6 +301,7 @@ export const semestersRelations = relations(semesters, ({ many }) => ({
   gradeDefinitions: many(gradeDefinitions),
   kpiSummaries: many(kpiMonthlySummaries),
   semesterAreas: many(semesterAreas),
+  projects: many(projects),
 }));
 
 export const semesterAreasRelations = relations(semesterAreas, ({ one }) => ({
@@ -290,4 +348,29 @@ export const positionHistoryRelations = relations(positionHistory, ({ one }) => 
   user: one(users, { fields: [positionHistory.userId], references: [users.id] }),
   area: one(areas, { fields: [positionHistory.areaId], references: [areas.id] }),
   semester: one(semesters, { fields: [positionHistory.semesterId], references: [semesters.id] }),
+}));
+
+// --- Proyectos ---
+
+export const projectsRelations = relations(projects, ({ one, many }) => ({
+  semester: one(semesters, { fields: [projects.semesterId], references: [semesters.id] }),
+  createdBy: one(users, { fields: [projects.createdById], references: [users.id], relationName: "projectCreator" }),
+  members: many(projectMembers),
+  tasks: many(projectTasks),
+}));
+
+export const projectMembersRelations = relations(projectMembers, ({ one }) => ({
+  project: one(projects, { fields: [projectMembers.projectId], references: [projects.id] }),
+  user: one(users, { fields: [projectMembers.userId], references: [users.id] }),
+}));
+
+export const projectTasksRelations = relations(projectTasks, ({ one, many }) => ({
+  project: one(projects, { fields: [projectTasks.projectId], references: [projects.id] }),
+  createdBy: one(users, { fields: [projectTasks.createdById], references: [users.id] }),
+  assignments: many(taskAssignments),
+}));
+
+export const taskAssignmentsRelations = relations(taskAssignments, ({ one }) => ({
+  task: one(projectTasks, { fields: [taskAssignments.taskId], references: [projectTasks.id] }),
+  user: one(users, { fields: [taskAssignments.userId], references: [users.id] }),
 }));

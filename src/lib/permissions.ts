@@ -46,6 +46,10 @@ export const PERMISSIONS = {
     // --- Áreas ---
     "area:manage": ["DEV", "PRESIDENT"],
 
+    // --- Proyectos ---
+    "project:create": ["DEV", "PRESIDENT", "DIRECTOR"],
+    "project:manage": ["DEV", "PRESIDENT"], // Manage any project (creators/directors manage their own via projectRole)
+
     // --- Dashboard / Vistas ---
     "dashboard:area_comparison": ["DEV", "PRESIDENT", "DIRECTOR", "SUBDIRECTOR", "TREASURER"],
     "dashboard:leadership_view": ["DEV", "PRESIDENT", "DIRECTOR", "SUBDIRECTOR", "TREASURER"],
