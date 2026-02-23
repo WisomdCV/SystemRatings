@@ -31,8 +31,8 @@ async function getUserProjectRole(userId: string, projectId: string) {
 }
 
 /** Check if user can manage a project (system admin OR project DIRECTOR/COORDINATOR) */
-async function canManageProject(userId: string, role: string, projectId: string) {
-    if (hasPermission(role, "project:manage")) return true;
+async function canManageProject(userId: string, role: string, projectId: string, customPermissions?: string[]) {
+    if (hasPermission(role, "project:manage", customPermissions)) return true;
     const projectRole = await getUserProjectRole(userId, projectId);
     return projectRole === "DIRECTOR" || projectRole === "COORDINATOR";
 }
@@ -115,7 +115,7 @@ export async function createProjectAction(input: CreateProjectDTO) {
         const session = await auth();
         if (!session?.user?.id) return { success: false as const, error: "No autorizado" };
 
-        if (!hasPermission(session.user.role, "project:create")) {
+        if (!hasPermission(session.user.role, "project:create", session.user.customPermissions)) {
             return { success: false as const, error: "No tienes permisos para crear proyectos." };
         }
 
@@ -161,7 +161,7 @@ export async function updateProjectAction(input: UpdateProjectDTO) {
         const validated = UpdateProjectSchema.safeParse(input);
         if (!validated.success) return { success: false as const, error: validated.error.issues[0].message };
 
-        const canManage = await canManageProject(session.user.id, session.user.role || "", validated.data.id);
+        const canManage = await canManageProject(session.user.id, session.user.role || "", validated.data.id, session.user.customPermissions);
         if (!canManage) return { success: false as const, error: "No tienes permisos para editar este proyecto." };
 
         await db.update(projects).set({
@@ -189,7 +189,7 @@ export async function deleteProjectAction(projectId: string) {
         const session = await auth();
         if (!session?.user?.id) return { success: false as const, error: "No autorizado" };
 
-        const canManage = await canManageProject(session.user.id, session.user.role || "", projectId);
+        const canManage = await canManageProject(session.user.id, session.user.role || "", projectId, session.user.customPermissions);
         if (!canManage) return { success: false as const, error: "No tienes permisos." };
 
         await db.delete(projects).where(eq(projects.id, projectId));
@@ -214,7 +214,7 @@ export async function addProjectMemberAction(input: AddProjectMemberDTO) {
         const validated = AddProjectMemberSchema.safeParse(input);
         if (!validated.success) return { success: false as const, error: validated.error.issues[0].message };
 
-        const canManage = await canManageProject(session.user.id, session.user.role || "", validated.data.projectId);
+        const canManage = await canManageProject(session.user.id, session.user.role || "", validated.data.projectId, session.user.customPermissions);
         if (!canManage) return { success: false as const, error: "No tienes permisos para gestionar miembros." };
 
         // Check if already a member
@@ -255,7 +255,7 @@ export async function updateProjectMemberRoleAction(input: UpdateProjectMemberRo
         });
         if (!member) return { success: false as const, error: "Miembro no encontrado." };
 
-        const canManage = await canManageProject(session.user.id, session.user.role || "", member.projectId);
+        const canManage = await canManageProject(session.user.id, session.user.role || "", member.projectId, session.user.customPermissions);
         if (!canManage) return { success: false as const, error: "No tienes permisos." };
 
         await db.update(projectMembers).set({
@@ -281,7 +281,7 @@ export async function removeProjectMemberAction(memberId: string) {
         });
         if (!member) return { success: false as const, error: "Miembro no encontrado." };
 
-        const canManage = await canManageProject(session.user.id, session.user.role || "", member.projectId);
+        const canManage = await canManageProject(session.user.id, session.user.role || "", member.projectId, session.user.customPermissions);
         if (!canManage) return { success: false as const, error: "No tienes permisos." };
 
         await db.delete(projectMembers).where(eq(projectMembers.id, memberId));
@@ -351,7 +351,7 @@ export async function updateTaskAction(input: UpdateTaskDTO) {
         });
         if (!task) return { success: false as const, error: "Tarea no encontrada." };
 
-        const canManage = await canManageProject(session.user.id, session.user.role || "", task.projectId);
+        const canManage = await canManageProject(session.user.id, session.user.role || "", task.projectId, session.user.customPermissions);
         if (!canManage) return { success: false as const, error: "No tienes permisos para editar esta tarea." };
 
         await db.update(projectTasks).set({
@@ -389,7 +389,7 @@ export async function updateTaskStatusAction(input: UpdateTaskStatusDTO) {
 
         // Allow: assigned user, project manager, or system admin
         const isAssigned = task.assignments.some(a => a.userId === session.user.id);
-        const canManage = await canManageProject(session.user.id, session.user.role || "", task.projectId);
+        const canManage = await canManageProject(session.user.id, session.user.role || "", task.projectId, session.user.customPermissions);
 
         if (!isAssigned && !canManage) {
             return { success: false as const, error: "Solo puedes actualizar tareas asignadas a ti." };
@@ -420,7 +420,7 @@ export async function deleteTaskAction(taskId: string) {
         });
         if (!task) return { success: false as const, error: "Tarea no encontrada." };
 
-        const canManage = await canManageProject(session.user.id, session.user.role || "", task.projectId);
+        const canManage = await canManageProject(session.user.id, session.user.role || "", task.projectId, session.user.customPermissions);
         if (!canManage) return { success: false as const, error: "No tienes permisos." };
 
         await db.delete(projectTasks).where(eq(projectTasks.id, taskId));
@@ -487,7 +487,7 @@ export async function unassignTaskAction(assignmentId: string) {
         });
         if (!assignment) return { success: false as const, error: "Asignación no encontrada." };
 
-        const canManage = await canManageProject(session.user.id, session.user.role || "", assignment.task.projectId);
+        const canManage = await canManageProject(session.user.id, session.user.role || "", assignment.task.projectId, session.user.customPermissions);
         if (!canManage) return { success: false as const, error: "No tienes permisos." };
 
         await db.delete(taskAssignments).where(eq(taskAssignments.id, assignmentId));

@@ -2,6 +2,7 @@ import UserFilters from "@/components/admin/UserFilters";
 import UsersTable from "@/components/admin/UsersTable";
 import { getAreasAction } from "@/server/actions/organization.actions";
 import { getUsersAction } from "@/server/actions/user.actions";
+import { getCustomRolesAction } from "@/server/actions/custom-role.actions";
 
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
@@ -18,9 +19,10 @@ export default async function AdminUsersPage(props: PageProps) {
     const page = typeof searchParams.page === 'string' ? parseInt(searchParams.page) : 1;
 
     // Fetch data in parallel
-    const [usersResult, areasResult] = await Promise.all([
+    const [usersResult, areasResult, customRolesResult] = await Promise.all([
         getUsersAction(search, role, status, page),
         getAreasAction(),
+        getCustomRolesAction(),
     ]);
 
     if (!usersResult.success || !areasResult.success) {
@@ -76,9 +78,7 @@ export default async function AdminUsersPage(props: PageProps) {
                 <UsersTable
                     users={usersResult.data.data}
                     areas={areasResult.data}
-                    // Pass total count and pages if available in result data?
-                    // result.data might be { data: User[], meta: { total: number, page: number, lastPage: number } }
-                    // Assuming structure based on typical pagination. If not, we rely on basic prev/next.
+                    customRoles={customRolesResult.success ? customRolesResult.data : []}
                     pagination={usersResult.data.meta}
                 />
             </div>

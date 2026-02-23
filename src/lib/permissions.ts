@@ -67,10 +67,19 @@ export type Permission = keyof typeof PERMISSIONS;
 
 /**
  * Verifica si un rol tiene un permiso específico.
+ * Chequea primero los permisos del rol del sistema (hardcoded),
+ * luego los permisos de roles personalizables (custom).
  */
-export function hasPermission(role: string | null | undefined, permission: Permission): boolean {
-    if (!role) return false;
-    return (PERMISSIONS[permission] as readonly string[]).includes(role);
+export function hasPermission(
+    role: string | null | undefined,
+    permission: Permission,
+    customPermissions?: string[]
+): boolean {
+    // 1. Chequear permisos del rol del sistema (hardcoded)
+    if (role && (PERMISSIONS[permission] as readonly string[]).includes(role)) return true;
+    // 2. Chequear permisos de roles personalizables
+    if (customPermissions?.includes(permission)) return true;
+    return false;
 }
 
 /**

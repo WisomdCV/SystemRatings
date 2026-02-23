@@ -1,7 +1,7 @@
 // src/db/seed.ts
 import "dotenv/config";
 import { db } from "./index";
-import { areas, semesters, users, gradeDefinitions } from "./schema";
+import { areas, semesters, users, gradeDefinitions, customRoles, customRolePermissions } from "./schema";
 import { eq, sql } from "drizzle-orm";
 
 async function main() {
@@ -77,6 +77,30 @@ async function main() {
         target: users.email,
         set: { role: "DEV", status: "ACTIVE" } // Si ya existías, te asegura el rol DEV
     });
+
+    // 5. Seed "Director de Proyectos" Custom Role
+    console.log("🎯 Sincronizando rol personalizable: Director de Proyectos...");
+
+    const [dirProyectos] = await db.insert(customRoles).values({
+        name: "Director de Proyectos",
+        description: "Puede crear y administrar todos los proyectos del ciclo.",
+        color: "#8B5CF6",
+        position: 1,
+        isSystem: true,
+    }).onConflictDoNothing({
+        target: customRoles.name,
+    }).returning();
+
+    if (dirProyectos) {
+        // Add permissions for this role
+        await db.insert(customRolePermissions).values([
+            { customRoleId: dirProyectos.id, permission: "project:create" },
+            { customRoleId: dirProyectos.id, permission: "project:manage" },
+        ]);
+        console.log("   ✅ Rol creado con permisos: project:create, project:manage");
+    } else {
+        console.log("   ⏭️ Rol ya existía, no se modificó.");
+    }
 
     console.log("✅ Seed completado con éxito.");
 }

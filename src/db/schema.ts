@@ -272,7 +272,35 @@ export const taskAssignments = sqliteTable("task_assignment", {
 });
 
 // =============================================================================
-// 7. RELACIONES (DRIZZLE ORM RELATIONS API)
+// 7. ROLES PERSONALIZABLES (CUSTOM ROLES)
+// =============================================================================
+
+export const customRoles = sqliteTable("custom_role", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  name: text("name").notNull().unique(),
+  description: text("description"),
+  color: text("color").default("#6366f1"), // Hex color for UI badges
+  position: integer("position").default(0), // Order/hierarchy (lower = higher priority)
+  isSystem: integer("is_system", { mode: "boolean" }).default(false), // System roles can't be deleted
+  createdAt: integer("created_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
+});
+
+export const customRolePermissions = sqliteTable("custom_role_permission", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  customRoleId: text("custom_role_id").references(() => customRoles.id, { onDelete: "cascade" }).notNull(),
+  permission: text("permission").notNull(), // e.g. "project:create", "event:manage"
+});
+
+export const userCustomRoles = sqliteTable("user_custom_role", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  customRoleId: text("custom_role_id").references(() => customRoles.id, { onDelete: "cascade" }).notNull(),
+  assignedAt: integer("assigned_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
+  assignedById: text("assigned_by_id").references(() => users.id),
+});
+
+// =============================================================================
+// 8. RELACIONES (DRIZZLE ORM RELATIONS API)
 // =============================================================================
 
 export const usersRelations = relations(users, ({ one, many }) => ({
@@ -287,6 +315,8 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   projectMemberships: many(projectMembers),
   createdProjects: many(projects, { relationName: "projectCreator" }),
   taskAssignments: many(taskAssignments),
+  customRoles: many(userCustomRoles, { relationName: "userCustomRoles" }),
+  assignedCustomRoles: many(userCustomRoles, { relationName: "roleAssigner" }),
 }));
 
 export const areasRelations = relations(areas, ({ many }) => ({
@@ -373,4 +403,21 @@ export const projectTasksRelations = relations(projectTasks, ({ one, many }) => 
 export const taskAssignmentsRelations = relations(taskAssignments, ({ one }) => ({
   task: one(projectTasks, { fields: [taskAssignments.taskId], references: [projectTasks.id] }),
   user: one(users, { fields: [taskAssignments.userId], references: [users.id] }),
+}));
+
+// --- Roles Personalizables ---
+
+export const customRolesRelations = relations(customRoles, ({ many }) => ({
+  permissions: many(customRolePermissions, { relationName: "rolePermissions" }),
+  userAssignments: many(userCustomRoles, { relationName: "roleAssignments" }),
+}));
+
+export const customRolePermissionsRelations = relations(customRolePermissions, ({ one }) => ({
+  role: one(customRoles, { fields: [customRolePermissions.customRoleId], references: [customRoles.id], relationName: "rolePermissions" }),
+}));
+
+export const userCustomRolesRelations = relations(userCustomRoles, ({ one }) => ({
+  user: one(users, { fields: [userCustomRoles.userId], references: [users.id], relationName: "userCustomRoles" }),
+  customRole: one(customRoles, { fields: [userCustomRoles.customRoleId], references: [customRoles.id], relationName: "roleAssignments" }),
+  assignedBy: one(users, { fields: [userCustomRoles.assignedById], references: [users.id], relationName: "roleAssigner" }),
 }));

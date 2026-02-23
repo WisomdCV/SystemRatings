@@ -17,7 +17,7 @@ export async function createEventAction(input: CreateEventDTO) {
 
         // Permisos: DEV, PRESIDENT, DIRECTOR, SUBDIRECTOR
         const role = session.user.role;
-        if (!hasPermission(role, "event:create")) {
+        if (!hasPermission(role, "event:create", session.user.customPermissions)) {
             return { success: false, error: "No tienes permisos para crear eventos." };
         }
 
@@ -96,7 +96,7 @@ export async function deleteEventAction(eventId: string) {
 
         // 2. Permissions
         const role = session.user.role;
-        const canManageAny = hasPermission(role, "event:manage");
+        const canManageAny = hasPermission(role, "event:manage", session.user.customPermissions);
 
         if (!canManageAny) {
             if (!isDirectorLevel(role)) return { success: false, error: "No tienes permisos." };
@@ -142,7 +142,7 @@ export async function updateEventAction(eventId: string, input: UpdateEventDTO) 
 
         // Permisos
         const role = session.user.role;
-        const canManageAny = hasPermission(role, "event:manage");
+        const canManageAny = hasPermission(role, "event:manage", session.user.customPermissions);
 
         if (!canManageAny) {
             if (!isDirectorLevel(role)) return { success: false, error: "No tienes permisos." };

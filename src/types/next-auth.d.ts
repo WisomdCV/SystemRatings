@@ -7,11 +7,12 @@ declare module 'next-auth' {
    */
   interface Session {
     accessToken?: string;
-    error?: string; // Add error property
+    error?: string;
     user: {
       id: string;
       role: string | null;
       currentAreaId: string | null;
+      customPermissions?: string[];
     } & DefaultSession['user'];
   }
 
@@ -32,6 +33,7 @@ declare module 'next-auth/jwt' {
     id?: string;
     role?: string | null;
     currentAreaId?: string | null;
+    customPermissions?: string[];
     accessToken?: string;
     refreshToken?: string;
   }

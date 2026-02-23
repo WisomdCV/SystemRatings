@@ -32,7 +32,7 @@ export async function getAreaComparisonAction(): Promise<{
 
         // Only allow leadership to see this
         const role = session.user.role || "";
-        const canViewComparison = hasPermission(role, "dashboard:area_comparison");
+        const canViewComparison = hasPermission(role, "dashboard:area_comparison", session.user.customPermissions);
 
         if (!canViewComparison) {
             return { success: false, error: "No tienes permisos para ver esta información." };

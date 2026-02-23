@@ -23,7 +23,7 @@ export async function getAttendanceSheetAction(eventId: string) {
 
         if (!isDevOrPresi) {
             // Allow Director, Subdirector, Treasurer
-            if (!hasPermission(role, "attendance:take")) {
+            if (!hasPermission(role, "attendance:take", session.user.customPermissions)) {
                 return { success: false, error: "Permisos insuficientes" };
             }
 

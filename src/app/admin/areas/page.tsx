@@ -13,7 +13,7 @@ export default async function AreasPage() {
     if (!session?.user) redirect("/login");
 
     const role = session.user.role || "";
-    if (!hasPermission(role, "area:manage")) {
+    if (!hasPermission(role, "area:manage", session.user.customPermissions)) {
         return redirect("/dashboard?error=AccessDenied");
     }
 

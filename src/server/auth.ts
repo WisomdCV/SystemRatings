@@ -5,6 +5,7 @@ import { db } from "@/db";
 import { authConfig } from "../../auth.config";
 import { accounts, sessions, users, verificationTokens } from "@/db/schema";
 import { eq } from "drizzle-orm";
+import { getCustomPermissionsForUser } from "@/server/data-access/custom-roles";
 
 
 // Helper to refresh Google Access Token
@@ -123,6 +124,16 @@ export const {
                 // Google "expires_at" is seconds, we need ms for comparison
                 token.expiresAt = (account.expires_at as number) * 1000;
 
+                // Load custom role permissions
+                if (user.id) {
+                    try {
+                        token.customPermissions = await getCustomPermissionsForUser(user.id);
+                    } catch (e) {
+                        console.error("Error loading custom permissions on sign in:", e);
+                        token.customPermissions = [];
+                    }
+                }
+
                 return token;
             }
 
@@ -131,7 +142,7 @@ export const {
                 token = { ...token, ...session };
             }
 
-            // 2.5 Force Refresh from DB (Real-time Role/Area updates)
+            // 2.5 Force Refresh from DB (Real-time Role/Area/CustomPerms updates)
             if (token.id) {
                 try {
                     const freshUser = await db.query.users.findFirst({
@@ -143,6 +154,9 @@ export const {
                         token.role = freshUser.role;
                         token.currentAreaId = freshUser.currentAreaId;
                     }
+
+                    // Refresh custom permissions
+                    token.customPermissions = await getCustomPermissionsForUser(token.id as string);
                 } catch (error) {
                     console.error("Error refreshing user data in JWT:", error);
                 }
@@ -162,9 +176,10 @@ export const {
                 session.user.id = token.id as string;
                 session.user.role = token.role as string | null;
                 session.user.currentAreaId = token.currentAreaId as string | null;
+                session.user.customPermissions = token.customPermissions as string[] | undefined;
 
                 session.accessToken = token.accessToken as string | undefined;
-                session.error = token.error as string | undefined; // Pass error to client if needed
+                session.error = token.error as string | undefined;
             }
             return session;
         },

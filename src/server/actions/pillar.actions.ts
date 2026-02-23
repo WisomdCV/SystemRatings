@@ -89,7 +89,7 @@ export async function getPillarsBySemesterAction(semesterId: string) {
 
 export async function upsertPillarAction(data: z.infer<typeof UpsertPillarSchema>) {
     const session = await auth();
-    if (!session?.user || !hasPermission(session.user.role, "pillar:manage")) {
+    if (!session?.user || !hasPermission(session.user.role, "pillar:manage", session.user.customPermissions)) {
         return { success: false, message: "No autorizado" };
     }
 
@@ -151,7 +151,7 @@ export async function upsertPillarAction(data: z.infer<typeof UpsertPillarSchema
 export async function deletePillarAction(id: string, semesterId: string) {
     try {
         const session = await auth();
-        if (!session?.user || !hasPermission(session.user.role, "pillar:manage")) {
+        if (!session?.user || !hasPermission(session.user.role, "pillar:manage", session.user.customPermissions)) {
             return { success: false, error: "No autorizado" };
         }
 
@@ -181,7 +181,7 @@ export async function deletePillarAction(id: string, semesterId: string) {
 export async function clonePillarsAction(sourceSemesterId: string, targetSemesterId: string) {
     try {
         const session = await auth();
-        if (!session?.user || !hasPermission(session.user.role, "pillar:manage")) {
+        if (!session?.user || !hasPermission(session.user.role, "pillar:manage", session.user.customPermissions)) {
             return { success: false, error: "No autorizado" };
         }
 

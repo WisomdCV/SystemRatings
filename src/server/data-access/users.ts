@@ -49,6 +49,11 @@ export async function getAllUsers(filters?: UserFilters, pagination?: Pagination
         where: conditions.length > 0 ? and(...conditions) : undefined,
         with: {
             currentArea: true,
+            customRoles: {
+                with: {
+                    customRole: true,
+                },
+            },
         },
         orderBy: [desc(users.joinedAt), asc(users.firstName)], // Default sorting
         limit: limit,
@@ -79,6 +84,11 @@ export async function getUserById(id: string) {
         where: eq(users.id, id),
         with: {
             currentArea: true,
+            customRoles: {
+                with: {
+                    customRole: true,
+                },
+            },
         },
     });
 }

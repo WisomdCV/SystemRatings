@@ -38,7 +38,7 @@ export async function createSemesterAction(input: CreateSemesterDTO) {
         const isFirstSemester = !existingSemesters;
 
         // Permission Check: Only President/Dev OR first-time setup
-        if (!isFirstSemester && !hasPermission(role, "semester:manage")) {
+        if (!isFirstSemester && !hasPermission(role, "semester:manage", session.user.customPermissions)) {
             return { success: false, error: "No tienes permisos para crear ciclos." };
         }
 
@@ -96,7 +96,7 @@ export async function toggleSemesterStatusAction(semesterId: string, shouldActiv
         if (!session?.user) return { success: false, error: "No autorizado" };
 
         const role = session.user.role;
-        if (!hasPermission(role, "semester:manage")) {
+        if (!hasPermission(role, "semester:manage", session.user.customPermissions)) {
             return { success: false, error: "No tienes permisos de gestión." };
         }
 

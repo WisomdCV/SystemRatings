@@ -16,7 +16,7 @@ export async function upsertGradeAction(input: UpsertGradeDTO) {
         if (!session?.user) return { success: false, error: "No autorizado" };
 
         const currentRole = session.user.role || "";
-        const canGrade = hasPermission(currentRole, "grade:assign");
+        const canGrade = hasPermission(currentRole, "grade:assign", session.user.customPermissions);
 
         if (!canGrade) {
             return { success: false, error: "No tienes permisos para calificar." };

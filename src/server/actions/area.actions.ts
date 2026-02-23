@@ -78,7 +78,7 @@ export async function createAreaAction(input: z.infer<typeof CreateAreaSchema>) 
     try {
         const session = await auth();
         if (!session?.user) return { success: false as const, error: "No autorizado" };
-        if (!hasPermission(session.user.role, "area:manage")) {
+        if (!hasPermission(session.user.role, "area:manage", session.user.customPermissions)) {
             return { success: false as const, error: "No tienes permisos para gestionar áreas." };
         }
 
@@ -109,7 +109,7 @@ export async function updateAreaAction(input: z.infer<typeof UpdateAreaSchema>) 
     try {
         const session = await auth();
         if (!session?.user) return { success: false as const, error: "No autorizado" };
-        if (!hasPermission(session.user.role, "area:manage")) {
+        if (!hasPermission(session.user.role, "area:manage", session.user.customPermissions)) {
             return { success: false as const, error: "No tienes permisos." };
         }
 
@@ -140,7 +140,7 @@ export async function deleteAreaAction(id: string) {
     try {
         const session = await auth();
         if (!session?.user) return { success: false as const, error: "No autorizado" };
-        if (!hasPermission(session.user.role, "area:manage")) {
+        if (!hasPermission(session.user.role, "area:manage", session.user.customPermissions)) {
             return { success: false as const, error: "No tienes permisos." };
         }
 
@@ -170,7 +170,7 @@ export async function toggleAreaInSemesterAction(areaId: string, semesterId: str
     try {
         const session = await auth();
         if (!session?.user) return { success: false as const, error: "No autorizado" };
-        if (!hasPermission(session.user.role, "area:manage")) {
+        if (!hasPermission(session.user.role, "area:manage", session.user.customPermissions)) {
             return { success: false as const, error: "No tienes permisos." };
         }
 
@@ -212,7 +212,7 @@ export async function activateAllAreasInSemesterAction(semesterId: string) {
     try {
         const session = await auth();
         if (!session?.user) return { success: false as const, error: "No autorizado" };
-        if (!hasPermission(session.user.role, "area:manage")) {
+        if (!hasPermission(session.user.role, "area:manage", session.user.customPermissions)) {
             return { success: false as const, error: "No tienes permisos." };
         }
 
@@ -252,7 +252,7 @@ export async function getAreasWithLeadersAction() {
     try {
         const session = await auth();
         if (!session?.user) return { success: false as const, error: "No autorizado" };
-        if (!hasPermission(session.user.role, "area:manage")) {
+        if (!hasPermission(session.user.role, "area:manage", session.user.customPermissions)) {
             return { success: false as const, error: "No tienes permisos." };
         }
 
@@ -294,7 +294,7 @@ export async function getMembersForAssignmentAction() {
     try {
         const session = await auth();
         if (!session?.user) return { success: false as const, error: "No autorizado" };
-        if (!hasPermission(session.user.role, "area:manage")) {
+        if (!hasPermission(session.user.role, "area:manage", session.user.customPermissions)) {
             return { success: false as const, error: "No tienes permisos." };
         }
 
