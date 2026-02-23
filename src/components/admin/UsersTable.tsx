@@ -26,6 +26,13 @@ type User = {
         name: string;
         code: string | null;
     } | null;
+    customRoles?: {
+        customRole: {
+            id: string;
+            name: string;
+            color: string;
+        }
+    }[];
 };
 
 type Area = {
@@ -37,6 +44,7 @@ type Area = {
 interface UsersTableProps {
     users: User[];
     areas: Area[];
+    customRoles: any[];
     pagination?: {
         total: number;
         page: number;
@@ -68,7 +76,7 @@ const formatCUI = (user: User) => {
     return `${rolePrefix}${areaCode}-${last4}`;
 };
 
-export default function UsersTable({ users, areas, pagination }: UsersTableProps) {
+export default function UsersTable({ users, areas, customRoles, pagination }: UsersTableProps) {
     const [selectedUser, setSelectedUser] = useState<User | null>(null);
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
     const router = useRouter();
@@ -134,9 +142,29 @@ export default function UsersTable({ users, areas, pagination }: UsersTableProps
                                     </div>
                                 </td>
                                 <td className="px-6 py-4">
-                                    <div className="flex flex-col">
-                                        <div className="text-sm font-bold text-meteorite-800">{user.role || "Voluntario"}</div>
-                                        <div className="text-xs text-meteorite-500">{user.currentArea?.name || "Sin Área"}</div>
+                                    <div className="flex flex-col gap-1.5">
+                                        <div>
+                                            <div className="text-sm font-bold text-meteorite-800">{user.role || "Voluntario"}</div>
+                                            <div className="text-xs text-meteorite-500">{user.currentArea?.name || "Sin Área"}</div>
+                                        </div>
+                                        {/* Phase 10: Additional Custom Roles Badges */}
+                                        {user.customRoles && user.customRoles.length > 0 && (
+                                            <div className="flex flex-wrap gap-1 mt-1">
+                                                {user.customRoles.map((ur) => (
+                                                    <span
+                                                        key={ur.customRole.id}
+                                                        className="px-2 py-0.5 rounded text-[10px] font-bold border whitespace-nowrap"
+                                                        style={{
+                                                            backgroundColor: `${ur.customRole.color}15`,
+                                                            color: ur.customRole.color,
+                                                            borderColor: `${ur.customRole.color}30`
+                                                        }}
+                                                    >
+                                                        {ur.customRole.name}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        )}
                                     </div>
                                 </td>
                                 <td className="px-6 py-4">
@@ -205,6 +233,7 @@ export default function UsersTable({ users, areas, pagination }: UsersTableProps
             <UserEditDrawer
                 user={selectedUser}
                 areas={areas}
+                customRoles={customRoles}
                 isOpen={isDrawerOpen}
                 onClose={handleCloseDrawer}
             />

@@ -7,6 +7,7 @@ import {
     updateUserDataAction,
     moderateUserAction,
 } from "@/server/actions/user.actions";
+import { assignCustomRoleAction, removeCustomRoleAction } from "@/server/actions/custom-role.actions";
 import { STATUSES, CATEGORIES, ROLES } from "@/lib/validators/user";
 
 type User = {
@@ -28,6 +29,13 @@ type User = {
         id: string;
         name: string;
     } | null;
+    customRoles?: {
+        customRole: {
+            id: string;
+            name: string;
+            color: string;
+        }
+    }[];
 };
 
 type Area = {
@@ -39,6 +47,7 @@ type Area = {
 interface UserEditDrawerProps {
     user: User | null;
     areas: Area[];
+    customRoles?: any[]; // The generic list of all custom roles available in the system
     isOpen: boolean;
     onClose: () => void;
 }
@@ -46,6 +55,7 @@ interface UserEditDrawerProps {
 export default function UserEditDrawer({
     user,
     areas,
+    customRoles = [],
     isOpen,
     onClose,
 }: UserEditDrawerProps) {
@@ -59,6 +69,16 @@ export default function UserEditDrawer({
     if (!isOpen && user && formData.id !== user.id) {
         /* Ideally performed in useEffect when user changes, 
            but for simplicity in this pure component we initialize later */
+    }
+
+    // Initialize custom role checkbox states from user's current roles
+    const [selectedCustomRoles, setSelectedCustomRoles] = useState<string[]>([]);
+    const [prevUserId, setPrevUserId] = useState<string | null>(null);
+
+    if (user && user.id !== prevUserId) {
+        setPrevUserId(user.id);
+        const userRoleIds = user.customRoles?.map(ur => ur.customRole.id) || [];
+        setSelectedCustomRoles(userRoleIds);
     }
 
     if (!isOpen || !user) return null;
@@ -82,18 +102,36 @@ export default function UserEditDrawer({
 
     const handleSaveRole = () => {
         startTransition(async () => {
-            const result = await updateUserRoleAction({
+            // 1. Update Core Role & Area
+            const roleResult = await updateUserRoleAction({
                 userId: user.id,
                 role: formData.role ?? user.role,
                 areaId: formData.areaId ?? user.currentAreaId, // Can be null
                 reason: formData.reason,
             });
-            if (result.success) {
-                alert("Jerarquía actualizada correctamete");
-                onClose();
-            } else {
-                alert("Error: " + result.error);
+
+            if (!roleResult.success) {
+                alert("Error base: " + roleResult.error);
+                return;
             }
+
+            // 2. Handle Custom Roles assignment differences
+            const originalUserRoleIds = user.customRoles?.map(ur => ur.customRole.id) || [];
+
+            // Roles to Add
+            const rolesToAdd = selectedCustomRoles.filter(id => !originalUserRoleIds.includes(id));
+            for (const roleId of rolesToAdd) {
+                await assignCustomRoleAction({ userId: user.id, customRoleId: roleId });
+            }
+
+            // Roles to Remove
+            const rolesToRemove = originalUserRoleIds.filter(id => !selectedCustomRoles.includes(id));
+            for (const roleId of rolesToRemove) {
+                await removeCustomRoleAction({ userId: user.id, customRoleId: roleId });
+            }
+
+            alert("Jerarquía y roles adicionales actualizados correctamete");
+            onClose();
         });
     };
 
@@ -274,6 +312,44 @@ export default function UserEditDrawer({
                             </div>
                             <div>
                                 <label className="block text-xs font-bold text-meteorite-700 uppercase tracking-wide mb-1.5">
+                                    Roles Personalizables (Adicionales)
+                                </label>
+                                <div className="space-y-2 mt-2">
+                                    {customRoles.length === 0 ? (
+                                        <p className="text-xs text-gray-400 italic">No hay roles personalizables creados.</p>
+                                    ) : (
+                                        customRoles.map((role: any) => (
+                                            <label
+                                                key={role.id}
+                                                className={`flex items-center p-3 rounded-xl border cursor-pointer transition-all ${selectedCustomRoles.includes(role.id) ? 'border-meteorite-500 bg-meteorite-50/50 shadow-sm' : 'border-gray-200 hover:bg-gray-50'}`}
+                                            >
+                                                <input
+                                                    type="checkbox"
+                                                    className="w-4 h-4 text-meteorite-600 rounded border-gray-300 focus:ring-meteorite-500"
+                                                    checked={selectedCustomRoles.includes(role.id)}
+                                                    onChange={(e) => {
+                                                        if (e.target.checked) {
+                                                            setSelectedCustomRoles([...selectedCustomRoles, role.id]);
+                                                        } else {
+                                                            setSelectedCustomRoles(selectedCustomRoles.filter(id => id !== role.id));
+                                                        }
+                                                    }}
+                                                />
+                                                <div className="ml-3 flex flex-col">
+                                                    <span className="text-sm font-bold flex items-center gap-2">
+                                                        <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: role.color }}></span>
+                                                        {role.name}
+                                                    </span>
+                                                    {role.description && <span className="text-xs text-gray-500 mt-0.5">{role.description}</span>}
+                                                </div>
+                                            </label>
+                                        ))
+                                    )}
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-bold text-meteorite-700 uppercase tracking-wide mb-1.5 mt-4">
                                     Razón (Opcional)
                                 </label>
                                 <textarea

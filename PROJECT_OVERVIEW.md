@@ -62,7 +62,7 @@ src/
 │
 ├── db/                           # Capa de Base de Datos
 │   ├── index.ts                  # Cliente Drizzle
-│   ├── schema.ts                 # Definición de 12 tablas
+│   ├── schema.ts                 # Definición de 21 tablas
 │   └── seed.ts                   # Datos iniciales
 │
 ├── lib/                          # Utilidades compartidas
@@ -71,9 +71,9 @@ src/
 │
 ├── server/                       # Backend Core
 │   ├── auth.ts                   # Configuración NextAuth completa
-│   ├── actions/                  # 7 archivos, 24 Server Actions
+│   ├── actions/                  # 9 archivos, 46 Server Actions
 │   ├── services/                 # 3 servicios de negocio
-│   └── data-access/              # 4 módulos DAO
+│   └── data-access/              # 5 módulos DAO
 │
 └── types/                        # Definiciones TypeScript
     ├── index.ts                  # ActionResult<T>
@@ -84,7 +84,7 @@ src/
 
 ## �️ Esquema de Base de Datos
 
-El esquema contiene **12 tablas** organizadas en 6 dominios:
+El esquema contiene **21 tablas** organizadas en 7 dominios:
 
 ### 1. Usuarios y Autenticación
 | Tabla | Propósito |
@@ -132,6 +132,21 @@ El esquema contiene **12 tablas** organizadas en 6 dominios:
 |:---|:---|
 | `kpiMonthlySummaries` | KPI mensual por usuario |
 | `areaKpiSummaries` | Promedio y ranking por área |
+
+### 6. Módulo de Proyectos
+| Tabla | Propósito |
+|:---|:---|
+| `projects` | Proyectos con estado (PLANNING, ACTIVE, etc.) y prioridad |
+| `projectMembers` | Miembros asignados a proyectos con sub-roles (DIRECTOR, COORDINATOR, MEMBER) |
+| `projectTasks` | Tareas Kanban asociadas a proyectos con estados (TODO, IN_PROGRESS, DONE) |
+| `taskAssignments` | Asignación de usuarios a tareas específicas |
+
+### 7. Roles Personalizables (Custom Roles)
+| Tabla | Propósito |
+|:---|:---|
+| `customRoles` | Definición de roles dinámicos (nombre, color, jerarquía) y del sistema |
+| `customRolePermissions` | Relación de permisos granulares asignados a cada rol personalizado |
+| `userCustomRoles` | Relación entre usuarios y los roles personalizados que se les asignan |
 
 ---
 
@@ -187,6 +202,16 @@ El esquema contiene **12 tablas** organizadas en 6 dominios:
 | `updateUserRoleAction` | Promoción/traslado | `PRESIDENT`/`DEV` |
 | `updateUserDataAction` | Actualizar datos | `PRESIDENT`/`DEV` |
 | `moderateUserAction` | Moderación | `PRESIDENT`/`DEV` |
+
+### project.actions.ts (14 funciones)
+| Acción Principal | Descripción | Criterio de Permiso |
+|:---|:---|:---|
+| Todo CRUD y Tareas | Gestión Integral de Proyectos y Tareas | Delegado mediante `canManageProject` (Director/Coordinador) o SuperAdmin. Creadores o miembros según la tarea. |
+
+### custom-role.actions.ts (8 funciones)
+| Acción Principal | Descripción | Criterio de Permiso |
+|:---|:---|:---|
+| Todo CRUD y Asignaciones | Gestión integral de roles personalizados y bindings | Restringido exclusivamente a `admin:full` (`DEV`, `PRESIDENT`) |
 
 ---
 
