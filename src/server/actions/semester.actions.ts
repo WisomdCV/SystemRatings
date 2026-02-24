@@ -2,9 +2,9 @@
 
 import { auth } from "@/server/auth";
 import { db } from "@/db";
-import { semesters } from "@/db/schema";
+import { semesters, users, positionHistory } from "@/db/schema";
 import { CreateSemesterDTO, CreateSemesterSchema } from "@/lib/validators/semester";
-import { eq, desc, ne, and } from "drizzle-orm";
+import { eq, desc, ne, and, inArray, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { hasPermission } from "@/lib/permissions";
 
@@ -103,12 +103,19 @@ export async function toggleSemesterStatusAction(semesterId: string, shouldActiv
         if (shouldActivate) {
             // TRANSACTION: Activate Target AND Deactivate Others
             await db.transaction(async (tx) => {
-                // 1. Deactivate ALL other semesters
+                // 1. Find currently active semesters to close their leaders' histories
+                const activeCycles = await tx.select({ id: semesters.id }).from(semesters).where(eq(semesters.isActive, true));
+
+                if (activeCycles.length > 0) {
+                    await triggerMassDowngrade(tx);
+                }
+
+                // 2. Deactivate ALL other semesters
                 await tx.update(semesters)
                     .set({ isActive: false })
                     .where(ne(semesters.id, semesterId));
 
-                // 2. Activate target
+                // 3. Activate target
                 await tx.update(semesters)
                     .set({ isActive: true })
                     .where(eq(semesters.id, semesterId));
@@ -116,11 +123,14 @@ export async function toggleSemesterStatusAction(semesterId: string, shouldActiv
             revalidatePath("/admin/events"); // Events depend on active semester
             revalidatePath("/dashboard");
         } else {
-            // Simply Deactivate Target (Result: No active semester)
-            // This allows a "maintenance mode" where nothing is active.
-            await db.update(semesters)
-                .set({ isActive: false })
-                .where(eq(semesters.id, semesterId));
+            // Deactivate Target AND trigger downgrade
+            await db.transaction(async (tx) => {
+                await triggerMassDowngrade(tx);
+
+                await tx.update(semesters)
+                    .set({ isActive: false })
+                    .where(eq(semesters.id, semesterId));
+            });
         }
 
         revalidatePath("/admin/cycles");
@@ -129,5 +139,35 @@ export async function toggleSemesterStatusAction(semesterId: string, shouldActiv
     } catch (error: any) {
         console.error("Toggle Semester Error:", error);
         return { success: false, error: error.message || "Error al cambiar estado" };
+    }
+}
+
+// --- Internal Helpers ---
+async function triggerMassDowngrade(tx: any) {
+    // 1. Find all users who are currently DIRECTORS, SUBDIRECTORS, or TREASURERS
+    const leaders = await tx.query.users.findMany({
+        where: and(
+            eq(users.status, "ACTIVE"),
+            inArray(users.role, ["DIRECTOR", "SUBDIRECTOR", "TREASURER"])
+        ),
+        columns: { id: true }
+    });
+
+    if (leaders.length > 0) {
+        const leaderIds = leaders.map((u: any) => u.id);
+
+        // 2. Close their open position history (set endDate to NOW)
+        await tx.update(positionHistory)
+            .set({ endDate: new Date() })
+            .where(and(
+                inArray(positionHistory.userId, leaderIds),
+                isNull(positionHistory.endDate)
+            ));
+
+        // 3. Downgrade their primary role to MEMBER
+        // currentAreaId remains untouched so they stay in their area!
+        await tx.update(users)
+            .set({ role: "MEMBER" })
+            .where(inArray(users.id, leaderIds));
     }
 }
