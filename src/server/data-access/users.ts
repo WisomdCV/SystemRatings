@@ -1,5 +1,5 @@
 import { db } from "@/db";
-import { users } from "@/db/schema";
+import { users, positionHistory } from "@/db/schema";
 import { eq, or, like, and, desc, asc, sql, ne } from "drizzle-orm";
 import { UpdateUserRoleDTO, UpdateUserProfileDTO, ModerateUserDTO } from "@/lib/validators/user";
 
@@ -105,4 +105,25 @@ export async function updateUser(id: string, data: Partial<typeof users.$inferIn
         .returning();
 
     return updatedUser;
+}
+
+export async function getFullUserProfile(id: string) {
+    return await db.query.users.findFirst({
+        where: eq(users.id, id),
+        with: {
+            currentArea: true,
+            customRoles: {
+                with: {
+                    customRole: true,
+                },
+            },
+            positionHistory: {
+                orderBy: [desc(positionHistory.startDate)],
+                with: {
+                    area: true,
+                    semester: true,
+                }
+            }
+        },
+    });
 }

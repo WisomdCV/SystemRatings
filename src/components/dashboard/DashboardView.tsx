@@ -17,6 +17,7 @@ import {
     Shield,
     MoreHorizontal,
     Clock,
+    FolderKanban,
     MapPin,
     ChevronRight,
     GraduationCap,
@@ -400,6 +401,15 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
                             <span className="ml-3 font-medium">Dashboard</span>
                         </a>
 
+                        {/* 1.5. Proyectos (Common) */}
+                        <a
+                            href="/dashboard/projects"
+                            className="flex items-center px-4 py-3 text-meteorite-200 hover:bg-meteorite-900 hover:text-white rounded-xl transition-all group"
+                        >
+                            <FolderKanban className="text-meteorite-400 group-hover:text-white transition-colors w-5 h-5" />
+                            <span className="ml-3 font-medium">Proyectos</span>
+                        </a>
+
                         {/* 2. Equipo IISE */}
                         {["DEV", "PRESIDENT", "TREASURER", "DIRECTOR", "SUBDIRECTOR"].includes((user as any).role) && (
                             <a
@@ -478,26 +488,25 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
 
                 <div className="relative z-10 p-4 border-t border-meteorite-800/50 bg-meteorite-900/30">
                     <div className="flex items-center justify-between p-2 rounded-xl hover:bg-meteorite-800 transition-colors group">
-                        <div className="flex items-center cursor-pointer">
+                        <Link href="/dashboard/profile" className="flex items-center cursor-pointer flex-1">
                             {user.image ? (
                                 <img
                                     src={user.image}
                                     alt="User"
-                                    className="w-10 h-10 rounded-full border-2 border-meteorite-400"
+                                    className="w-10 h-10 rounded-full border-2 border-meteorite-400 group-hover:border-meteorite-300 transition-colors"
                                 />
                             ) : (
-                                <div className="w-10 h-10 rounded-full bg-meteorite-700 flex items-center justify-center border-2 border-meteorite-400">
+                                <div className="w-10 h-10 rounded-full bg-meteorite-700 flex items-center justify-center border-2 border-meteorite-400 group-hover:border-meteorite-300 transition-colors">
                                     <UserIcon className="text-white w-5 h-5" />
                                 </div>
                             )}
                             <div className="ml-3 overflow-hidden">
-                                <p className="text-sm font-semibold text-white truncate">{user.name}</p>
+                                <p className="text-sm font-semibold text-white truncate group-hover:text-meteorite-100 transition-colors">{user.name}</p>
                                 <p className="text-xs text-meteorite-300 truncate">
-                                    {/* Roles would come from extended session */}
                                     {(user as any).role || "Miembro"}
                                 </p>
                             </div>
-                        </div>
+                        </Link>
                         <button
                             onClick={async () => await logoutAction()}
                             className="text-meteorite-400 hover:text-red-400 transition-colors p-2"

@@ -7,6 +7,7 @@ import {
     updateUserDataService,
     moderateUserService,
 } from "@/server/services/user.service";
+import { getFullUserProfile } from "@/server/data-access/users";
 import { ActionResult } from "@/types";
 import {
     UpdateUserRoleSchema,
@@ -91,6 +92,24 @@ export async function moderateUserAction(input: any): Promise<ActionResult<any>>
         const result = await moderateUserService(session.user.id, validated.data);
         revalidatePath("/dashboard/users");
         return { success: true, data: result };
+    } catch (error: any) {
+        return { success: false, error: error.message };
+    }
+}
+
+// --- 5. Get Full User Profile (Read-Only) ---
+export async function getMyProfileAction(): Promise<ActionResult<any>> {
+    try {
+        const session = await auth();
+        if (!session?.user?.id) return { success: false, error: "No autenticado" };
+
+        const fullProfile = await getFullUserProfile(session.user.id);
+
+        if (!fullProfile) {
+            return { success: false, error: "Perfil no encontrado" };
+        }
+
+        return { success: true, data: fullProfile };
     } catch (error: any) {
         return { success: false, error: error.message };
     }
