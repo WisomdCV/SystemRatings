@@ -47,9 +47,9 @@ export default async function AdminUsersPage(props: PageProps) {
                 <div className="mb-8 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                     <div className="flex items-center gap-4">
                         <Link
-                            href="/dashboard"
+                            href="/admin"
                             className="bg-white p-2.5 rounded-full text-meteorite-600 hover:text-meteorite-800 hover:bg-meteorite-100 transition-all shadow-sm border border-meteorite-100"
-                            title="Volver al Dashboard"
+                            title="Volver a Administración"
                         >
                             <ArrowLeft className="w-5 h-5" />
                         </Link>
@@ -60,11 +60,11 @@ export default async function AdminUsersPage(props: PageProps) {
 
                     <div className="hidden sm:block">
                         <Link
-                            href="/dashboard"
+                            href="/admin"
                             className="flex items-center gap-2 px-4 py-2 bg-white text-meteorite-700 text-sm font-bold rounded-xl border border-meteorite-200 shadow-sm hover:shadow-md hover:border-meteorite-300 transition-all group"
                         >
                             <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
-                            Regresar al Dashboard
+                            Regresar a Admin
                         </Link>
                     </div>
                 </div>

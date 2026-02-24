@@ -60,9 +60,9 @@ export default async function AreasPage() {
                 <div className="mb-8 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                     <div className="flex items-center gap-4">
                         <Link
-                            href="/dashboard"
+                            href="/admin"
                             className="bg-white p-2.5 rounded-full text-meteorite-600 hover:text-meteorite-800 hover:bg-meteorite-100 transition-all shadow-sm border border-meteorite-100"
-                            title="Volver al Dashboard"
+                            title="Volver a Administración"
                         >
                             <ArrowLeft className="w-5 h-5" />
                         </Link>

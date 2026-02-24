@@ -54,9 +54,9 @@ export default function CyclesView({ semesters }: CyclesViewProps) {
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 py-8 border-b border-meteorite-200/50">
                     <div className="flex items-center gap-4">
                         <Link
-                            href="/dashboard"
+                            href="/admin"
                             className="bg-white p-2.5 rounded-full text-meteorite-600 hover:text-meteorite-800 hover:bg-meteorite-100 transition-all shadow-sm border border-meteorite-100 shrink-0"
-                            title="Volver al Dashboard"
+                            title="Volver a Administración"
                         >
                             <ArrowLeft className="w-5 h-5" />
                         </Link>

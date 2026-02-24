@@ -410,36 +410,14 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
                             <span className="ml-3 font-medium">Proyectos</span>
                         </a>
 
-                        {/* 2. Equipo IISE */}
+                        {/* 2. Administración Central */}
                         {["DEV", "PRESIDENT", "TREASURER", "DIRECTOR", "SUBDIRECTOR"].includes((user as any).role) && (
                             <a
-                                href="/admin/users"
+                                href="/admin"
                                 className="flex items-center px-4 py-3 text-meteorite-200 hover:bg-meteorite-900 hover:text-white rounded-xl transition-all group"
                             >
                                 <Users className="text-meteorite-400 group-hover:text-white transition-colors w-5 h-5" />
-                                <span className="ml-3 font-medium">Equipo IISE</span>
-                            </a>
-                        )}
-
-                        {/* 3. Permisos & Roles (Custom Roles) - DEV/PRESIDENT Only */}
-                        {["DEV", "PRESIDENT"].includes((user as any).role) && (
-                            <a
-                                href="/admin/roles"
-                                className="flex items-center px-4 py-3 text-meteorite-200 hover:bg-meteorite-900 hover:text-white rounded-xl transition-all group"
-                            >
-                                <Shield className="text-meteorite-400 group-hover:text-white transition-colors w-5 h-5" />
-                                <span className="ml-3 font-medium">Permisos & Roles</span>
-                            </a>
-                        )}
-
-                        {/* 4. Gestión Ciclos (Cycles) - President Only */}
-                        {["DEV", "PRESIDENT"].includes((user as any).role) && (
-                            <a
-                                href="/admin/cycles"
-                                className="flex items-center px-4 py-3 text-meteorite-200 hover:bg-meteorite-900 hover:text-white rounded-xl transition-all group"
-                            >
-                                <RefreshCcw className="text-meteorite-400 group-hover:text-white transition-colors w-5 h-5" />
-                                <span className="ml-3 font-medium">Gestión Ciclos</span>
+                                <span className="ml-3 font-medium">Administración</span>
                             </a>
                         )}
 
