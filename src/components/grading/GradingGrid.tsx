@@ -314,7 +314,7 @@ export default function GradingGrid({ initialData, currentUserRole }: GradingGri
                                         const currentScore = grade?.score ?? "";
                                         const key = `${user.id}-${pillar.id}`;
                                         const isSaving = saving[key];
-                                        const isTargetDirector = ["DIRECTOR", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER"].includes(user.role);
+                                        const isTargetDirector = ["DIRECTOR", "SUBDIRECTOR", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER"].includes(user.role);
                                         const isDisabled = pillar.isDirectorOnly && !isTargetDirector;
 
                                         return (

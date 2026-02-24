@@ -52,7 +52,7 @@ export async function recalculateUserKPI(userId: string, semesterId: string) {
 
     // 5. Define Weights Based on Role (Business Rule V2.0 - Dynamic)
     const role = user.role || "MEMBER";
-    const isDirectorLevel = ["DIRECTOR", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER"].includes(role);
+    const isDirectorLevel = ["DIRECTOR", "SUBDIRECTOR", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER"].includes(role);
 
     let finalKPI = 0;
 
