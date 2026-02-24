@@ -1,0 +1,11 @@
+Checking foreign keys pointing to 'area'...
+Table 'area_kpi_summary' references 'area'. Column: area_id -> id, OnDelete: NO ACTION
+  -> Rows in area_kpi_summary with non-null area_id: 7
+Table 'event' references 'area'. Column: target_area_id -> id, OnDelete: NO ACTION
+  -> Rows in event with non-null target_area_id: 2
+Table 'position_history' references 'area'. Column: area_id -> id, OnDelete: NO ACTION
+  -> Rows in position_history with non-null area_id: 30
+Table 'user' references 'area'. Column: area_id -> id, OnDelete: NO ACTION
+  -> Rows in user with non-null area_id: 6
+Table 'semester_area' references 'area'. Column: area_id -> id, OnDelete: CASCADE
+  -> Rows in semester_area with non-null area_id: 8

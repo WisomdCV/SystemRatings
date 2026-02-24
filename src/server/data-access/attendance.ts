@@ -33,7 +33,7 @@ export async function getAttendanceSheetDAO(eventId: string): Promise<Attendance
         },
         with: {
             targetArea: {
-                columns: { code: true }
+                columns: { isLeadershipArea: true }
             },
             createdBy: {
                 columns: {
@@ -79,7 +79,7 @@ export async function getAttendanceSheetDAO(eventId: string): Promise<Attendance
             },
             orderBy: (users, { asc }) => [asc(users.name)]
         });
-    } else if (event.targetArea?.code === "MD") {
+    } else if (event.targetArea?.isLeadershipArea) {
         // Lógica Mesa Directiva: Presidenta toma lista a sus líderes
         // DEV is excluded implicitly by inArray check below, but explicit check implies intention if roles changed.
         // Actually, inArray(["DIRECTOR"...]) already excludes "DEV" unless DEV is added to that list. 

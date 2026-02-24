@@ -40,6 +40,7 @@ type EventItem = {
         id: string;
         name: string;
         code: string | null;
+        isLeadershipArea: boolean | null;
     } | null;
     createdBy?: {
         name: string | null;
@@ -297,7 +298,7 @@ function canManageEvent(role: string, userAreaId: string | null, event: EventIte
     if (role === "DEV" || role === "PRESIDENT") return true; // Start Mode God/Strategic Global
     if (role === "TREASURER") {
         // Can manage General and MD events
-        return !event.targetAreaId || event.targetArea?.code === "MD";
+        return !event.targetAreaId || event.targetArea?.isLeadershipArea === true;
     }
     if (role === "DIRECTOR" || role === "SUBDIRECTOR") {
         // Can manage ONLY their area events
@@ -326,7 +327,7 @@ interface EventCardProps {
 
 function EventCardGrid({ event, isDeleting, onEdit, onDelete, canEdit, canDelete, canAttendance }: EventCardProps) {
     const isGeneral = !event.targetArea;
-    const isBoard = event.targetArea?.code === "MD";
+    const isBoard = event.targetArea?.isLeadershipArea === true;
     const dateObj = new Date(event.date);
     const day = dateObj.toLocaleDateString('es-ES', { day: '2-digit', timeZone: 'UTC' });
     const month = dateObj.toLocaleDateString('es-ES', { month: 'short', timeZone: 'UTC' }).toUpperCase().replace('.', '');
@@ -418,7 +419,7 @@ function EventCardGrid({ event, isDeleting, onEdit, onDelete, canEdit, canDelete
 
 function EventCardList({ event, isDeleting, onEdit, onDelete, canEdit, canDelete, canAttendance }: EventCardProps) {
     const isGeneral = !event.targetArea;
-    const isBoard = event.targetArea?.code === "MD";
+    const isBoard = event.targetArea?.isLeadershipArea === true;
     const dateObj = new Date(event.date);
     const day = dateObj.toLocaleDateString('es-ES', { day: '2-digit', timeZone: 'UTC' });
     const month = dateObj.toLocaleDateString('es-ES', { month: 'short', timeZone: 'UTC' }).toUpperCase().replace('.', '');
@@ -527,9 +528,9 @@ function Tag({ isGeneral, isBoard, areaName, areaCode }: { isGeneral: boolean, i
     if (isGeneral) {
         return <span className="inline-block px-2 py-0.5 rounded-md bg-gray-100 text-gray-600 text-[10px] font-bold uppercase tracking-wide border border-gray-200">General</span>;
     }
-    // Board is handled by areaCode MD usually, but keep specific check if needed
+    // Board is handled by isLeadershipArea boolean
     if (isBoard) {
-        return <span className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide border ${getAreaStyle("MD")}`}>Mesa Directiva</span>;
+        return <span className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide border bg-amber-100 text-amber-700 border-amber-200`}>{areaName || "Mesa Directiva"}</span>;
     }
     const style = getAreaStyle(areaCode);
     return <span className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide border ${style}`}>{areaName}</span>;

@@ -39,7 +39,7 @@ export default async function DashboardPage() {
         if (role) {
             // Find MD Area ID helper
             const mdArea = await db.query.areas.findFirst({
-                where: eq(areas.code, "MD"),
+                where: eq(areas.isLeadershipArea, true),
                 columns: { id: true }
             });
 

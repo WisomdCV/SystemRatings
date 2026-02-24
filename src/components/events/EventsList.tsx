@@ -22,6 +22,7 @@ type EventItem = {
         id: string;
         name: string;
         code: string | null;
+        isLeadershipArea: boolean | null;
     } | null;
     createdAt?: Date;
     updatedAt?: Date;
@@ -142,7 +143,7 @@ export default function EventsList({ events, userRole, userAreaId, userAreaName,
                         const dateObj = new Date(event.date);
                         const day = dateObj.toLocaleDateString('es-ES', { day: '2-digit', timeZone: 'UTC' });
                         const month = dateObj.toLocaleDateString('es-ES', { month: 'short', timeZone: 'UTC' }).toUpperCase().replace('.', '');
-                        const isBoard = event.targetArea?.code === "MD";
+                        const isBoard = event.targetArea?.isLeadershipArea === true;
 
                         return (
                             <div

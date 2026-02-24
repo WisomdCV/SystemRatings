@@ -93,6 +93,7 @@ export const areas = sqliteTable("area", {
   name: text("name").notNull(),
   code: text("code").unique(),
   description: text("description"),
+  isLeadershipArea: integer("is_leadership_area", { mode: "boolean" }).default(false),
 });
 
 export const semesters = sqliteTable("semester", {

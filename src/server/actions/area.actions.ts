@@ -2,24 +2,26 @@
 
 import { auth } from "@/server/auth";
 import { db } from "@/db";
-import { areas, semesterAreas, semesters, users } from "@/db/schema";
+import { areas, semesterAreas, semesters, users, events, positionHistory, areaKpiSummaries } from "@/db/schema";
 import { eq, and, asc, inArray, ne } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { hasPermission } from "@/lib/permissions";
 import { z } from "zod";
 
 // --- Validators ---
-export const CreateAreaSchema = z.object({
+const CreateAreaSchema = z.object({
     name: z.string().min(2, "Nombre muy corto").max(100),
     code: z.string().min(1).max(10).toUpperCase().optional().nullable(),
     description: z.string().max(500).optional().nullable(),
+    isLeadershipArea: z.boolean().optional().default(false),
 });
 
-export const UpdateAreaSchema = z.object({
+const UpdateAreaSchema = z.object({
     id: z.string().uuid(),
     name: z.string().min(2, "Nombre muy corto").max(100),
     code: z.string().min(1).max(10).toUpperCase().optional().nullable(),
     description: z.string().max(500).optional().nullable(),
+    isLeadershipArea: z.boolean().optional().default(false),
 });
 
 // --- Actions ---
@@ -87,10 +89,15 @@ export async function createAreaAction(input: z.infer<typeof CreateAreaSchema>) 
             return { success: false as const, error: validated.error.issues[0].message };
         }
 
+        if (validated.data.isLeadershipArea) {
+            await db.update(areas).set({ isLeadershipArea: false });
+        }
+
         const [newArea] = await db.insert(areas).values({
             name: validated.data.name,
             code: validated.data.code || null,
             description: validated.data.description || null,
+            isLeadershipArea: validated.data.isLeadershipArea,
         }).returning();
 
         revalidatePath("/admin/areas");
@@ -118,10 +125,15 @@ export async function updateAreaAction(input: z.infer<typeof UpdateAreaSchema>) 
             return { success: false as const, error: validated.error.issues[0].message };
         }
 
+        if (validated.data.isLeadershipArea) {
+            await db.update(areas).set({ isLeadershipArea: false }).where(ne(areas.id, validated.data.id));
+        }
+
         await db.update(areas).set({
             name: validated.data.name,
             code: validated.data.code || null,
             description: validated.data.description || null,
+            isLeadershipArea: validated.data.isLeadershipArea,
         }).where(eq(areas.id, validated.data.id));
 
         revalidatePath("/admin/areas");
@@ -135,7 +147,7 @@ export async function updateAreaAction(input: z.infer<typeof UpdateAreaSchema>) 
     }
 }
 
-/** Delete a global area (only if no users are assigned) */
+/** Delete a global area (only if no core users/events are assigned) */
 export async function deleteAreaAction(id: string) {
     try {
         const session = await auth();
@@ -144,7 +156,7 @@ export async function deleteAreaAction(id: string) {
             return { success: false as const, error: "No tienes permisos." };
         }
 
-        // Check for assigned users
+        // 1. Check for assigned users (Base Area)
         const assignedUsers = await db.query.users.findFirst({
             where: eq(users.currentAreaId, id),
         });
@@ -152,13 +164,53 @@ export async function deleteAreaAction(id: string) {
         if (assignedUsers) {
             return {
                 success: false as const,
-                error: "No se puede eliminar: hay usuarios asignados a esta área. Reasígnalos primero."
+                error: "No se puede eliminar: hay usuarios vinculados a esta área."
             };
         }
 
+        // 2. Check for historical events
+        const existingEvent = await db.query.events.findFirst({
+            where: eq(events.targetAreaId, id),
+        });
+
+        if (existingEvent) {
+            return {
+                success: false as const,
+                error: "No se puede eliminar: existen eventos/reuniones históricas para esta área."
+            };
+        }
+
+        // 3. Check for position history
+        const existingHistory = await db.query.positionHistory.findFirst({
+            where: eq(positionHistory.areaId, id),
+        });
+
+        if (existingHistory) {
+            return {
+                success: false as const,
+                error: "No se puede eliminar: el área forma parte del historial de cargos de uno o más usuarios."
+            };
+        }
+
+        // 4. Check for KPI summaries
+        const existingKpi = await db.query.areaKpiSummaries.findFirst({
+            where: eq(areaKpiSummaries.areaId, id),
+        });
+
+        if (existingKpi) {
+            return {
+                success: false as const,
+                error: "No se puede eliminar: el área tiene reportes de KPI históricos guardados."
+            };
+        }
+
+        // 5. Clear the cascade junction table manually to prevent SQLite constraint failures
+        await db.delete(semesterAreas).where(eq(semesterAreas.areaId, id));
+
+        // 6. Finally delete the area
         await db.delete(areas).where(eq(areas.id, id));
         revalidatePath("/admin/areas");
-        return { success: true as const, message: "Área eliminada." };
+        return { success: true as const, message: "Área eliminada limpia y exitosamente." };
     } catch (error) {
         console.error("Error deleting area:", error);
         return { success: false as const, error: "Error al eliminar el área." };

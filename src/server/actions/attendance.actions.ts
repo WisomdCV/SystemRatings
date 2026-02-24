@@ -42,23 +42,19 @@ export async function getAttendanceSheetAction(eventId: string) {
                     // OK
                 } else {
                     // Check if MD. We need relation. OR specific ID logic.
-                    // Safe approach: Check if userAreaId is same (unlikely for Treasurer) OR code is MD.
+                    // Safe approach: Check if userAreaId is same (unlikely for Treasurer) OR isLeadershipArea is true.
                     // If we don't have code, we might fail on MD check.
                     // Let's assume getEventByIdDAO fetches relation as most DAOs do. 
-                    // If not, we might need to fetch it.
-                    // But wait, line 22 checks `event.targetAreaId`. 
 
                     // Optimization: If TREASURER, allow if !targetAreaId. 
                     // What about MD? MD is a specific area. 
-                    // How to identify MD? By code "MD".
-                    // If event.targetArea?.code === "MD".
-                    // Let's assume event object has targetArea. 
+                    // How to identify MD? By isLeadershipArea field.
 
                     const isGeneral = !event.targetAreaId;
-                    const isMD = event.targetArea?.code === "MD";
+                    const isMD = event.targetArea?.isLeadershipArea === true;
 
                     if (!isGeneral && !isMD) {
-                        return { success: false, error: "El Tesorero solo puede gestionar Eventos Generales y Mesa Directiva." };
+                        return { success: false, error: "El Tesorero solo puede gestionar Eventos Generales y de Mesa Directiva." };
                     }
                 }
             }
@@ -97,16 +93,10 @@ export async function saveAttendanceAction(eventId: string, records: { userId: s
 
         if (!isDevOrPresi) {
             if (!isDirLevel && role !== "SECRETARY" && role !== "TREASURER") return { success: false, error: "Permisos insuficientes" };
-            if (event.targetAreaId && event.targetAreaId !== userAreaId && event.targetAreaId !== "BOARD" && role !== "TREASURER") {
+            if (event.targetAreaId && event.targetAreaId !== userAreaId && !event.targetArea?.isLeadershipArea && role !== "TREASURER") {
                 // Logic check: Treasurer can take attendance for BOARD events?
-                // If event.targetAreaId is the "MD" area ID... we don't know it here easily without fetching.
-                // But simply: If user is Treasurer, maybe they can take attendance generally or only for Board?
-                // Prompt says "Presidenta / Tesorero".
-                // Let's allow Treasurer if they are Treasurer. They are high level.
-                // Or strict:
-                // if (role === "TREASURER" && eventTargetAreaCode !== "MD") -> Error?
-                // To avoid complexity with fetching Area Code again in Action (which requires DB query),
-                // I will allow Treasurer to pass this check.
+                // To avoid complexity with fetching Area Code again in Action,
+                // I will allow Treasurer to pass this check for now.
                 // Ideally verify it's a Board meeting or General.
                 // For now, simple inclusion.
             }

@@ -10,7 +10,7 @@ import {
 } from "@/server/actions/area.actions";
 import {
     Plus, Edit2, Trash2, ToggleLeft, ToggleRight,
-    CheckCircle2, XCircle, Loader2, MapPin, Zap
+    CheckCircle2, XCircle, Loader2, MapPin, Zap, Crown
 } from "lucide-react";
 
 interface Area {
@@ -18,6 +18,7 @@ interface Area {
     name: string;
     code: string | null;
     description: string | null;
+    isLeadershipArea: boolean | null;
 }
 
 interface AreaWithStatus extends Area {
@@ -41,6 +42,7 @@ export default function AreasManager({ initialAreas, semesterStatus, activeSemes
     const [formName, setFormName] = useState("");
     const [formCode, setFormCode] = useState("");
     const [formDescription, setFormDescription] = useState("");
+    const [formIsLeadershipArea, setFormIsLeadershipArea] = useState(false);
 
     // Merge areas with semester status
     const areasData: AreaWithStatus[] = initialAreas.map(area => {
@@ -61,6 +63,7 @@ export default function AreasManager({ initialAreas, semesterStatus, activeSemes
         setFormName("");
         setFormCode("");
         setFormDescription("");
+        setFormIsLeadershipArea(false);
         setShowCreateForm(false);
         setEditingArea(null);
     };
@@ -71,6 +74,7 @@ export default function AreasManager({ initialAreas, semesterStatus, activeSemes
                 name: formName,
                 code: formCode || null,
                 description: formDescription || null,
+                isLeadershipArea: formIsLeadershipArea,
             });
             if (result.success) {
                 showFeedback("success", result.message || "Área creada.");
@@ -89,6 +93,7 @@ export default function AreasManager({ initialAreas, semesterStatus, activeSemes
                 name: formName,
                 code: formCode || null,
                 description: formDescription || null,
+                isLeadershipArea: formIsLeadershipArea,
             });
             if (result.success) {
                 showFeedback("success", result.message || "Área actualizada.");
@@ -140,6 +145,7 @@ export default function AreasManager({ initialAreas, semesterStatus, activeSemes
         setFormName(area.name);
         setFormCode(area.code || "");
         setFormDescription(area.description || "");
+        setFormIsLeadershipArea(area.isLeadershipArea ?? false);
         setShowCreateForm(false);
     };
 
@@ -155,8 +161,8 @@ export default function AreasManager({ initialAreas, semesterStatus, activeSemes
             {/* Feedback Toast */}
             {feedback && (
                 <div className={`fixed top-4 right-4 z-50 px-6 py-3 rounded-2xl shadow-2xl font-bold text-sm flex items-center gap-2 animate-in slide-in-from-top-2 duration-300 ${feedback.type === "success"
-                        ? "bg-emerald-500 text-white"
-                        : "bg-red-500 text-white"
+                    ? "bg-emerald-500 text-white"
+                    : "bg-red-500 text-white"
                     }`}>
                     {feedback.type === "success"
                         ? <CheckCircle2 className="w-4 h-4" />
@@ -207,7 +213,7 @@ export default function AreasManager({ initialAreas, semesterStatus, activeSemes
                         {editingArea ? `Editar: ${editingArea.name}` : "Crear Nueva Área"}
                     </h3>
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                         <div>
                             <label className="block text-sm font-bold text-meteorite-700 mb-1">Nombre *</label>
                             <input
@@ -239,6 +245,23 @@ export default function AreasManager({ initialAreas, semesterStatus, activeSemes
                                 className="w-full px-4 py-2.5 rounded-xl border border-meteorite-200 focus:border-meteorite-500 focus:ring-2 focus:ring-meteorite-200 outline-none transition-all bg-white text-meteorite-950 font-medium"
                             />
                         </div>
+                        <div className="flex flex-col justify-end pb-1">
+                            <label className="flex items-center gap-3 cursor-pointer group">
+                                <div className="relative flex items-center">
+                                    <input
+                                        type="checkbox"
+                                        className="sr-only"
+                                        checked={formIsLeadershipArea}
+                                        onChange={(e) => setFormIsLeadershipArea(e.target.checked)}
+                                    />
+                                    <div className={`w-11 h-6 rounded-full transition-colors ${formIsLeadershipArea ? 'bg-amber-500' : 'bg-gray-200'}`}></div>
+                                    <div className={`absolute left-1 top-1 w-4 h-4 bg-white rounded-full transition-transform ${formIsLeadershipArea ? 'translate-x-5' : 'translate-x-0'}`}></div>
+                                </div>
+                                <div className="text-sm font-bold text-meteorite-700 group-hover:text-meteorite-900 transition-colors">
+                                    Mesa Directiva <span className="text-amber-500 inline-block ml-1"><Crown className="w-4 h-4" /></span>
+                                </div>
+                            </label>
+                        </div>
                     </div>
 
                     <div className="flex gap-3 mt-4">
@@ -266,20 +289,25 @@ export default function AreasManager({ initialAreas, semesterStatus, activeSemes
                     <div
                         key={area.id}
                         className={`bg-white/80 backdrop-blur-md border rounded-2xl p-5 shadow-sm hover:shadow-lg transition-all duration-300 group ${area.isActiveInSemester
-                                ? "border-emerald-200/50 ring-1 ring-emerald-100"
-                                : "border-gray-200/50"
+                            ? "border-emerald-200/50 ring-1 ring-emerald-100"
+                            : "border-gray-200/50"
                             }`}
                     >
                         <div className="flex items-start justify-between mb-3">
                             <div className="flex items-center gap-3">
                                 <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-sm shadow-inner ${area.isActiveInSemester
-                                        ? "bg-emerald-100 text-emerald-700"
-                                        : "bg-gray-100 text-gray-500"
+                                    ? "bg-emerald-100 text-emerald-700"
+                                    : "bg-gray-100 text-gray-500"
                                     }`}>
                                     {area.code || area.name.substring(0, 2).toUpperCase()}
                                 </div>
                                 <div>
-                                    <h3 className="font-bold text-meteorite-950 text-base">{area.name}</h3>
+                                    <h3 className="font-bold text-meteorite-950 text-base flex items-center gap-2">
+                                        {area.name}
+                                        {area.isLeadershipArea && (
+                                            <Crown className="w-4 h-4 text-amber-500 fill-amber-500" />
+                                        )}
+                                    </h3>
                                     {area.code && (
                                         <span className="text-xs font-mono text-meteorite-400">
                                             {area.code}
@@ -291,8 +319,8 @@ export default function AreasManager({ initialAreas, semesterStatus, activeSemes
                             {/* Status Badge */}
                             {activeSemester && (
                                 <span className={`text-xs font-bold px-2.5 py-1 rounded-lg ${area.isActiveInSemester
-                                        ? "bg-emerald-100 text-emerald-700"
-                                        : "bg-gray-100 text-gray-500"
+                                    ? "bg-emerald-100 text-emerald-700"
+                                    : "bg-gray-100 text-gray-500"
                                     }`}>
                                     {area.isActiveInSemester ? "Activa" : "Inactiva"}
                                 </span>
@@ -319,8 +347,8 @@ export default function AreasManager({ initialAreas, semesterStatus, activeSemes
                                     onClick={() => handleToggleSemester(area.id, !area.isActiveInSemester)}
                                     disabled={isPending}
                                     className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg transition-all disabled:opacity-50 ${area.isActiveInSemester
-                                            ? "text-amber-700 bg-amber-50 hover:bg-amber-100"
-                                            : "text-emerald-700 bg-emerald-50 hover:bg-emerald-100"
+                                        ? "text-amber-700 bg-amber-50 hover:bg-amber-100"
+                                        : "text-emerald-700 bg-emerald-50 hover:bg-emerald-100"
                                         }`}
                                 >
                                     {area.isActiveInSemester

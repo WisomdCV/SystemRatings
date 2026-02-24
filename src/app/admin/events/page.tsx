@@ -36,7 +36,7 @@ export default async function EventsPage() {
     if (activeSemester) {
         // Fetch MD Area ID globally as it's needed for multiple roles
         const mdArea = await db.query.areas.findFirst({
-            where: eq(areas.code, "MD"),
+            where: eq(areas.isLeadershipArea, true),
             columns: { id: true }
         });
 
@@ -72,7 +72,7 @@ export default async function EventsPage() {
             // Treasurer might need areas list if allowed to create MD/General events?
             // The prompt says "Permítele elegir entre General y Mesa Directiva".
             // So we need to provide MD in areasList or handle it in Form.
-            if (mdArea) areasList = await db.select({ id: areas.id, name: areas.name }).from(areas).where(eq(areas.code, "MD"));
+            if (mdArea) areasList = await db.select({ id: areas.id, name: areas.name }).from(areas).where(eq(areas.isLeadershipArea, true));
         }
 
         // C. Director/Subdirector: Fetch Own Events + General Events + BOARD (MD) Events
