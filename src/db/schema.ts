@@ -23,7 +23,7 @@ export const users = sqliteTable("user", {
 
   // --- JERARQUÍA ACTUAL ---
   currentAreaId: text("area_id").references(() => areas.id),
-  // Roles: 'DEV', 'PRESIDENT', 'DIRECTOR', 'SUBDIRECTOR', 'TREASURER', 'MEMBER', 'VOLUNTEER'
+  // Roles: 'DEV', 'PRESIDENT', 'VICEPRESIDENT', 'SECRETARY', 'DIRECTOR', 'SUBDIRECTOR', 'TREASURER', 'MEMBER', 'VOLUNTEER'
   role: text("role").default("VOLUNTEER"),
 
   // --- ESTADOS Y ANTIGÜEDAD ---

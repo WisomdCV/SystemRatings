@@ -148,7 +148,8 @@ async function triggerMassDowngrade(tx: any) {
     const leaders = await tx.query.users.findMany({
         where: and(
             eq(users.status, "ACTIVE"),
-            inArray(users.role, ["DIRECTOR", "SUBDIRECTOR", "TREASURER"])
+            // Downgrade all leaders. Although VP, SEC, and TREASURER have President-level permissions, they're cycle-bound leaders.
+            inArray(users.role, ["VICEPRESIDENT", "SECRETARY", "DIRECTOR", "SUBDIRECTOR", "TREASURER"])
         ),
         columns: { id: true }
     });

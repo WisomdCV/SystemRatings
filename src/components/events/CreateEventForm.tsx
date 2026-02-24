@@ -173,7 +173,7 @@ export default function CreateEventForm({
                         - TREASURER: Select (General + MD)
                         - DIRECTOR/SUBDIRECTOR: Fixed Badge (Own Area)
                     */}
-                    {["DEV", "PRESIDENT", "SECRETARY", "TREASURER"].includes(userRole) ? (
+                    {["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER"].includes(userRole) ? (
                         <select
                             {...form.register("targetAreaId")}
                             className="w-full px-4 py-2.5 rounded-xl border border-gray-200 bg-gray-50/50 focus:bg-white focus:border-meteorite-500 focus:ring-2 focus:ring-meteorite-200 transition-all outline-none text-sm font-medium text-gray-700 appearance-none cursor-pointer"

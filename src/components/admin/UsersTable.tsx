@@ -59,6 +59,8 @@ const getRolePrefix = (role: string | null) => {
         case "MEMBER": return "M";
         case "VOLUNTEER": return "V";
         case "PRESIDENT": return "P";
+        case "VICEPRESIDENT": return "VP";
+        case "SECRETARY": return "SCT";
         case "TREASURER": return "T";
         case "DEV": return "X";
         default: return "V";

@@ -7,6 +7,8 @@ export const ROLES = [
     "DIRECTOR",
     "SUBDIRECTOR",
     "PRESIDENT",
+    "VICEPRESIDENT",
+    "SECRETARY",
     "TREASURER",
     "DEV",
 ] as const;

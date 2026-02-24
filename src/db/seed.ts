@@ -78,6 +78,39 @@ async function main() {
         set: { role: "DEV", status: "ACTIVE" } // Si ya existías, te asegura el rol DEV
     });
 
+    // 4.1. Opcional: PRE-AUTORIZAR OTROS ROLES ADMINISTRATIVOS
+    // Puedes descomentar y cambiar los correos si deseas que al desplegar, 
+    // estos usuarios ya nazcan con sus rangos respectivos.
+    /*
+    console.log("👤 Autorizando Ejecutivos...");
+    await db.insert(users).values([
+        {
+            email: "vp@tuorganizacion.com",
+            role: "VICEPRESIDENT",
+            status: "ACTIVE",
+            firstName: "Vice",
+            lastName: "Presidente",
+        },
+        {
+            email: "tesorero@tuorganizacion.com",
+            role: "TREASURER",
+            status: "ACTIVE",
+            firstName: "Tesorero",
+            lastName: "Oficial",
+        },
+        {
+            email: "secretario@tuorganizacion.com",
+            role: "SECRETARY",
+            status: "ACTIVE",
+            firstName: "Secretario",
+            lastName: "Oficial",
+        }
+    ]).onConflictDoUpdate({
+        target: users.email,
+        set: { status: "ACTIVE" }
+    });
+    */
+
     // 5. Seed "Director de Proyectos" Custom Role
     console.log("🎯 Sincronizando rol personalizable: Director de Proyectos...");
 

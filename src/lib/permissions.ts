@@ -8,6 +8,8 @@
 export const ROLES = [
     "DEV",
     "PRESIDENT",
+    "VICEPRESIDENT",
+    "SECRETARY",
     "DIRECTOR",
     "SUBDIRECTOR",
     "TREASURER",
@@ -22,41 +24,41 @@ export type Role = (typeof ROLES)[number];
 // ---------------------------------------------------------------------------
 export const PERMISSIONS = {
     // --- Eventos ---
-    "event:create": ["DEV", "PRESIDENT", "DIRECTOR", "SUBDIRECTOR"],
-    "event:manage": ["DEV", "PRESIDENT"], // Delete/update any event (creators can also manage their own)
+    "event:create": ["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER", "DIRECTOR", "SUBDIRECTOR"],
+    "event:manage": ["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER"], // Delete/update any event
 
     // --- Asistencia ---
-    "attendance:take": ["DEV", "PRESIDENT", "DIRECTOR", "SUBDIRECTOR", "TREASURER"],
-    "attendance:review": ["DEV", "PRESIDENT", "DIRECTOR", "SUBDIRECTOR"],
+    "attendance:take": ["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER", "DIRECTOR", "SUBDIRECTOR"],
+    "attendance:review": ["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER", "DIRECTOR", "SUBDIRECTOR"],
 
     // --- Calificaciones ---
-    "grade:assign": ["DEV", "PRESIDENT", "DIRECTOR"],
-    "grade:view_sheet": ["DEV", "PRESIDENT", "DIRECTOR", "SUBDIRECTOR"],
+    "grade:assign": ["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER", "DIRECTOR"],
+    "grade:view_sheet": ["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER", "DIRECTOR", "SUBDIRECTOR"],
 
     // --- Pilares ---
-    "pillar:manage": ["DEV", "PRESIDENT"],
+    "pillar:manage": ["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER"],
 
     // --- Semestres / Ciclos ---
-    "semester:manage": ["DEV", "PRESIDENT"],
-    "semester:create_first": ["DEV", "PRESIDENT", "DIRECTOR", "SUBDIRECTOR", "TREASURER", "MEMBER", "VOLUNTEER"], // First-time setup
+    "semester:manage": ["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER"],
+    "semester:create_first": ["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER", "DIRECTOR", "SUBDIRECTOR", "MEMBER", "VOLUNTEER"],
 
     // --- Usuarios ---
-    "user:manage": ["DEV", "PRESIDENT"],
+    "user:manage": ["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER"],
 
     // --- Áreas ---
-    "area:manage": ["DEV", "PRESIDENT"],
+    "area:manage": ["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER"],
 
     // --- Proyectos ---
-    "project:create": ["DEV", "PRESIDENT", "DIRECTOR"],
-    "project:manage": ["DEV", "PRESIDENT"], // Manage any project (creators/directors manage their own via projectRole)
+    "project:create": ["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER", "DIRECTOR"],
+    "project:manage": ["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER"],
 
     // --- Dashboard / Vistas ---
-    "dashboard:area_comparison": ["DEV", "PRESIDENT", "DIRECTOR", "SUBDIRECTOR", "TREASURER"],
-    "dashboard:leadership_view": ["DEV", "PRESIDENT", "DIRECTOR", "SUBDIRECTOR", "TREASURER"],
+    "dashboard:area_comparison": ["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER", "DIRECTOR", "SUBDIRECTOR"],
+    "dashboard:leadership_view": ["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER", "DIRECTOR", "SUBDIRECTOR"],
 
     // --- Admin panel access (route-level) ---
-    "admin:access": ["DEV", "PRESIDENT", "DIRECTOR", "SUBDIRECTOR", "TREASURER"],
-    "admin:full": ["DEV", "PRESIDENT"],
+    "admin:access": ["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER", "DIRECTOR", "SUBDIRECTOR"],
+    "admin:full": ["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER"],
 } as const satisfies Record<string, readonly Role[]>;
 
 export type Permission = keyof typeof PERMISSIONS;

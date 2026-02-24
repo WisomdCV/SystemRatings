@@ -103,7 +103,7 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
 
 
     // --- Logic for Dynamic UI ---
-    const isManagementRole = ["DEV", "PRESIDENT", "TREASURER", "DIRECTOR", "SUBDIRECTOR"].includes((user as any).role || "");
+    const isManagementRole = ["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER", "DIRECTOR", "SUBDIRECTOR"].includes((user as any).role || "");
     const eventsLink = isManagementRole ? "/admin/events" : "/dashboard/agenda";
 
 
@@ -411,7 +411,7 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
                         </a>
 
                         {/* 2. Administración Central */}
-                        {["DEV", "PRESIDENT", "TREASURER", "DIRECTOR", "SUBDIRECTOR"].includes((user as any).role) && (
+                        {["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER", "DIRECTOR", "SUBDIRECTOR"].includes((user as any).role) && (
                             <a
                                 href="/admin"
                                 className="flex items-center px-4 py-3 text-meteorite-200 hover:bg-meteorite-900 hover:text-white rounded-xl transition-all group"
@@ -422,7 +422,7 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
                         )}
 
                         {/* 5. Calificaciones */}
-                        {["DEV", "PRESIDENT", "TREASURER", "DIRECTOR"].includes((user as any).role) && (
+                        {["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER", "DIRECTOR"].includes((user as any).role) && (
                             <a
                                 href="/dashboard/management/grades"
                                 className="flex items-center px-4 py-3 text-meteorite-200 hover:bg-meteorite-900 hover:text-white rounded-xl transition-all group"
@@ -433,7 +433,7 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
                         )}
 
                         {/* 6. Comparación de Áreas - Leadership Only */}
-                        {["DEV", "PRESIDENT", "TREASURER", "DIRECTOR", "SUBDIRECTOR"].includes((user as any).role) && (
+                        {["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER", "DIRECTOR", "SUBDIRECTOR"].includes((user as any).role) && (
                             <a
                                 href="/dashboard/areas"
                                 className="flex items-center px-4 py-3 text-meteorite-200 hover:bg-meteorite-900 hover:text-white rounded-xl transition-all group"
@@ -444,7 +444,7 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
                         )}
 
                         {/* 3. Meetings */}
-                        {["DEV", "PRESIDENT", "TREASURER", "DIRECTOR", "SUBDIRECTOR"].includes((user as any).role) ? (
+                        {["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER", "DIRECTOR", "SUBDIRECTOR"].includes((user as any).role) ? (
                             <a
                                 href="/admin/events"
                                 className="flex items-center px-4 py-3 text-meteorite-200 hover:bg-meteorite-900 hover:text-white rounded-xl transition-all group"
@@ -1035,7 +1035,7 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
                         </div>
                         <span className="text-[10px] font-medium opacity-100">Inicio</span>
                     </a>
-                    {["DEV", "PRESIDENT", "TREASURER", "DIRECTOR", "SUBDIRECTOR"].includes((user as any).role) ? (
+                    {["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER", "DIRECTOR", "SUBDIRECTOR"].includes((user as any).role) ? (
                         <a
                             href="/admin/events"
                             className="flex flex-col items-center justify-center w-full h-full text-meteorite-400 hover:text-white transition-colors"
