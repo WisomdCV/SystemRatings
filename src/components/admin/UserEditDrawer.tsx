@@ -336,7 +336,7 @@ export default function UserEditDrawer({
                                                     }}
                                                 />
                                                 <div className="ml-3 flex flex-col">
-                                                    <span className="text-sm font-bold flex items-center gap-2">
+                                                    <span className="text-sm font-bold text-meteorite-950 flex items-center gap-2">
                                                         <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: role.color }}></span>
                                                         {role.name}
                                                     </span>

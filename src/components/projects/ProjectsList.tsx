@@ -284,7 +284,7 @@ export default function ProjectsList({ projects, canCreate, currentUserId }: Pro
                                             <CalendarDays className="w-3.5 h-3.5" />
                                             <span>
                                                 Deadline: {new Date(project.deadline).toLocaleDateString("es", {
-                                                    day: "numeric", month: "short"
+                                                    day: "numeric", month: "short", timeZone: "UTC"
                                                 })}
                                             </span>
                                         </div>

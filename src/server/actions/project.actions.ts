@@ -103,7 +103,8 @@ export async function getProjectByIdAction(projectId: string) {
                 tasks: {
                     orderBy: [asc(projectTasks.position), desc(projectTasks.createdAt)],
                     with: {
-                        createdBy: { columns: { id: true, name: true } },
+                        createdBy: { columns: { id: true, name: true, image: true } },
+                        projectArea: true,
                         assignments: {
                             with: { user: { columns: { id: true, name: true, image: true } } },
                         },
@@ -341,6 +342,7 @@ export async function createTaskAction(input: CreateTaskDTO) {
 
         const [newTask] = await db.insert(projectTasks).values({
             projectId: validated.data.projectId,
+            projectAreaId: validated.data.projectAreaId || null,
             title: validated.data.title,
             description: validated.data.description || null,
             priority: validated.data.priority,

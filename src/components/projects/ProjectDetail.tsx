@@ -27,6 +27,7 @@ interface Task {
     description: string | null;
     status: string;
     priority: string;
+    createdAt: Date | null;
     dueDate: Date | null;
     position: number | null;
     createdBy: { id: string; name: string | null };
@@ -35,12 +36,12 @@ interface Task {
 
 interface Member {
     id: string;
-    projectRole: { id: string; name: string; hierarchyLevel: number; isSystem: boolean | null };
+    projectRole: { id: string; name: string; hierarchyLevel: number; color: string | null; isSystem: boolean | null };
     projectArea: { id: string; name: string; color: string | null } | null;
     user: { id: string; name: string | null; image: string | null; email: string; role: string | null };
 }
 
-interface ProjectRole { id: string; name: string; hierarchyLevel: number; }
+interface ProjectRole { id: string; name: string; hierarchyLevel: number; color: string | null; }
 interface ProjectArea { id: string; name: string; color: string | null; }
 
 interface Project {
@@ -92,6 +93,14 @@ const TASK_STATUS_ICON: Record<string, { icon: React.ComponentType<any>; color: 
     BLOCKED: { icon: X, color: "text-red-500", label: "Bloqueado" },
 };
 
+const TASK_BG_COLORS: Record<string, string> = {
+    TODO: "bg-white border-gray-200",
+    IN_PROGRESS: "bg-blue-50/50 border-blue-200",
+    REVIEW: "bg-purple-50/50 border-purple-200",
+    DONE: "bg-emerald-50/50 border-emerald-200",
+    BLOCKED: "bg-red-50/50 border-red-200",
+};
+
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export default function ProjectDetail({ project, eligibleUsers, allProjectRoles, allProjectAreas, currentUserId, isSystemAdmin }: Props) {
@@ -102,6 +111,7 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
     // Member add
     const [showAddMember, setShowAddMember] = useState(false);
     const [memberSearch, setMemberSearch] = useState("");
+    const [selectedAreaId, setSelectedAreaId] = useState<string>("none"); // 'none' means system/sin area
 
     // Task create
     const [showCreateTask, setShowCreateTask] = useState(false);
@@ -109,6 +119,7 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
     const [taskDescription, setTaskDescription] = useState("");
     const [taskPriority, setTaskPriority] = useState("MEDIUM");
     const [taskDue, setTaskDue] = useState("");
+    const [taskAreaId, setTaskAreaId] = useState<string>("none");
 
     // Task assign
     const [assigningTaskId, setAssigningTaskId] = useState<string | null>(null);
@@ -116,6 +127,7 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
 
     // Task filter
     const [statusFilter, setStatusFilter] = useState<string>("ALL");
+    const [areaFilter, setAreaFilter] = useState<string>("ALL");
 
     const userProjectRole = project.members.find(m => m.user.id === currentUserId)?.projectRole;
     const canManage = isSystemAdmin || (userProjectRole?.hierarchyLevel ?? 0) >= 80;
@@ -130,11 +142,14 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
         startTransition(async () => {
             const defaultRole = allProjectRoles.find(r => r.hierarchyLevel === 10) || allProjectRoles[allProjectRoles.length - 1];
             if (!defaultRole) return;
-            const res = await addProjectMemberAction({
+            const payload: any = {
                 projectId: project.id,
                 userId,
                 projectRoleId: defaultRole.id,
-            });
+            };
+            if (selectedAreaId !== "none") payload.projectAreaId = selectedAreaId;
+
+            const res = await addProjectMemberAction(payload);
             if (res.success) { showFeedback("success", res.message!); setShowAddMember(false); setMemberSearch(""); router.refresh(); }
             else showFeedback("error", res.error!);
         });
@@ -166,10 +181,11 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
                 description: taskDescription || null,
                 priority: taskPriority as any,
                 dueDate: taskDue ? new Date(taskDue) : null,
+                projectAreaId: taskAreaId !== "none" ? taskAreaId : undefined,
             });
             if (res.success) {
                 showFeedback("success", res.message!);
-                setShowCreateTask(false); setTaskTitle(""); setTaskDescription(""); setTaskPriority("MEDIUM"); setTaskDue("");
+                setShowCreateTask(false); setTaskTitle(""); setTaskDescription(""); setTaskPriority("MEDIUM"); setTaskDue(""); setTaskAreaId("none");
                 router.refresh();
             } else showFeedback("error", res.error!);
         });
@@ -208,9 +224,11 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
     };
 
     // Filters
-    const filteredTasks = statusFilter === "ALL"
-        ? project.tasks
-        : project.tasks.filter(t => t.status === statusFilter);
+    const filteredTasks = project.tasks.filter(t => {
+        const matchStatus = statusFilter === "ALL" || t.status === statusFilter;
+        const matchArea = areaFilter === "ALL" || (areaFilter === "GENERAL" ? !t.projectArea : t.projectArea?.id === areaFilter);
+        return matchStatus && matchArea;
+    });
 
     const filteredEligible = eligibleUsers.filter(u => {
         if (!memberSearch) return true;
@@ -255,7 +273,7 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
                     {project.deadline && (
                         <span className="text-xs text-gray-500 flex items-center gap-1">
                             <Clock className="w-3 h-3" />
-                            Deadline: {new Date(project.deadline).toLocaleDateString("es", { day: "numeric", month: "short", year: "numeric" })}
+                            Deadline: {new Date(project.deadline).toLocaleDateString("es", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" })}
                         </span>
                     )}
                 </div>
@@ -297,6 +315,11 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
                                     className="px-3 py-2 rounded-xl border border-gray-200 outline-none bg-white text-meteorite-950 text-sm">
                                     {TASK_PRIORITIES.map(p => <option key={p} value={p}>{p}</option>)}
                                 </select>
+                                <select value={taskAreaId} onChange={e => setTaskAreaId(e.target.value)}
+                                    className="px-3 py-2 rounded-xl border border-gray-200 outline-none bg-white text-meteorite-950 text-sm">
+                                    <option value="none">Área General</option>
+                                    {allProjectAreas.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                                </select>
                                 <input type="date" value={taskDue} onChange={e => setTaskDue(e.target.value)}
                                     className="px-3 py-2 rounded-xl border border-gray-200 outline-none bg-white text-meteorite-950 text-sm" />
                                 <div className="ml-auto flex gap-2">
@@ -309,6 +332,24 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
                             </div>
                         </div>
                     )}
+
+                    {/* Area Filter */}
+                    <div className="flex gap-1.5 flex-wrap">
+                        <button onClick={() => setAreaFilter("ALL")}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${areaFilter === "ALL" ? "bg-violet-100 text-violet-700 border-violet-200 shadow-sm" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"}`}>
+                            Todas las Áreas
+                        </button>
+                        <button onClick={() => setAreaFilter("GENERAL")}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${areaFilter === "GENERAL" ? "bg-violet-100 text-violet-700 border-violet-200 shadow-sm" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"}`}>
+                            General
+                        </button>
+                        {allProjectAreas.map(a => (
+                            <button key={a.id} onClick={() => setAreaFilter(a.id)}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${areaFilter === a.id ? "bg-violet-100 text-violet-700 border-violet-200 shadow-sm" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"}`}>
+                                {a.name}
+                            </button>
+                        ))}
+                    </div>
 
                     {/* Status Filter */}
                     <div className="flex gap-1.5 flex-wrap">
@@ -340,8 +381,9 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
                             {filteredTasks.map(task => {
                                 const statusCfg = TASK_STATUS_ICON[task.status] || TASK_STATUS_ICON.TODO;
                                 const StatusIcon = statusCfg.icon;
+                                const bgClass = TASK_BG_COLORS[task.status] || TASK_BG_COLORS.TODO;
                                 return (
-                                    <div key={task.id} className="bg-white border border-gray-200 rounded-xl p-3 hover:shadow-md transition-all">
+                                    <div key={task.id} className={`border rounded-xl p-3 hover:shadow-md transition-all ${bgClass}`}>
                                         <div className="flex items-start gap-3">
                                             {/* Status toggle */}
                                             <div className="mt-0.5">
@@ -358,72 +400,132 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
                                             </div>
 
                                             <div className="flex-1 min-w-0">
-                                                <p className={`font-bold text-sm ${task.status === "DONE" ? "line-through text-gray-400" : "text-meteorite-950"}`}>
-                                                    {task.title}
-                                                </p>
-                                                {task.description && (
-                                                    <p className="text-xs text-gray-400 line-clamp-1 mt-0.5">{task.description}</p>
-                                                )}
-
-                                                {/* Assignments */}
-                                                <div className="flex items-center gap-1.5 mt-2 flex-wrap">
-                                                    {task.assignments.map(a => (
-                                                        <span key={a.id} className="inline-flex items-center gap-1 px-2 py-0.5 bg-violet-50 text-violet-700 rounded-md text-[10px] font-bold">
-                                                            {a.user.name || "?"}
-                                                            {canManage && (
-                                                                <button onClick={() => handleUnassign(a.id)} disabled={isPending}
-                                                                    className="hover:text-red-500 ml-0.5">
-                                                                    <X className="w-2.5 h-2.5" />
-                                                                </button>
+                                                <div className="flex items-start justify-between">
+                                                    <div>
+                                                        <p className={`font-bold text-sm leading-tight flex items-center gap-1.5 ${task.status === "DONE" ? "line-through text-gray-400" : "text-meteorite-950"}`}>
+                                                            {task.priority === "CRITICAL" && <span className="inline-block shrink-0 w-2 h-2 rounded-full bg-red-500 animate-pulse shadow-[0_0_5px_rgba(239,68,68,0.5)]" title="Prioridad Crítica" />}
+                                                            {task.priority === "HIGH" && <span className="inline-block shrink-0 w-2 h-2 rounded-full bg-orange-500" title="Prioridad Alta" />}
+                                                            {task.title}
+                                                        </p>
+                                                        <div className="flex items-center gap-2 mt-1 mb-1.5">
+                                                            {task.projectArea ? (
+                                                                <span className="text-[9px] font-black px-1.5 py-0.5 rounded border" style={{ backgroundColor: `${task.projectArea.color || "#e2e8f0"}15`, color: task.projectArea.color || "#64748b", borderColor: `${task.projectArea.color || "#e2e8f0"}40` }}>
+                                                                    {task.projectArea.name}
+                                                                </span>
+                                                            ) : (
+                                                                <span className="text-[9px] font-black px-1.5 py-0.5 rounded border bg-gray-50 border-gray-200 text-gray-500">
+                                                                    General
+                                                                </span>
                                                             )}
-                                                        </span>
-                                                    ))}
-                                                    {canManage && (
-                                                        <button onClick={() => { setAssigningTaskId(assigningTaskId === task.id ? null : task.id); setAssignSearch(""); }}
-                                                            disabled={isPending}
-                                                            className="p-1 text-gray-400 hover:text-violet-600 rounded transition-colors disabled:opacity-50">
-                                                            <UserPlus className="w-3.5 h-3.5" />
-                                                        </button>
-                                                    )}
+                                                            <span className="text-[10px] text-gray-400 flex items-center gap-1 font-medium">
+                                                                Por:
+                                                                {task.createdBy?.image ? (
+                                                                    <img src={task.createdBy.image} alt={task.createdBy.name || ""} className="w-3.5 h-3.5 rounded-full inline-block object-cover" referrerPolicy="no-referrer" />
+                                                                ) : (
+                                                                    <div className="w-3.5 h-3.5 rounded-full bg-gray-200 flex items-center justify-center text-[7px] font-bold text-gray-500 shrink-0">
+                                                                        {task.createdBy?.name?.charAt(0) || "?"}
+                                                                    </div>
+                                                                )}
+                                                                <strong className="text-gray-600 truncate max-w-[80px]">{task.createdBy?.name?.split(" ")[0]}</strong>
+                                                            </span>
+                                                        </div>
+                                                        {task.description && (
+                                                            <p className="text-xs text-gray-500 line-clamp-2 mt-0.5 leading-snug">{task.description}</p>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Task actions (Delete) */}
+                                                    <div className="flex items-center gap-1 shrink-0 ml-2">
+                                                        {canManage && (
+                                                            <button onClick={() => handleDeleteTask(task.id)} disabled={isPending}
+                                                                className="p-1.5 text-gray-300 hover:bg-red-50 hover:text-red-500 rounded-lg transition-colors disabled:opacity-50">
+                                                                <Trash2 className="w-3.5 h-3.5" />
+                                                            </button>
+                                                        )}
+                                                    </div>
                                                 </div>
 
-                                                {/* Assign dropdown */}
-                                                {assigningTaskId === task.id && (
-                                                    <div className="mt-2 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden max-w-xs">
-                                                        <div className="p-2 border-b border-gray-100">
-                                                            <input type="text" value={assignSearch} onChange={e => setAssignSearch(e.target.value)}
-                                                                placeholder="Buscar miembro…" autoFocus
-                                                                className="w-full px-3 py-1.5 text-xs rounded-lg border border-gray-200 outline-none" />
-                                                        </div>
-                                                        <div className="max-h-28 overflow-y-auto">
-                                                            {filteredAssignUsers.map(m => (
-                                                                <button key={m.user.id} onClick={() => handleAssignTask(task.id, m.user.id)}
-                                                                    disabled={isPending || task.assignments.some(a => a.user.id === m.user.id)}
-                                                                    className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-violet-50 text-left text-xs disabled:opacity-30">
-                                                                    <span className="font-medium text-gray-900 truncate">{m.user.name || m.user.email}</span>
-                                                                    <span className={`ml-auto text-[9px] font-bold px-1 py-0.5 rounded bg-gray-100 text-gray-700`}>
-                                                                        {m.projectRole.name}
-                                                                    </span>
-                                                                </button>
-                                                            ))}
-                                                        </div>
-                                                    </div>
-                                                )}
-                                            </div>
+                                                {/* Meta details (Dates + Assignments) */}
+                                                <div className="flex flex-col sm:flex-row sm:items-center gap-3 mt-3">
 
-                                            {/* Task actions */}
-                                            <div className="flex items-center gap-1 shrink-0">
-                                                {task.dueDate && (
-                                                    <span className="text-[10px] text-gray-400 font-medium">
-                                                        {new Date(task.dueDate).toLocaleDateString("es", { day: "numeric", month: "short" })}
-                                                    </span>
-                                                )}
-                                                {canManage && (
-                                                    <button onClick={() => handleDeleteTask(task.id)} disabled={isPending}
-                                                        className="p-1 text-gray-400 hover:text-red-500 rounded transition-colors disabled:opacity-50">
-                                                        <Trash2 className="w-3.5 h-3.5" />
-                                                    </button>
-                                                )}
+                                                    {/* Dates */}
+                                                    <div className="flex items-center gap-2 text-[10px] font-medium text-gray-400 shrink-0">
+                                                        <span className="flex items-center gap-1 px-1.5 py-0.5 bg-gray-50 rounded border border-gray-100" title="Fecha de creación">
+                                                            <Plus className="w-3 h-3 text-gray-400" />
+                                                            {new Date(task.createdAt || new Date()).toLocaleDateString("es", { day: "2-digit", month: "short", year: "numeric" })}
+                                                        </span>
+
+                                                        {task.dueDate && (
+                                                            <>
+                                                                <span className="text-gray-300">→</span>
+                                                                <span className={`flex items-center gap-1 px-1.5 py-0.5 rounded border ${new Date(task.dueDate) < new Date() && task.status !== 'DONE'
+                                                                    ? "bg-red-50 text-red-600 border-red-100"
+                                                                    : "bg-orange-50 text-orange-600 border-orange-100"
+                                                                    }`} title="Fecha límite">
+                                                                    <ListChecks className="w-3 h-3" />
+                                                                    {new Date(task.dueDate).toLocaleDateString("es", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" })}
+                                                                </span>
+                                                            </>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Assignments list */}
+                                                    <div className="flex flex-wrap items-center gap-1">
+                                                        {task.assignments.map(a => (
+                                                            <div key={a.id} className="group relative flex items-center">
+                                                                <span className="inline-flex items-center justify-center w-6 h-6 bg-violet-100 text-violet-700 rounded-full text-[9px] font-black border border-white shadow-sm ring-1 ring-violet-50 z-10" title={a.user.name || "?"}>
+                                                                    {(a.user.name || "?").charAt(0).toUpperCase()}
+                                                                </span>
+                                                                {canManage && (
+                                                                    <button onClick={() => handleUnassign(a.id)} disabled={isPending}
+                                                                        className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-red-500 text-white rounded-full items-center justify-center text-[8px] z-20 opacity-0 group-hover:opacity-100 transition-opacity shadow-sm  disabled:opacity-50 flex">
+                                                                        <X className="w-2.5 h-2.5" />
+                                                                    </button>
+                                                                )}
+                                                            </div>
+                                                        ))}
+
+                                                        {canManage && (
+                                                            <div className="relative">
+                                                                <button onClick={() => { setAssigningTaskId(assigningTaskId === task.id ? null : task.id); setAssignSearch(""); }}
+                                                                    disabled={isPending}
+                                                                    className="flex items-center justify-center w-6 h-6 rounded-full border border-dashed border-gray-300 text-gray-400 hover:text-violet-600 hover:border-violet-300 hover:bg-violet-50 transition-colors disabled:opacity-50 ml-1">
+                                                                    <Plus className="w-3.5 h-3.5" />
+                                                                </button>
+
+                                                                {/* Assign dropdown inline */}
+                                                                {assigningTaskId === task.id && (
+                                                                    <div className="absolute top-8 left-0 z-50 bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden min-w-48 w-max">
+                                                                        <div className="p-2 border-b border-gray-100 bg-gray-50/50">
+                                                                            <input type="text" value={assignSearch} onChange={e => setAssignSearch(e.target.value)}
+                                                                                placeholder="Buscar miembro…" autoFocus
+                                                                                className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-gray-200 outline-none focus:border-violet-500 transition-colors bg-white shadow-sm" />
+                                                                        </div>
+                                                                        <div className="max-h-32 overflow-y-auto p-1">
+                                                                            {filteredAssignUsers.length === 0 ? (
+                                                                                <div className="px-2 py-3 text-center text-xs text-gray-400 font-medium">Sin coincidencias</div>
+                                                                            ) : (
+                                                                                filteredAssignUsers.map(m => (
+                                                                                    <button key={m.user.id} onClick={() => handleAssignTask(task.id, m.user.id)}
+                                                                                        disabled={isPending || task.assignments.some(a => a.user.id === m.user.id)}
+                                                                                        className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-violet-50 rounded-lg text-left text-xs disabled:opacity-40 transition-colors group">
+                                                                                        <div className="w-5 h-5 rounded-md bg-gray-100 flex items-center justify-center text-[9px] font-black text-gray-600 group-disabled:bg-gray-50 shrink-0">
+                                                                                            {m.user.name?.charAt(0).toUpperCase() || "?"}
+                                                                                        </div>
+                                                                                        <span className="font-bold text-gray-900 truncate flex-1">{m.user.name || m.user.email}</span>
+                                                                                        {task.assignments.some(a => a.user.id === m.user.id) && (
+                                                                                            <span className="text-[9px] font-bold text-emerald-600 shrink-0">Asignado</span>
+                                                                                        )}
+                                                                                    </button>
+                                                                                ))
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -453,7 +555,19 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
                         {/* Add Member Dropdown */}
                         {showAddMember && (
                             <div className="mb-3 bg-gray-50 border border-gray-200 rounded-xl overflow-hidden">
-                                <div className="p-2 border-b border-gray-100">
+                                <div className="p-2 border-b border-gray-100 flex flex-col gap-2">
+                                    <div className="flex gap-2">
+                                        <select
+                                            value={selectedAreaId}
+                                            onChange={e => setSelectedAreaId(e.target.value)}
+                                            className="px-2 py-1.5 text-xs font-bold rounded-lg border border-gray-200 outline-none flex-1 text-gray-700 bg-white"
+                                        >
+                                            <option value="none">Sin Área Específica</option>
+                                            {allProjectAreas.map(a => (
+                                                <option key={a.id} value={a.id}>{a.name}</option>
+                                            ))}
+                                        </select>
+                                    </div>
                                     <input type="text" value={memberSearch} onChange={e => setMemberSearch(e.target.value)}
                                         placeholder="Buscar usuario…" autoFocus
                                         className="w-full px-3 py-1.5 text-xs rounded-lg border border-gray-200 outline-none" />
@@ -462,52 +576,97 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
                                     {filteredEligible.slice(0, 10).map(u => (
                                         <button key={u.id} onClick={() => handleAddMember(u.id)}
                                             disabled={isPending}
-                                            className="w-full flex items-center gap-2 px-3 py-2 hover:bg-white text-left text-xs disabled:opacity-50">
+                                            className="w-full flex items-center gap-2 px-3 py-2 hover:bg-white text-left text-xs disabled:opacity-50 transition-colors">
                                             <span className="font-medium text-gray-900 truncate flex-1">{u.name || u.email}</span>
                                             <span className="text-[9px] font-bold px-1 py-0.5 bg-gray-100 text-gray-500 rounded">{u.role}</span>
                                         </button>
                                     ))}
+                                    {filteredEligible.length === 0 && (
+                                        <div className="p-3 text-center text-xs text-gray-500">No hay usuarios disponibles.</div>
+                                    )}
                                 </div>
                             </div>
                         )}
 
-                        {/* Member List */}
-                        <div className="space-y-1.5">
-                            {project.members.map(m => {
-                                return (
-                                    <div key={m.id} className="flex items-center gap-2 p-2 rounded-xl hover:bg-gray-50 transition-colors">
-                                        <div className="w-7 h-7 rounded-lg bg-violet-100 flex items-center justify-center text-[10px] font-black text-violet-700 shrink-0">
-                                            {m.user.name?.charAt(0).toUpperCase() || "?"}
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <p className="text-xs font-bold text-meteorite-950 truncate">{m.user.name || m.user.email}</p>
-                                            <p className="text-[10px] text-gray-400 truncate">{m.user.email}</p>
-                                        </div>
-                                        {canManage ? (
-                                            <select
-                                                value={m.projectRole.id}
-                                                onChange={e => handleChangeRole(m.id, e.target.value)}
-                                                disabled={isPending}
-                                                className={`text-[10px] font-bold rounded-md px-1.5 py-0.5 border outline-none cursor-pointer bg-gray-100 text-gray-700 border-gray-200`}
-                                            >
-                                                {allProjectRoles.map(r => (
-                                                    <option key={r.id} value={r.id}>{r.name}</option>
+                        {/* Member List Grouped by Area */}
+                        <div className="space-y-4 mt-2">
+                            {(() => {
+                                const sortedMembers = [...project.members].sort((a, b) => b.projectRole.hierarchyLevel - a.projectRole.hierarchyLevel);
+                                const grouped = sortedMembers.reduce((acc, current) => {
+                                    const areaName = current.projectArea?.name || "Dirección Administrativa";
+                                    if (!acc[areaName]) acc[areaName] = { members: [], color: current.projectArea?.color || "#94a3b8" };
+                                    acc[areaName].members.push(current);
+                                    return acc;
+                                }, {} as Record<string, { members: typeof project.members, color: string }>);
+
+                                const sortedAreaNames = Object.keys(grouped).sort((a, b) => {
+                                    if (a === "Dirección Administrativa") return -1;
+                                    if (b === "Dirección Administrativa") return 1;
+                                    return a.localeCompare(b);
+                                });
+
+                                return sortedAreaNames.map(areaName => {
+                                    const data = grouped[areaName];
+                                    return (
+                                        <div key={areaName} className="space-y-2">
+                                            <div className="flex items-center gap-2">
+                                                <div className="w-2 h-2 rounded-full shadow-sm" style={{ backgroundColor: data.color }} />
+                                                <h5 className="text-xs font-black text-meteorite-900 uppercase tracking-wider">{areaName}</h5>
+                                                <div className="flex-1 h-px bg-gray-100" />
+                                            </div>
+                                            <div className="space-y-1.5 ml-1">
+                                                {data.members.map(m => (
+                                                    <div key={m.id} className="flex items-center gap-2 p-2 rounded-xl hover:bg-gray-50 transition-colors border border-transparent hover:border-gray-100">
+                                                        <div className="relative shrink-0">
+                                                            {m.user.image ? (
+                                                                <img src={m.user.image} alt={m.user.name || ""} className="w-8 h-8 rounded-xl shadow-sm object-cover bg-gray-100" referrerPolicy="no-referrer" />
+                                                            ) : (
+                                                                <div className="w-8 h-8 rounded-xl flex items-center justify-center text-[10px] font-black shadow-sm"
+                                                                    style={{ backgroundColor: `${data.color}20`, color: data.color }}>
+                                                                    {m.user.name?.charAt(0).toUpperCase() || "?"}
+                                                                </div>
+                                                            )}
+                                                            {m.projectRole.isSystem && (
+                                                                <div className="absolute -bottom-1 -right-1 bg-amber-400 text-white rounded-full p-0.5 shadow-sm" title="Rol Maestro">
+                                                                    <Crown className="w-2.5 h-2.5" />
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                        <div className="flex-1 min-w-0 flex flex-col justify-center">
+                                                            <p className="text-xs font-bold text-meteorite-950 truncate leading-tight">{m.user.name || m.user.email}</p>
+                                                            <p className="text-[10px] text-gray-500 truncate leading-tight mt-0.5">{m.user.email}</p>
+                                                        </div>
+                                                        <div className="flex flex-col items-end gap-1">
+                                                            {canManage ? (
+                                                                <select
+                                                                    value={m.projectRole.id}
+                                                                    onChange={e => handleChangeRole(m.id, e.target.value)}
+                                                                    disabled={isPending}
+                                                                    className="text-[10px] font-bold rounded-lg px-2 py-1 border outline-none cursor-pointer bg-white text-gray-700 border-gray-200 shadow-sm focus:border-violet-500 hover:border-gray-300 transition-colors"
+                                                                >
+                                                                    {allProjectRoles.map(r => (
+                                                                        <option key={r.id} value={r.id}>{r.name}</option>
+                                                                    ))}
+                                                                </select>
+                                                            ) : (
+                                                                <span className="text-[10px] font-bold px-2 py-1 rounded-lg border shadow-sm" style={{ backgroundColor: `${m.projectRole.color || "#e2e8f0"}15`, color: m.projectRole.color || "#64748b", borderColor: `${m.projectRole.color || "#e2e8f0"}40` }}>
+                                                                    {m.projectRole.name}
+                                                                </span>
+                                                            )}
+                                                            {canManage && m.user.id !== currentUserId && (
+                                                                <button onClick={() => handleRemoveMember(m.id)} disabled={isPending}
+                                                                    className="text-[10px] flex items-center gap-1 text-red-400 hover:text-red-500 transition-colors disabled:opacity-50">
+                                                                    Quitar
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    </div>
                                                 ))}
-                                            </select>
-                                        ) : (
-                                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md border bg-gray-100 text-gray-700 border-gray-200`}>
-                                                {m.projectRole.name}
-                                            </span>
-                                        )}
-                                        {canManage && m.user.id !== currentUserId && (
-                                            <button onClick={() => handleRemoveMember(m.id)} disabled={isPending}
-                                                className="p-1 text-gray-400 hover:text-red-500 transition-colors disabled:opacity-50">
-                                                <UserMinus className="w-3 h-3" />
-                                            </button>
-                                        )}
-                                    </div>
-                                );
-                            })}
+                                            </div>
+                                        </div>
+                                    );
+                                });
+                            })()}
                         </div>
                     </div>
 

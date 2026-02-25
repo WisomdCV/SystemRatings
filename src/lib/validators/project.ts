@@ -45,6 +45,7 @@ export const UpdateProjectMemberRoleSchema = z.object({
 
 export const CreateTaskSchema = z.object({
     projectId: z.string().uuid(),
+    projectAreaId: z.string().uuid().optional().nullable(),
     title: z.string().min(1, "Título requerido").max(300),
     description: z.string().max(2000).optional().nullable(),
     priority: z.enum(TASK_PRIORITIES).default("MEDIUM"),

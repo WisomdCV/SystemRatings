@@ -52,6 +52,15 @@ export default async function AdminHubPage() {
             colorClass: "from-purple-500 to-purple-700",
             shadowClass: "shadow-purple-500/30",
             hasAccess: hasPermission(role, "semester:manage", session.user.customPermissions)
+        },
+        {
+            title: "Ajustes de Proyectos",
+            description: "Configura dinámicamente las áreas y la jerarquía de poder de los roles en los proyectos.",
+            href: "/admin/project-settings",
+            icon: <Settings className="w-8 h-8 text-white" />,
+            colorClass: "from-indigo-500 to-indigo-700",
+            shadowClass: "shadow-indigo-500/30",
+            hasAccess: role === "DEV" || role === "PRESIDENT"
         }
     ];
 

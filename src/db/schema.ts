@@ -253,6 +253,7 @@ export const projectRoles = sqliteTable("project_role", {
   name: text("name").notNull(),
   description: text("description"),
   hierarchyLevel: integer("hierarchy_level").default(10).notNull(), // 100 = Coordinator, 10 = Member
+  color: text("color").default("#6366f1"), // Added for UI Role badges
   permissions: text("permissions"), // JSON stringified array of local permissions
   isSystem: integer("is_system", { mode: "boolean" }).default(false),
 });
@@ -272,6 +273,7 @@ export const projectMembers = sqliteTable("project_member", {
 export const projectTasks = sqliteTable("project_task", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
   projectId: text("project_id").references(() => projects.id, { onDelete: "cascade" }).notNull(),
+  projectAreaId: text("project_area_id").references(() => projectAreas.id), // Nulo significa area general
   title: text("title").notNull(),
   description: text("description"),
   // TODO | IN_PROGRESS | REVIEW | DONE | BLOCKED
@@ -428,6 +430,7 @@ export const projectMembersRelations = relations(projectMembers, ({ one }) => ({
 
 export const projectTasksRelations = relations(projectTasks, ({ one, many }) => ({
   project: one(projects, { fields: [projectTasks.projectId], references: [projects.id] }),
+  projectArea: one(projectAreas, { fields: [projectTasks.projectAreaId], references: [projectAreas.id] }),
   createdBy: one(users, { fields: [projectTasks.createdById], references: [users.id] }),
   assignments: many(taskAssignments),
 }));
