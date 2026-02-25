@@ -15,7 +15,8 @@ import Link from "next/link";
 
 interface ProjectMember {
     id: string;
-    projectRole: string;
+    projectRole: { id: string; name: string };
+    projectArea: { id: string; name: string; color: string | null } | null;
     user: { id: string; name: string | null; image: string | null; role: string | null };
 }
 

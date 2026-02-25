@@ -7,7 +7,7 @@ import {
     updateProjectMemberRoleAction, createTaskAction, updateTaskStatusAction,
     deleteTaskAction, assignTaskAction, unassignTaskAction,
 } from "@/server/actions/project.actions";
-import { PROJECT_STATUSES, PROJECT_PRIORITIES, PROJECT_ROLES, TASK_STATUSES, TASK_PRIORITIES } from "@/lib/validators/project";
+import { PROJECT_STATUSES, PROJECT_PRIORITIES, TASK_STATUSES, TASK_PRIORITIES } from "@/lib/validators/project";
 import {
     Users, ListChecks, Plus, Loader2, Trash2, Crown, UserPlus,
     CheckCircle2, XCircle, Circle, Clock, AlertTriangle, Search,
@@ -35,9 +35,13 @@ interface Task {
 
 interface Member {
     id: string;
-    projectRole: string;
+    projectRole: { id: string; name: string; hierarchyLevel: number; isSystem: boolean | null };
+    projectArea: { id: string; name: string; color: string | null } | null;
     user: { id: string; name: string | null; image: string | null; email: string; role: string | null };
 }
+
+interface ProjectRole { id: string; name: string; hierarchyLevel: number; }
+interface ProjectArea { id: string; name: string; color: string | null; }
 
 interface Project {
     id: string;
@@ -64,6 +68,8 @@ interface EligibleUser {
 interface Props {
     project: Project;
     eligibleUsers: EligibleUser[];
+    allProjectRoles: ProjectRole[];
+    allProjectAreas: ProjectArea[];
     currentUserId: string;
     isSystemAdmin: boolean;
 }
@@ -86,15 +92,9 @@ const TASK_STATUS_ICON: Record<string, { icon: React.ComponentType<any>; color: 
     BLOCKED: { icon: X, color: "text-red-500", label: "Bloqueado" },
 };
 
-const ROLE_BADGE: Record<string, { label: string; color: string }> = {
-    DIRECTOR: { label: "Director", color: "bg-amber-100 text-amber-700 border-amber-200" },
-    COORDINATOR: { label: "Coordinador", color: "bg-indigo-100 text-indigo-700 border-indigo-200" },
-    MEMBER: { label: "Miembro", color: "bg-gray-100 text-gray-600 border-gray-200" },
-};
-
 // ─── Component ───────────────────────────────────────────────────────────────
 
-export default function ProjectDetail({ project, eligibleUsers, currentUserId, isSystemAdmin }: Props) {
+export default function ProjectDetail({ project, eligibleUsers, allProjectRoles, allProjectAreas, currentUserId, isSystemAdmin }: Props) {
     const router = useRouter();
     const [isPending, startTransition] = useTransition();
     const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
@@ -118,7 +118,7 @@ export default function ProjectDetail({ project, eligibleUsers, currentUserId, i
     const [statusFilter, setStatusFilter] = useState<string>("ALL");
 
     const userProjectRole = project.members.find(m => m.user.id === currentUserId)?.projectRole;
-    const canManage = isSystemAdmin || userProjectRole === "DIRECTOR" || userProjectRole === "COORDINATOR";
+    const canManage = isSystemAdmin || (userProjectRole?.hierarchyLevel ?? 0) >= 80;
 
     const showFeedback = (type: "success" | "error", message: string) => {
         setFeedback({ type, message });
@@ -126,12 +126,14 @@ export default function ProjectDetail({ project, eligibleUsers, currentUserId, i
     };
 
     // ── Members ──
-    const handleAddMember = (userId: string, role: string = "MEMBER") => {
+    const handleAddMember = (userId: string) => {
         startTransition(async () => {
+            const defaultRole = allProjectRoles.find(r => r.hierarchyLevel === 10) || allProjectRoles[allProjectRoles.length - 1];
+            if (!defaultRole) return;
             const res = await addProjectMemberAction({
                 projectId: project.id,
                 userId,
-                projectRole: role as any,
+                projectRoleId: defaultRole.id,
             });
             if (res.success) { showFeedback("success", res.message!); setShowAddMember(false); setMemberSearch(""); router.refresh(); }
             else showFeedback("error", res.error!);
@@ -146,9 +148,9 @@ export default function ProjectDetail({ project, eligibleUsers, currentUserId, i
         });
     };
 
-    const handleChangeRole = (memberId: string, newRole: string) => {
+    const handleChangeRole = (memberId: string, newRoleId: string) => {
         startTransition(async () => {
-            const res = await updateProjectMemberRoleAction({ memberId, projectRole: newRole as any });
+            const res = await updateProjectMemberRoleAction({ memberId, projectRoleId: newRoleId });
             if (res.success) { showFeedback("success", res.message!); router.refresh(); }
             else showFeedback("error", res.error!);
         });
@@ -399,8 +401,8 @@ export default function ProjectDetail({ project, eligibleUsers, currentUserId, i
                                                                     disabled={isPending || task.assignments.some(a => a.user.id === m.user.id)}
                                                                     className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-violet-50 text-left text-xs disabled:opacity-30">
                                                                     <span className="font-medium text-gray-900 truncate">{m.user.name || m.user.email}</span>
-                                                                    <span className={`ml-auto text-[9px] font-bold px-1 py-0.5 rounded ${ROLE_BADGE[m.projectRole]?.color || "bg-gray-100"}`}>
-                                                                        {ROLE_BADGE[m.projectRole]?.label || m.projectRole}
+                                                                    <span className={`ml-auto text-[9px] font-bold px-1 py-0.5 rounded bg-gray-100 text-gray-700`}>
+                                                                        {m.projectRole.name}
                                                                     </span>
                                                                 </button>
                                                             ))}
@@ -472,7 +474,6 @@ export default function ProjectDetail({ project, eligibleUsers, currentUserId, i
                         {/* Member List */}
                         <div className="space-y-1.5">
                             {project.members.map(m => {
-                                const roleCfg = ROLE_BADGE[m.projectRole] || ROLE_BADGE.MEMBER;
                                 return (
                                     <div key={m.id} className="flex items-center gap-2 p-2 rounded-xl hover:bg-gray-50 transition-colors">
                                         <div className="w-7 h-7 rounded-lg bg-violet-100 flex items-center justify-center text-[10px] font-black text-violet-700 shrink-0">
@@ -484,18 +485,18 @@ export default function ProjectDetail({ project, eligibleUsers, currentUserId, i
                                         </div>
                                         {canManage ? (
                                             <select
-                                                value={m.projectRole}
+                                                value={m.projectRole.id}
                                                 onChange={e => handleChangeRole(m.id, e.target.value)}
                                                 disabled={isPending}
-                                                className={`text-[10px] font-bold rounded-md px-1.5 py-0.5 border outline-none cursor-pointer ${roleCfg.color}`}
+                                                className={`text-[10px] font-bold rounded-md px-1.5 py-0.5 border outline-none cursor-pointer bg-gray-100 text-gray-700 border-gray-200`}
                                             >
-                                                {PROJECT_ROLES.map(r => (
-                                                    <option key={r} value={r}>{ROLE_BADGE[r]?.label || r}</option>
+                                                {allProjectRoles.map(r => (
+                                                    <option key={r.id} value={r.id}>{r.name}</option>
                                                 ))}
                                             </select>
                                         ) : (
-                                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md border ${roleCfg.color}`}>
-                                                {roleCfg.label}
+                                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md border bg-gray-100 text-gray-700 border-gray-200`}>
+                                                {m.projectRole.name}
                                             </span>
                                         )}
                                         {canManage && m.user.id !== currentUserId && (

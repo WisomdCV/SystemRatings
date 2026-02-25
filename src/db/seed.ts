@@ -1,7 +1,7 @@
 // src/db/seed.ts
 import "dotenv/config";
 import { db } from "./index";
-import { areas, semesters, users, gradeDefinitions, customRoles, customRolePermissions } from "./schema";
+import { areas, semesters, users, gradeDefinitions, customRoles, customRolePermissions, projectAreas, projectRoles } from "./schema";
 import { eq, sql } from "drizzle-orm";
 
 async function main() {
@@ -132,6 +132,39 @@ async function main() {
         console.log("   ✅ Rol creado con permisos: project:create, project:manage");
     } else {
         console.log("   ⏭️ Rol ya existía, no se modificó.");
+    }
+
+    // 6. Seed Áreas y Roles de Proyecto
+    console.log("🏢 Sincronizando Áreas Estándar de Proyecto...");
+    const existingAreas = await db.query.projectAreas.findMany();
+    if (existingAreas.length === 0) {
+        await db.insert(projectAreas).values([
+            { name: "Logística", color: "#0ea5e9" },           // cyan-500
+            { name: "Relaciones Públicas", color: "#ec4899" }, // pink-500
+            { name: "Marketing", color: "#e11d48" },           // rose-600
+            { name: "Académica", color: "#8b5cf6" },           // violet-500
+            { name: "Sistemas", color: "#10b981" },            // emerald-500
+            { name: "Mesa de recursos humanos", color: "#f59e0b", isSystem: true }, // amber-500, no director allowed logic
+        ]);
+        console.log("   ✅ Áreas insertadas.");
+    } else {
+        console.log("   ⏭️ Áreas ya existían, omitiendo.");
+    }
+
+    console.log("🛡️ Sincronizando Jerarquías (Roles) de Proyecto...");
+    const existingRoles = await db.query.projectRoles.findMany();
+    if (existingRoles.length === 0) {
+        await db.insert(projectRoles).values([
+            { name: "Coordinador / Project Management", hierarchyLevel: 100, isSystem: true },
+            { name: "Director de proyecto", hierarchyLevel: 80, isSystem: true },
+            { name: "Subdirector de proyecto", hierarchyLevel: 70, isSystem: true },
+            { name: "Tesorero de proyecto", hierarchyLevel: 60, isSystem: true },
+            { name: "Director de Área", hierarchyLevel: 50, isSystem: true },
+            { name: "Miembro de Área", hierarchyLevel: 10, isSystem: true },
+        ]);
+        console.log("   ✅ Roles insertados.");
+    } else {
+        console.log("   ⏭️ Roles ya existían, omitiendo.");
     }
 
     console.log("✅ Seed completado con éxito.");

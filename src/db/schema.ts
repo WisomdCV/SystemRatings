@@ -219,7 +219,7 @@ export const areaKpiSummaries = sqliteTable("area_kpi_summary", {
 });
 
 // =============================================================================
-// 6. MÓDULO DE PROYECTOS
+// 6. MÓDULO DE PROYECTOS (AVANZADO)
 // =============================================================================
 
 export const projects = sqliteTable("project", {
@@ -239,12 +239,33 @@ export const projects = sqliteTable("project", {
   updatedAt: integer("updated_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
 });
 
+export const projectAreas = sqliteTable("project_area", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  name: text("name").notNull(),
+  description: text("description"),
+  color: text("color").default("#94a3b8"), // Slate-400 Default
+  position: integer("position").default(0),
+  isSystem: integer("is_system", { mode: "boolean" }).default(false),
+});
+
+export const projectRoles = sqliteTable("project_role", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  name: text("name").notNull(),
+  description: text("description"),
+  hierarchyLevel: integer("hierarchy_level").default(10).notNull(), // 100 = Coordinator, 10 = Member
+  permissions: text("permissions"), // JSON stringified array of local permissions
+  isSystem: integer("is_system", { mode: "boolean" }).default(false),
+});
+
 export const projectMembers = sqliteTable("project_member", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
   projectId: text("project_id").references(() => projects.id, { onDelete: "cascade" }).notNull(),
   userId: text("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
-  // DIRECTOR | COORDINATOR | MEMBER — sub-rol independiente del rol principal
-  projectRole: text("project_role").default("MEMBER").notNull(),
+
+  // Novedad: En lugar de texto duro, usamos FKs al nuevo sistema local
+  projectRoleId: text("project_role_id").references(() => projectRoles.id).notNull(),
+  projectAreaId: text("project_area_id").references(() => projectAreas.id), // Nulo significa "Coordinador General o sin área"
+
   joinedAt: integer("joined_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
 });
 
@@ -390,9 +411,19 @@ export const projectsRelations = relations(projects, ({ one, many }) => ({
   tasks: many(projectTasks),
 }));
 
+export const projectAreasRelations = relations(projectAreas, ({ many }) => ({
+  members: many(projectMembers),
+}));
+
+export const projectRolesRelations = relations(projectRoles, ({ many }) => ({
+  members: many(projectMembers),
+}));
+
 export const projectMembersRelations = relations(projectMembers, ({ one }) => ({
   project: one(projects, { fields: [projectMembers.projectId], references: [projects.id] }),
   user: one(users, { fields: [projectMembers.userId], references: [users.id] }),
+  projectRole: one(projectRoles, { fields: [projectMembers.projectRoleId], references: [projectRoles.id] }),
+  projectArea: one(projectAreas, { fields: [projectMembers.projectAreaId], references: [projectAreas.id] }),
 }));
 
 export const projectTasksRelations = relations(projectTasks, ({ one, many }) => ({

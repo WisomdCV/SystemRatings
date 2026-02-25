@@ -6,8 +6,8 @@ import ProjectDetail from "@/components/projects/ProjectDetail";
 import Link from "next/link";
 import { ArrowLeft, FolderKanban } from "lucide-react";
 import { db } from "@/db";
-import { users } from "@/db/schema";
-import { eq, ne } from "drizzle-orm";
+import { users, projectRoles, projectAreas } from "@/db/schema";
+import { eq, desc, asc } from "drizzle-orm";
 
 export default async function ProjectDetailPage(props: { params: Promise<{ id: string }> }) {
     const params = await props.params;
@@ -38,6 +38,15 @@ export default async function ProjectDetailPage(props: { params: Promise<{ id: s
     });
     const eligibleUsers = allUsers.filter(u => !projectMemberIds.includes(u.id));
 
+    // Fetch dynamic project roles and areas to pass into the component
+    const allRoles = await db.query.projectRoles.findMany({
+        orderBy: [desc(projectRoles.hierarchyLevel)],
+    });
+
+    const allAreas = await db.query.projectAreas.findMany({
+        orderBy: [asc(projectAreas.position)],
+    });
+
     return (
         <div className="min-h-screen bg-meteorite-50 relative overflow-hidden p-4 md:p-6 2xl:p-10">
             {/* Background */}
@@ -63,6 +72,8 @@ export default async function ProjectDetailPage(props: { params: Promise<{ id: s
                 <ProjectDetail
                     project={projectResult.data}
                     eligibleUsers={eligibleUsers}
+                    allProjectRoles={allRoles}
+                    allProjectAreas={allAreas}
                     currentUserId={session.user.id!}
                     isSystemAdmin={hasPermission(session.user.role, "project:manage")}
                 />

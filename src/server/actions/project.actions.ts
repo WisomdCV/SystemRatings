@@ -19,22 +19,25 @@ import type {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-/** Get the user's projectRole in a project, or null if not a member */
-async function getUserProjectRole(userId: string, projectId: string) {
+/** Get the user's project role and area in a project, or null if not a member */
+async function getUserProjectMembership(userId: string, projectId: string) {
     const membership = await db.query.projectMembers.findFirst({
         where: and(
             eq(projectMembers.projectId, projectId),
             eq(projectMembers.userId, userId),
         ),
+        with: {
+            projectRole: true,
+        }
     });
-    return membership?.projectRole ?? null;
+    return membership ?? null;
 }
 
-/** Check if user can manage a project (system admin OR project DIRECTOR/COORDINATOR) */
+/** Check if user can manage a project (system admin OR project hierarchy level >= 80) */
 async function canManageProject(userId: string, role: string, projectId: string, customPermissions?: string[]) {
     if (hasPermission(role, "project:manage", customPermissions)) return true;
-    const projectRole = await getUserProjectRole(userId, projectId);
-    return projectRole === "DIRECTOR" || projectRole === "COORDINATOR";
+    const membership = await getUserProjectMembership(userId, projectId);
+    return (membership?.projectRole?.hierarchyLevel ?? 0) >= 80;
 }
 
 const revalidateProjects = () => {
@@ -62,7 +65,11 @@ export async function getProjectsAction() {
             with: {
                 createdBy: { columns: { id: true, name: true, image: true } },
                 members: {
-                    with: { user: { columns: { id: true, name: true, image: true, role: true } } },
+                    with: {
+                        user: { columns: { id: true, name: true, image: true, role: true } },
+                        projectRole: true,
+                        projectArea: true,
+                    },
                 },
                 tasks: true,
             },
@@ -87,7 +94,11 @@ export async function getProjectByIdAction(projectId: string) {
                 createdBy: { columns: { id: true, name: true, image: true, email: true } },
                 semester: { columns: { id: true, name: true } },
                 members: {
-                    with: { user: { columns: { id: true, name: true, image: true, email: true, role: true } } },
+                    with: {
+                        user: { columns: { id: true, name: true, image: true, email: true, role: true } },
+                        projectRole: true,
+                        projectArea: true,
+                    },
                 },
                 tasks: {
                     orderBy: [asc(projectTasks.position), desc(projectTasks.createdAt)],
@@ -137,12 +148,19 @@ export async function createProjectAction(input: CreateProjectDTO) {
             createdById: session.user.id,
         }).returning();
 
-        // Auto-add creator as DIRECTOR of the project
-        await db.insert(projectMembers).values({
-            projectId: newProject.id,
-            userId: session.user.id,
-            projectRole: "DIRECTOR",
+        // Auto-add creator as Coordinador (hierarchy: 100) or find the highest available
+        const { projectRoles } = await import("@/db/schema");
+        const coordinatorRole = await db.query.projectRoles.findFirst({
+            orderBy: [desc(projectRoles.hierarchyLevel)],
         });
+
+        if (coordinatorRole) {
+            await db.insert(projectMembers).values({
+                projectId: newProject.id,
+                userId: session.user.id,
+                projectRoleId: coordinatorRole.id,
+            });
+        }
 
         revalidateProjects();
         return { success: true as const, data: newProject, message: "Proyecto creado exitosamente." };
@@ -229,7 +247,8 @@ export async function addProjectMemberAction(input: AddProjectMemberDTO) {
         await db.insert(projectMembers).values({
             projectId: validated.data.projectId,
             userId: validated.data.userId,
-            projectRole: validated.data.projectRole,
+            projectRoleId: validated.data.projectRoleId,
+            projectAreaId: validated.data.projectAreaId || null,
         });
 
         revalidateProjects();
@@ -259,7 +278,8 @@ export async function updateProjectMemberRoleAction(input: UpdateProjectMemberRo
         if (!canManage) return { success: false as const, error: "No tienes permisos." };
 
         await db.update(projectMembers).set({
-            projectRole: validated.data.projectRole,
+            projectRoleId: validated.data.projectRoleId,
+            projectAreaId: validated.data.projectAreaId || null,
         }).where(eq(projectMembers.id, validated.data.memberId));
 
         revalidateProjects();
@@ -307,9 +327,9 @@ export async function createTaskAction(input: CreateTaskDTO) {
         if (!validated.success) return { success: false as const, error: validated.error.issues[0].message };
 
         // Must be a member of the project (any role can create tasks, DIRECTOR/COORDINATOR for management)
-        const projectRole = await getUserProjectRole(session.user.id, validated.data.projectId);
+        const membership = await getUserProjectMembership(session.user.id, validated.data.projectId);
         const isSystemAdmin = isAdmin(session.user.role);
-        if (!projectRole && !isSystemAdmin) {
+        if (!membership && !isSystemAdmin) {
             return { success: false as const, error: "Debes ser miembro del proyecto para crear tareas." };
         }
 

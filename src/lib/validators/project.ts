@@ -3,7 +3,6 @@ import { z } from "zod";
 // ─── Project Statuses ────────────────────────────────────────────────────────
 export const PROJECT_STATUSES = ["PLANNING", "ACTIVE", "PAUSED", "COMPLETED", "CANCELLED"] as const;
 export const PROJECT_PRIORITIES = ["LOW", "MEDIUM", "HIGH", "CRITICAL"] as const;
-export const PROJECT_ROLES = ["DIRECTOR", "COORDINATOR", "MEMBER"] as const;
 export const TASK_STATUSES = ["TODO", "IN_PROGRESS", "REVIEW", "DONE", "BLOCKED"] as const;
 export const TASK_PRIORITIES = ["LOW", "MEDIUM", "HIGH"] as const;
 
@@ -32,12 +31,14 @@ export const UpdateProjectSchema = z.object({
 export const AddProjectMemberSchema = z.object({
     projectId: z.string().uuid(),
     userId: z.string().uuid(),
-    projectRole: z.enum(PROJECT_ROLES).default("MEMBER"),
+    projectRoleId: z.string().uuid(),
+    projectAreaId: z.string().uuid().optional().nullable(),
 });
 
 export const UpdateProjectMemberRoleSchema = z.object({
     memberId: z.string().uuid(),
-    projectRole: z.enum(PROJECT_ROLES),
+    projectRoleId: z.string().uuid(),
+    projectAreaId: z.string().uuid().optional().nullable(),
 });
 
 // ─── Task Schemas ────────────────────────────────────────────────────────────
