@@ -63,42 +63,25 @@ export async function recalculateUserKPI(userId: string, semesterId: string) {
     for (const [name, data] of gradeMap.entries()) {
         const { raw, max, normalized } = data;
 
-        // Find the definition object from the raw grades logic above is tricky without the full object.
-        // Let's retrieve the definition from the original array.
         const gradeEntry = userGrades.find(g => g.definition.name === name);
-        if (!gradeEntry) continue;
+        if (!gradeEntry) { continue; }
         const def = gradeEntry.definition;
 
         // --- RULE 1: EXCLUSION ---
-        // If pilar is Director Only AND user is NOT director => Skip completely.
         if (def.isDirectorOnly && !isDirectorLevel) {
             continue;
         }
 
         // --- RULE 2: PRIORITY FALLBACK (WEIGHT) ---
-        // If Director AND directorWeight exists => Use directorWeight
-        // Else => Use standard weight
         let weightToUse = def.weight;
 
-        // Ensure directorWeight is treated as number if present
         if (isDirectorLevel && def.directorWeight !== null && def.directorWeight !== undefined) {
             weightToUse = def.directorWeight;
         }
 
-        // Calculation: Normalized (0-10) * (Weight / 100) -> Contribution to Final (0-10)
-        // Example: Score 10 * (30 / 100) = 3.0 points
-        /* 
-           Wait, logic in previous code was: 
-           (getNorm("RG") * 0.20)
-           Here: 
-           (normalized * (weightToUse / 100))
-           Correct.
-        */
+        const contribution = normalized * (weightToUse / 100);
 
-        // Safety: ensure weight is valid number
-        // console.log(`[KPI] Pillar: ${name}, Role: ${isDirectorLevel ? 'DIR' : 'MEM'}, Weight: ${weightToUse}, Score: ${normalized}`);
-
-        finalKPI += (normalized * (weightToUse / 100)); // Divide by 100 as weights are 20, 30, etc.
+        finalKPI += contribution;
     }
 
     // 5. Save Snapshot to DB
