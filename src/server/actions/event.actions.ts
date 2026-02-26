@@ -3,9 +3,19 @@
 import { auth } from "@/server/auth";
 import { CreateEventDTO, CreateEventSchema } from "@/lib/validators/event";
 import { createGoogleMeeting } from "@/server/services/google-calendar.service";
-import { createEventDAO } from "@/server/data-access/events";
+import { createEventDAO, getEventByIdDAO, updateEventDAO, deleteEventDAO } from "@/server/data-access/events";
 import { revalidatePath } from "next/cache";
-import { hasPermission, isAdmin, isDirectorLevel } from "@/lib/permissions";
+import { hasPermission, isDirectorLevel } from "@/lib/permissions";
+import {
+    canCreateIISEEvent,
+    canCreateProjectEvent,
+    canManageEvent,
+    shouldTrackAttendance,
+    type EventScope,
+    type EventType,
+} from "@/server/services/event-permissions.service";
+import { UpdateEventDTO, UpdateEventSchema } from "@/lib/validators/event";
+import { deleteGoogleEvent, updateGoogleEvent } from "@/server/services/google-calendar.service";
 
 export async function createEventAction(input: CreateEventDTO) {
     try {
@@ -15,44 +25,66 @@ export async function createEventAction(input: CreateEventDTO) {
             return { success: false, error: "No autenticado" };
         }
 
-        // Permisos: DEV, PRESIDENT, DIRECTOR, SUBDIRECTOR
-        const role = session.user.role;
-        if (!hasPermission(role, "event:create", session.user.customPermissions)) {
-            return { success: false, error: "No tienes permisos para crear eventos." };
-        }
-
-        // Validación de Schema
         const validated = CreateEventSchema.safeParse(input);
         if (!validated.success) {
             return { success: false, error: validated.error.issues[0].message };
         }
         const data = validated.data;
 
-        // TIEMPO FIX: z.coerce.date() parsea "YYYY-MM-DD" como UTC Midnight (ej. 28 Dic 00:00Z).
-        // Si el servidor está en Perú (GMT-5), "Hoy" empieza a las 05:00Z.
-        // 00:00Z (Evento) < 05:00Z (Filtro Dashboard) -> El evento desaparece.
-        // SOLUCIÓN: Reconstruimos la fecha usando los componentes UTC para forzar "Medianoche Local".
-        // Ej: UTC(2025, 11, 28) -> Local(2025, 11, 28) = 28 Dic 00:00 Perú.
-        data.date = new Date(data.date.getUTCFullYear(), data.date.getUTCMonth(), data.date.getUTCDate());
+        // 2. Permission check via centralized engine
+        const role = session.user.role;
+        const eventScope = data.eventScope as EventScope;
+        const eventType = data.eventType as EventType;
 
-        // Regla: DIRECTOR/SUBDIRECTOR solo crea para SU área
-        if (role === "DIRECTOR" || role === "SUBDIRECTOR") {
-            const currentAreaId = session.user.currentAreaId;
-            if (!currentAreaId) return { success: false, error: "Usuario sin área asignada." };
+        if (eventScope === "IISE") {
+            const canCreate = await canCreateIISEEvent(
+                {
+                    userRole: role,
+                    userAreaId: session.user.currentAreaId,
+                    customPermissions: session.user.customPermissions,
+                },
+                eventType,
+                data.targetAreaId,
+            );
+            if (!canCreate) {
+                return { success: false, error: "No tienes permisos para crear este tipo de evento." };
+            }
 
-            // Forzamos que sea para su área
-            data.targetAreaId = currentAreaId;
+            // For AREA events: if user is DIRECTOR/SUBDIRECTOR without special area permissions,
+            // force their own area
+            if (eventType === "AREA" && isDirectorLevel(role) && !hasPermission(role, "event:create_general", session.user.customPermissions)) {
+                data.targetAreaId = session.user.currentAreaId;
+            }
+        } else if (eventScope === "PROJECT") {
+            if (!data.projectId) {
+                return { success: false, error: "Se requiere un proyecto para este tipo de evento." };
+            }
+            const canCreate = await canCreateProjectEvent(
+                {
+                    userRole: role,
+                    userAreaId: session.user.currentAreaId,
+                    customPermissions: session.user.customPermissions,
+                    projectId: data.projectId,
+                    userId: session.user.id,
+                },
+                eventType,
+                data.targetProjectAreaId,
+            );
+            if (!canCreate) {
+                return { success: false, error: "No tienes permisos para crear eventos en este proyecto." };
+            }
         }
 
-        // 2. Google Calendar Integration
+        // 3. TIMEZONE FIX
+        data.date = new Date(data.date.getUTCFullYear(), data.date.getUTCMonth(), data.date.getUTCDate());
+
+        // 4. Google Calendar Integration
         if (!session.accessToken) {
             return { success: false, error: "Google Token Expired. Por favor relogueate." };
         }
 
         let googleResult = { googleId: "manual-" + Date.now(), meetLink: null as string | null };
 
-        // Solo llamamos a Google si es Virtual o queremos sincronizar calendar
-        // El requerimiento dice: "Sincronizarlas con Google Calendar". Asumimos siempre.
         try {
             const googleResponse = await createGoogleMeeting(session.accessToken, data);
             googleResult = {
@@ -61,17 +93,19 @@ export async function createEventAction(input: CreateEventDTO) {
             };
         } catch (error: any) {
             console.error("Google API Error:", error);
-            // Podríamos fallar todo, o crear el evento localmente con warning.
-            // Por requerimiento "Integración", fallaremos si no se puede conectar.
             return { success: false, error: "Error conectando con Google Calendar: " + error.message };
         }
 
-        // 3. Persistencia en BD
-        await createEventDAO(session.user.id, data, googleResult);
+        // 5. Persistence
+        const tracksAttendance = shouldTrackAttendance(eventType);
+        await createEventDAO(session.user.id, data, googleResult, tracksAttendance);
 
-        // 4. Revalidate
+        // 6. Revalidate
         revalidatePath("/dashboard");
         revalidatePath("/admin/events");
+        if (data.projectId) {
+            revalidatePath(`/dashboard/projects/${data.projectId}`);
+        }
 
         return { success: true, message: "Evento creado y sincronizado correctamente." };
 
@@ -81,45 +115,49 @@ export async function createEventAction(input: CreateEventDTO) {
     }
 }
 
-import { UpdateEventDTO, UpdateEventSchema } from "@/lib/validators/event";
-import { deleteGoogleEvent, updateGoogleEvent } from "@/server/services/google-calendar.service";
-import { deleteEventDAO, getEventByIdDAO, updateEventDAO } from "@/server/data-access/events";
-
 export async function deleteEventAction(eventId: string) {
     try {
         const session = await auth();
         if (!session?.user?.id) return { success: false, error: "No autenticado" };
 
-        // 1. Get Event
         const event = await getEventByIdDAO(eventId);
         if (!event) return { success: false, error: "Evento no encontrado" };
 
-        // 2. Permissions
-        const role = session.user.role;
-        const canManageAny = hasPermission(role, "event:manage", session.user.customPermissions);
-
-        if (!canManageAny) {
-            if (!isDirectorLevel(role)) return { success: false, error: "No tienes permisos." };
-            if (event.targetAreaId !== session.user.currentAreaId) {
-                return { success: false, error: "No puedes eliminar eventos de otras áreas." };
+        // Permissions via centralized engine
+        const canManage = await canManageEvent(
+            {
+                userRole: session.user.role,
+                userId: session.user.id,
+                userAreaId: session.user.currentAreaId,
+                customPermissions: session.user.customPermissions,
+            },
+            {
+                createdById: event.createdById,
+                eventScope: event.eventScope,
+                eventType: event.eventType,
+                targetAreaId: event.targetAreaId,
+                projectId: event.projectId,
+                targetProjectAreaId: event.targetProjectAreaId,
             }
+        );
+
+        if (!canManage) {
+            return { success: false, error: "No tienes permisos para eliminar este evento." };
         }
 
-        // 3. Google Sync (Delete)
+        // Google Sync (Delete)
         let warning = "";
         if (event.googleEventId && session.accessToken) {
             try {
                 await deleteGoogleEvent(session.accessToken, event.googleEventId);
             } catch (err: any) {
                 console.error("Google Delete Error:", err);
-                warning = " Nota: No se pudo eliminar de Google Calendar (Token expirado o error API).";
-                // Soft fail: Proceed to DB delete as requested
+                warning = " Nota: No se pudo eliminar de Google Calendar.";
             }
         } else if (event.googleEventId && !session.accessToken) {
             warning = " Nota: No se pudo conectar con Google (Sesión expirada).";
         }
 
-        // 4. DB Delete
         await deleteEventDAO(eventId);
 
         revalidatePath("/dashboard");
@@ -140,32 +178,40 @@ export async function updateEventAction(eventId: string, input: UpdateEventDTO) 
         const event = await getEventByIdDAO(eventId);
         if (!event) return { success: false, error: "Evento no encontrado" };
 
-        // Permisos
-        const role = session.user.role;
-        const canManageAny = hasPermission(role, "event:manage", session.user.customPermissions);
-
-        if (!canManageAny) {
-            if (!isDirectorLevel(role)) return { success: false, error: "No tienes permisos." };
-            // Strict Area Check:
-            if (event.targetAreaId !== session.user.currentAreaId) {
-                return { success: false, error: "Solo puedes gestionar eventos de tu área." };
+        // Permissions via centralized engine
+        const canManage = await canManageEvent(
+            {
+                userRole: session.user.role,
+                userId: session.user.id,
+                userAreaId: session.user.currentAreaId,
+                customPermissions: session.user.customPermissions,
+            },
+            {
+                createdById: event.createdById,
+                eventScope: event.eventScope,
+                eventType: event.eventType,
+                targetAreaId: event.targetAreaId,
+                projectId: event.projectId,
+                targetProjectAreaId: event.targetProjectAreaId,
             }
+        );
+
+        if (!canManage) {
+            return { success: false, error: "No tienes permisos para editar este evento." };
         }
 
-        // Validación
         const validated = UpdateEventSchema.safeParse(input);
         if (!validated.success) {
             return { success: false, error: validated.error.issues[0].message };
         }
         const data = validated.data;
 
-        // TIEMPO FIX: Misma lógica de corrección que en Create
+        // TIMEZONE FIX
         if (data.date) {
             data.date = new Date(data.date.getUTCFullYear(), data.date.getUTCMonth(), data.date.getUTCDate());
         }
 
         // Google Sync (Update)
-        // Check if syncheable fields changed
         const needsGoogleUpdate = data.title || data.description || (data.date && data.startTime && data.endTime);
         let warning = "";
 
@@ -182,7 +228,6 @@ export async function updateEventAction(eventId: string, input: UpdateEventDTO) 
             }
         }
 
-        // DB Update
         await updateEventDAO(eventId, data);
 
         revalidatePath("/dashboard");

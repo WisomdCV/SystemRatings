@@ -26,6 +26,9 @@ export const PERMISSIONS = {
     // --- Eventos ---
     "event:create": ["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER", "DIRECTOR", "SUBDIRECTOR"],
     "event:manage": ["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER"], // Delete/update any event
+    "event:create_general": ["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER"], // Create IISE-wide events
+    "event:create_area": ["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER", "DIRECTOR", "SUBDIRECTOR"], // Create area events
+    "event:create_individual": ["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER"], // Create individual/group meetings
 
     // --- Asistencia ---
     "attendance:take": ["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER", "DIRECTOR", "SUBDIRECTOR"],

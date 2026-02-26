@@ -32,8 +32,11 @@ interface Props {
 // ─── Permission label map ────────────────────────────────────────────────────
 
 const PERMISSION_LABELS: Record<string, string> = {
-    "event:create": "Crear eventos",
+    "event:create": "Crear eventos (legacy)",
     "event:manage": "Gestionar eventos",
+    "event:create_general": "Crear eventos generales (IISE)",
+    "event:create_area": "Crear eventos por área",
+    "event:create_individual": "Crear reuniones individuales/grupales",
     "attendance:take": "Pasar asistencia",
     "attendance:review": "Revisar justificaciones",
     "grade:assign": "Asignar calificaciones",
@@ -176,8 +179,8 @@ export default function CustomRoleManager({ initialRoles, permissionGroups }: Pr
             {/* Feedback */}
             {feedback && (
                 <div className={`p-4 rounded-xl text-sm font-medium border transition-all ${feedback.type === "success"
-                        ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                        : "bg-red-50 text-red-700 border-red-200"
+                    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                    : "bg-red-50 text-red-700 border-red-200"
                     }`}>
                     {feedback.message}
                 </div>
@@ -349,13 +352,13 @@ export default function CustomRoleManager({ initialRoles, permissionGroups }: Pr
                                                     <label
                                                         key={perm}
                                                         className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition-all ${selectedPermissions.includes(perm)
-                                                                ? "bg-violet-50 border border-violet-200"
-                                                                : "hover:bg-meteorite-50 border border-transparent"
+                                                            ? "bg-violet-50 border border-violet-200"
+                                                            : "hover:bg-meteorite-50 border border-transparent"
                                                             }`}
                                                     >
                                                         <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${selectedPermissions.includes(perm)
-                                                                ? "bg-violet-500 border-violet-500"
-                                                                : "border-meteorite-300"
+                                                            ? "bg-violet-500 border-violet-500"
+                                                            : "border-meteorite-300"
                                                             }`}>
                                                             {selectedPermissions.includes(perm) && (
                                                                 <Check className="w-3 h-3 text-white" />

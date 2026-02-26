@@ -14,6 +14,8 @@ const CreateAreaSchema = z.object({
     code: z.string().min(1).max(10).toUpperCase().optional().nullable(),
     description: z.string().max(500).optional().nullable(),
     isLeadershipArea: z.boolean().optional().default(false),
+    canCreateEvents: z.boolean().optional().default(false),
+    canCreateIndividualEvents: z.boolean().optional().default(false),
 });
 
 const UpdateAreaSchema = z.object({
@@ -22,6 +24,8 @@ const UpdateAreaSchema = z.object({
     code: z.string().min(1).max(10).toUpperCase().optional().nullable(),
     description: z.string().max(500).optional().nullable(),
     isLeadershipArea: z.boolean().optional().default(false),
+    canCreateEvents: z.boolean().optional().default(false),
+    canCreateIndividualEvents: z.boolean().optional().default(false),
 });
 
 // --- Actions ---
@@ -98,6 +102,8 @@ export async function createAreaAction(input: z.infer<typeof CreateAreaSchema>) 
             code: validated.data.code || null,
             description: validated.data.description || null,
             isLeadershipArea: validated.data.isLeadershipArea,
+            canCreateEvents: validated.data.canCreateEvents,
+            canCreateIndividualEvents: validated.data.canCreateIndividualEvents,
         }).returning();
 
         revalidatePath("/admin/areas");
@@ -134,6 +140,8 @@ export async function updateAreaAction(input: z.infer<typeof UpdateAreaSchema>) 
             code: validated.data.code || null,
             description: validated.data.description || null,
             isLeadershipArea: validated.data.isLeadershipArea,
+            canCreateEvents: validated.data.canCreateEvents,
+            canCreateIndividualEvents: validated.data.canCreateIndividualEvents,
         }).where(eq(areas.id, validated.data.id));
 
         revalidatePath("/admin/areas");

@@ -19,6 +19,8 @@ interface Area {
     code: string | null;
     description: string | null;
     isLeadershipArea: boolean | null;
+    canCreateEvents: boolean | null;
+    canCreateIndividualEvents: boolean | null;
 }
 
 interface AreaWithStatus extends Area {
@@ -43,6 +45,8 @@ export default function AreasManager({ initialAreas, semesterStatus, activeSemes
     const [formCode, setFormCode] = useState("");
     const [formDescription, setFormDescription] = useState("");
     const [formIsLeadershipArea, setFormIsLeadershipArea] = useState(false);
+    const [formCanCreateEvents, setFormCanCreateEvents] = useState(false);
+    const [formCanCreateIndividualEvents, setFormCanCreateIndividualEvents] = useState(false);
 
     // Merge areas with semester status
     const areasData: AreaWithStatus[] = initialAreas.map(area => {
@@ -64,6 +68,8 @@ export default function AreasManager({ initialAreas, semesterStatus, activeSemes
         setFormCode("");
         setFormDescription("");
         setFormIsLeadershipArea(false);
+        setFormCanCreateEvents(false);
+        setFormCanCreateIndividualEvents(false);
         setShowCreateForm(false);
         setEditingArea(null);
     };
@@ -75,6 +81,8 @@ export default function AreasManager({ initialAreas, semesterStatus, activeSemes
                 code: formCode || null,
                 description: formDescription || null,
                 isLeadershipArea: formIsLeadershipArea,
+                canCreateEvents: formCanCreateEvents,
+                canCreateIndividualEvents: formCanCreateIndividualEvents,
             });
             if (result.success) {
                 showFeedback("success", result.message || "Área creada.");
@@ -94,6 +102,8 @@ export default function AreasManager({ initialAreas, semesterStatus, activeSemes
                 code: formCode || null,
                 description: formDescription || null,
                 isLeadershipArea: formIsLeadershipArea,
+                canCreateEvents: formCanCreateEvents,
+                canCreateIndividualEvents: formCanCreateIndividualEvents,
             });
             if (result.success) {
                 showFeedback("success", result.message || "Área actualizada.");
@@ -146,6 +156,8 @@ export default function AreasManager({ initialAreas, semesterStatus, activeSemes
         setFormCode(area.code || "");
         setFormDescription(area.description || "");
         setFormIsLeadershipArea(area.isLeadershipArea ?? false);
+        setFormCanCreateEvents(area.canCreateEvents ?? false);
+        setFormCanCreateIndividualEvents(area.canCreateIndividualEvents ?? false);
         setShowCreateForm(false);
     };
 
@@ -259,6 +271,43 @@ export default function AreasManager({ initialAreas, semesterStatus, activeSemes
                                 </div>
                                 <div className="text-sm font-bold text-meteorite-700 group-hover:text-meteorite-900 transition-colors">
                                     Mesa Directiva <span className="text-amber-500 inline-block ml-1"><Crown className="w-4 h-4" /></span>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    {/* Event Capabilities */}
+                    <div className="mt-4 p-4 bg-violet-50/60 rounded-xl border border-violet-200/50">
+                        <h4 className="text-xs font-black text-violet-700 uppercase tracking-wider mb-3">📅 Permisos de Eventos</h4>
+                        <div className="flex flex-wrap gap-4">
+                            <label className="flex items-center gap-3 cursor-pointer group">
+                                <div className="relative flex items-center">
+                                    <input
+                                        type="checkbox"
+                                        className="sr-only"
+                                        checked={formCanCreateEvents}
+                                        onChange={(e) => setFormCanCreateEvents(e.target.checked)}
+                                    />
+                                    <div className={`w-11 h-6 rounded-full transition-colors ${formCanCreateEvents ? 'bg-violet-500' : 'bg-gray-200'}`}></div>
+                                    <div className={`absolute left-1 top-1 w-4 h-4 bg-white rounded-full transition-transform ${formCanCreateEvents ? 'translate-x-5' : 'translate-x-0'}`}></div>
+                                </div>
+                                <div className="text-sm font-bold text-meteorite-700 group-hover:text-meteorite-900 transition-colors">
+                                    Crear eventos generales / área
+                                </div>
+                            </label>
+                            <label className="flex items-center gap-3 cursor-pointer group">
+                                <div className="relative flex items-center">
+                                    <input
+                                        type="checkbox"
+                                        className="sr-only"
+                                        checked={formCanCreateIndividualEvents}
+                                        onChange={(e) => setFormCanCreateIndividualEvents(e.target.checked)}
+                                    />
+                                    <div className={`w-11 h-6 rounded-full transition-colors ${formCanCreateIndividualEvents ? 'bg-violet-500' : 'bg-gray-200'}`}></div>
+                                    <div className={`absolute left-1 top-1 w-4 h-4 bg-white rounded-full transition-transform ${formCanCreateIndividualEvents ? 'translate-x-5' : 'translate-x-0'}`}></div>
+                                </div>
+                                <div className="text-sm font-bold text-meteorite-700 group-hover:text-meteorite-900 transition-colors">
+                                    Crear reuniones individuales/grupales
                                 </div>
                             </label>
                         </div>
