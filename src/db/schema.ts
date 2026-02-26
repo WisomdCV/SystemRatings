@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, real, primaryKey } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, real, primaryKey, unique } from "drizzle-orm/sqlite-core";
 import { relations, sql } from "drizzle-orm";
 import type { AdapterAccount } from "next-auth/adapters";
 
@@ -94,6 +94,10 @@ export const areas = sqliteTable("area", {
   code: text("code").unique(),
   description: text("description"),
   isLeadershipArea: integer("is_leadership_area", { mode: "boolean" }).default(false),
+
+  // Event capabilities (Configurable from /admin/areas)
+  canCreateEvents: integer("can_create_events", { mode: "boolean" }).default(false),
+  canCreateIndividualEvents: integer("can_create_individual_events", { mode: "boolean" }).default(false),
 });
 
 export const semesters = sqliteTable("semester", {
@@ -124,7 +128,16 @@ export const events = sqliteTable("event", {
   title: text("title").notNull(),
   description: text("description"),
 
+  // Scope & Type (Events v2)
+  eventScope: text("event_scope").notNull().default("IISE"),          // "IISE" | "PROJECT"
+  eventType: text("event_type").notNull().default("GENERAL"),          // "GENERAL" | "AREA" | "INDIVIDUAL_GROUP"
+
+  // IISE target
   targetAreaId: text("target_area_id").references(() => areas.id),
+
+  // PROJECT target
+  projectId: text("project_id").references(() => projects.id),
+  targetProjectAreaId: text("target_project_area_id").references(() => projectAreas.id),
 
   date: integer("date", { mode: "timestamp" }).notNull(),
   startTime: text("start_time"),
@@ -133,6 +146,9 @@ export const events = sqliteTable("event", {
   isVirtual: integer("is_virtual", { mode: "boolean" }).default(false),
   meetLink: text("meet_link"),
   googleEventId: text("google_event_id"),
+
+  // Attendance tracking (false for INDIVIDUAL_GROUP events)
+  tracksAttendance: integer("tracks_attendance", { mode: "boolean" }).default(true),
 
   status: text("status").default("SCHEDULED"),
 
@@ -155,6 +171,17 @@ export const attendanceRecords = sqliteTable("attendance_record", {
   adminFeedback: text("admin_feedback"),
   reviewedById: text("reviewed_by_id").references(() => users.id),
 });
+
+// Event Invitees (for INDIVIDUAL_GROUP events)
+export const eventInvitees = sqliteTable("event_invitee", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  eventId: text("event_id").references(() => events.id, { onDelete: "cascade" }).notNull(),
+  userId: text("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  status: text("status").default("PENDING"), // PENDING | ACCEPTED | DECLINED
+  createdAt: integer("created_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
+}, (table) => ({
+  uniqueInvite: unique().on(table.eventId, table.userId),
+}));
 
 // =============================================================================
 // 4. ACADÉMICO: NOTAS MANUALES
@@ -246,6 +273,9 @@ export const projectAreas = sqliteTable("project_area", {
   color: text("color").default("#94a3b8"), // Slate-400 Default
   position: integer("position").default(0),
   isSystem: integer("is_system", { mode: "boolean" }).default(false),
+
+  // Event capability: members of this area can create project events (e.g. RRHH)
+  membersCanCreateEvents: integer("members_can_create_events", { mode: "boolean" }).default(false),
 });
 
 export const projectRoles = sqliteTable("project_role", {
@@ -256,6 +286,9 @@ export const projectRoles = sqliteTable("project_role", {
   color: text("color").default("#6366f1"), // Added for UI Role badges
   permissions: text("permissions"), // JSON stringified array of local permissions
   isSystem: integer("is_system", { mode: "boolean" }).default(false),
+
+  // Event capability: roles with this flag can create project events (configurable, replaces hardcoded hierarchy check)
+  canCreateEvents: integer("can_create_events", { mode: "boolean" }).default(false),
 });
 
 export const projectMembers = sqliteTable("project_member", {
@@ -366,8 +399,11 @@ export const semesterAreasRelations = relations(semesterAreas, ({ one }) => ({
 export const eventsRelations = relations(events, ({ one, many }) => ({
   semester: one(semesters, { fields: [events.semesterId], references: [semesters.id] }),
   targetArea: one(areas, { fields: [events.targetAreaId], references: [areas.id] }),
+  project: one(projects, { fields: [events.projectId], references: [projects.id], relationName: "projectEvents" }),
+  targetProjectArea: one(projectAreas, { fields: [events.targetProjectAreaId], references: [projectAreas.id] }),
   createdBy: one(users, { fields: [events.createdById], references: [users.id], relationName: "creator" }),
   attendanceRecords: many(attendanceRecords),
+  invitees: many(eventInvitees),
 }));
 
 export const attendanceRecordsRelations = relations(attendanceRecords, ({ one }) => ({
@@ -411,10 +447,12 @@ export const projectsRelations = relations(projects, ({ one, many }) => ({
   createdBy: one(users, { fields: [projects.createdById], references: [users.id], relationName: "projectCreator" }),
   members: many(projectMembers),
   tasks: many(projectTasks),
+  events: many(events, { relationName: "projectEvents" }),
 }));
 
 export const projectAreasRelations = relations(projectAreas, ({ many }) => ({
   members: many(projectMembers),
+  events: many(events),
 }));
 
 export const projectRolesRelations = relations(projectRoles, ({ many }) => ({
@@ -438,6 +476,13 @@ export const projectTasksRelations = relations(projectTasks, ({ one, many }) => 
 export const taskAssignmentsRelations = relations(taskAssignments, ({ one }) => ({
   task: one(projectTasks, { fields: [taskAssignments.taskId], references: [projectTasks.id] }),
   user: one(users, { fields: [taskAssignments.userId], references: [users.id] }),
+}));
+
+// --- Event Invitees ---
+
+export const eventInviteesRelations = relations(eventInvitees, ({ one }) => ({
+  event: one(events, { fields: [eventInvitees.eventId], references: [events.id] }),
+  user: one(users, { fields: [eventInvitees.userId], references: [users.id] }),
 }));
 
 // --- Roles Personalizables ---
