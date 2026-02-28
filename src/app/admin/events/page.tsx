@@ -34,49 +34,36 @@ export default async function EventsPage() {
     let areasList: any[] = [];
     let userAreaName: string | null = null;
 
+    // Common `with` for all event queries (includes invitees for avatar display)
+    const eventWith = {
+        targetArea: true,
+        project: { columns: { id: true, name: true } },
+        targetProjectArea: { columns: { id: true, name: true } },
+        createdBy: { columns: { name: true, role: true } },
+        invitees: {
+            with: {
+                user: { columns: { id: true, name: true, image: true } }
+            }
+        }
+    } as const;
+
     if (activeSemester) {
         const mdArea = await db.query.areas.findFirst({
             where: eq(areas.isLeadershipArea, true),
             columns: { id: true }
         });
 
-        // A. Admin (DEV/PRESIDENT): Fetch ALL events and ALL areas
-        if (role === "DEV" || role === "PRESIDENT") {
+        // A. Full-access admins (event:manage): see ALL events, ALL areas
+        if (hasPermission(role, "event:manage")) {
             eventsData = await db.query.events.findMany({
                 where: eq(events.semesterId, activeSemester.id),
                 orderBy: [desc(events.date)],
-                with: {
-                    targetArea: true,
-                    project: { columns: { id: true, name: true } },
-                    targetProjectArea: { columns: { id: true, name: true } },
-                    createdBy: { columns: { name: true, role: true } }
-                }
+                with: eventWith
             });
             areasList = await db.select({ id: areas.id, name: areas.name }).from(areas);
         }
 
-        // B. Treasurer: Fetch General + MD Only
-        else if (role === "TREASURER") {
-            const visibilityConditions = [isNull(events.targetAreaId)];
-            if (mdArea) visibilityConditions.push(eq(events.targetAreaId, mdArea.id));
-
-            eventsData = await db.query.events.findMany({
-                where: and(
-                    eq(events.semesterId, activeSemester.id),
-                    or(...visibilityConditions)
-                ),
-                orderBy: [desc(events.date)],
-                with: {
-                    targetArea: true,
-                    project: { columns: { id: true, name: true } },
-                    targetProjectArea: { columns: { id: true, name: true } },
-                    createdBy: { columns: { name: true, role: true } }
-                }
-            });
-            if (mdArea) areasList = await db.select({ id: areas.id, name: areas.name }).from(areas).where(eq(areas.isLeadershipArea, true));
-        }
-
-        // C. Director/Subdirector: Fetch Own Events + General Events + BOARD (MD) Events
+        // B. Director/Subdirector: scoped view — General + own area + MD + their PROJECT events + INDIVIDUAL_GROUP where invitee
         else if (role === "DIRECTOR" || role === "SUBDIRECTOR") {
             if (currentAreaId) {
                 const areaObj = await db.query.areas.findFirst({
@@ -86,12 +73,27 @@ export default async function EventsPage() {
                 if (areaObj) userAreaName = areaObj.name;
             }
 
+            // Fetch director's project ids
+            let directorProjectIds: string[] = [];
+            if (userId) {
+                const memberships = await db.query.projectMembers.findMany({
+                    where: eq(projectMembers.userId, userId),
+                    with: { project: { columns: { id: true, semesterId: true } } }
+                });
+                directorProjectIds = memberships
+                    .filter(m => m.project?.semesterId === activeSemester.id)
+                    .map(m => m.project!.id);
+            }
+
             const visibilityConditions = [
                 isNull(events.targetAreaId),
                 eq(events.targetAreaId, currentAreaId || "impossible_id")
             ];
             if (mdArea) {
                 visibilityConditions.push(eq(events.targetAreaId, mdArea.id));
+            }
+            for (const pid of directorProjectIds) {
+                visibilityConditions.push(eq(events.projectId, pid));
             }
 
             eventsData = await db.query.events.findMany({
@@ -100,12 +102,16 @@ export default async function EventsPage() {
                     or(...visibilityConditions)
                 ),
                 orderBy: [desc(events.date)],
-                with: {
-                    targetArea: true,
-                    project: { columns: { id: true, name: true } },
-                    targetProjectArea: { columns: { id: true, name: true } },
-                    createdBy: { columns: { name: true, role: true } }
+                with: eventWith
+            });
+
+            // Privacy: directors only see INDIVIDUAL_GROUP where they're invitee or creator
+            eventsData = eventsData.filter((event: any) => {
+                if (event.eventType === "INDIVIDUAL_GROUP") {
+                    if (event.createdById === userId) return true;
+                    return event.invitees?.some((inv: any) => inv.userId === userId);
                 }
+                return true;
             });
         }
     }
@@ -186,11 +192,28 @@ export default async function EventsPage() {
         }
     }
 
+    // Build projectMembersMap: projectId -> members (for invitee filtering)
+    const projectMembersMap: Record<string, { id: string; name: string | null; image: string | null }[]> = {};
+    if (userProjects.length > 0) {
+        for (const proj of userProjects) {
+            const members = await db.query.projectMembers.findMany({
+                where: eq(projectMembers.projectId, proj.id),
+                with: { user: { columns: { id: true, name: true, image: true } } }
+            });
+            projectMembersMap[proj.id] = members.map(m => ({
+                id: m.user.id,
+                name: m.user.name,
+                image: m.user.image,
+            }));
+        }
+    }
+
     return (
         <EventsView
             events={eventsWithCounts}
             activeSemesterName={activeSemester?.name || "Sin Semestre"}
             userRole={role}
+            userId={userId}
             userAreaId={currentAreaId}
             userAreaName={userAreaName}
             areas={areasList}
@@ -199,6 +222,7 @@ export default async function EventsPage() {
             availableScopes={availableScopes}
             projects={userProjects}
             projectAreas={allProjectAreas}
+            projectMembersMap={projectMembersMap}
         />
     );
 }

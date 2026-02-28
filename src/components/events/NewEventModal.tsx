@@ -15,6 +15,7 @@ interface NewEventModalProps {
     projects?: { id: string; name: string }[];
     projectAreas?: { id: string; name: string }[];
     users?: { id: string; name: string | null; image: string | null }[];
+    projectMembersMap?: Record<string, { id: string; name: string | null; image: string | null }[]>;
 }
 
 export default function NewEventModal({
@@ -27,6 +28,7 @@ export default function NewEventModal({
     projects,
     projectAreas,
     users,
+    projectMembersMap,
 }: NewEventModalProps) {
     const [isOpen, setIsOpen] = useState(false);
 
@@ -72,6 +74,7 @@ export default function NewEventModal({
                                 projects={projects}
                                 projectAreas={projectAreas}
                                 users={users}
+                                projectMembersMap={projectMembersMap}
                             />
                         </div>
                     </div>

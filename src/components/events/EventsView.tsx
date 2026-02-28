@@ -56,12 +56,22 @@ type EventItem = {
     createdAt?: Date;
     updatedAt?: Date;
     pendingJustificationCount?: number;
+    invitees?: {
+        userId: string;
+        status: string | null;
+        user: {
+            id: string;
+            name: string | null;
+            image: string | null;
+        };
+    }[];
 };
 
 interface EventsViewProps {
     events: EventItem[];
     activeSemesterName: string;
     userRole: string;
+    userId?: string | null;
     userAreaId: string | null;
     userAreaName: string | null;
     areas: any[];
@@ -72,12 +82,14 @@ interface EventsViewProps {
     projects?: { id: string; name: string }[];
     projectAreas?: { id: string; name: string }[];
     users?: { id: string; name: string | null; image: string | null }[];
+    projectMembersMap?: Record<string, { id: string; name: string | null; image: string | null }[]>;
 }
 
 export default function EventsView({
     events,
     activeSemesterName,
     userRole,
+    userId,
     userAreaId,
     userAreaName,
     areas,
@@ -87,6 +99,7 @@ export default function EventsView({
     projects,
     projectAreas,
     users,
+    projectMembersMap,
 }: EventsViewProps) {
     const router = useRouter();
     const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
@@ -188,6 +201,7 @@ export default function EventsView({
                                 projects={projects}
                                 projectAreas={projectAreas}
                                 users={users}
+                                projectMembersMap={projectMembersMap}
                             />
                         )}
                     </div>
@@ -236,9 +250,9 @@ export default function EventsView({
                         {viewMode === "grid" && (
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-8">
                                 {filteredEvents.map((event) => {
-                                    const canEdit = !readOnly && canManageEvent(userRole, userAreaId, event);
-                                    const canDelete = !readOnly && canManageEvent(userRole, userAreaId, event);
-                                    const canAttendance = !readOnly && canTakeAttendance(userRole, userAreaId, event);
+                                    const canEdit = !readOnly && canManageEvent(userRole, userId, userAreaId, event);
+                                    const canDelete = !readOnly && canManageEvent(userRole, userId, userAreaId, event);
+                                    const canAttendance = !readOnly && canTakeAttendance(userRole, userId, userAreaId, event);
 
                                     return (
                                         <EventCardGrid
@@ -260,9 +274,9 @@ export default function EventsView({
                         {viewMode === "list" && (
                             <div className="space-y-4 pb-8">
                                 {filteredEvents.map((event) => {
-                                    const canEdit = !readOnly && canManageEvent(userRole, userAreaId, event);
-                                    const canDelete = !readOnly && canManageEvent(userRole, userAreaId, event);
-                                    const canAttendance = !readOnly && canTakeAttendance(userRole, userAreaId, event);
+                                    const canEdit = !readOnly && canManageEvent(userRole, userId, userAreaId, event);
+                                    const canDelete = !readOnly && canManageEvent(userRole, userId, userAreaId, event);
+                                    const canAttendance = !readOnly && canTakeAttendance(userRole, userId, userAreaId, event);
 
                                     return (
                                         <EventCardList
@@ -317,23 +331,28 @@ export default function EventsView({
 }
 
 // --- Helpers ---
-function canManageEvent(role: string, userAreaId: string | null, event: EventItem) {
-    if (role === "DEV" || role === "PRESIDENT") return true; // Start Mode God/Strategic Global
-    if (role === "TREASURER") {
-        // Can manage General and MD events
-        return !event.targetAreaId || event.targetArea?.isLeadershipArea === true;
+// Roles with event:manage permission (aligned with server-side PERMISSIONS map)
+const EVENT_MANAGE_ROLES = ["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER"];
+
+function canManageEvent(role: string, userId: string | null | undefined, userAreaId: string | null, event: EventItem) {
+    // Full admin: event:manage roles can manage any event
+    if (EVENT_MANAGE_ROLES.includes(role)) return true;
+
+    // Creator can always manage their own event
+    if (userId && event.createdById === userId) return true;
+
+    // Director/Subdirector: can manage their area events
+    if ((role === "DIRECTOR" || role === "SUBDIRECTOR") && event.targetAreaId && event.targetAreaId === userAreaId) {
+        return true;
     }
-    if (role === "DIRECTOR" || role === "SUBDIRECTOR") {
-        // Can manage ONLY their area events
-        return event.targetAreaId === userAreaId;
-    }
+
     return false;
 }
 
-function canTakeAttendance(role: string, userAreaId: string | null, event: EventItem) {
+function canTakeAttendance(role: string, userId: string | null | undefined, userAreaId: string | null, event: EventItem) {
     // Events that don't track attendance (INDIVIDUAL_GROUP) should not show the button
     if (event.tracksAttendance === false) return false;
-    return canManageEvent(role, userAreaId, event);
+    return canManageEvent(role, userId, userAreaId, event);
 }
 
 // --- Sub-components to keep clean ---
@@ -408,6 +427,11 @@ function EventCardGrid({ event, isDeleting, onEdit, onDelete, canEdit, canDelete
                         Creado por: <span className="font-bold text-gray-700">{event.createdBy?.name || event.createdBy?.role || "Desconocido"}</span>
                     </span>
                 </div>
+                {event.eventType === "INDIVIDUAL_GROUP" && event.invitees && event.invitees.length > 0 && (
+                    <div className="mt-2 pt-2 border-t border-gray-50">
+                        <InviteeAvatars invitees={event.invitees} />
+                    </div>
+                )}
             </div>
 
             <div className="flex items-center justify-between mt-auto pt-4 border-t border-gray-50">
@@ -495,6 +519,11 @@ function EventCardList({ event, isDeleting, onEdit, onDelete, canEdit, canDelete
                         <span>{event.createdBy?.name || event.createdBy?.role || "Desconocido"}</span>
                     </div>
                 </div>
+                {event.eventType === "INDIVIDUAL_GROUP" && event.invitees && event.invitees.length > 0 && (
+                    <div className="mt-1">
+                        <InviteeAvatars invitees={event.invitees} />
+                    </div>
+                )}
             </div>
 
             {/* Right: Actions */}
@@ -527,6 +556,43 @@ function EventCardList({ event, isDeleting, onEdit, onDelete, canEdit, canDelete
                     {/* More options dots could go here if needed -> Hidden to reduce clutter if actions are limited */}
                 </div>
             </div>
+        </div>
+    );
+}
+
+function InviteeAvatars({ invitees }: { invitees?: EventItem["invitees"] }) {
+    if (!invitees || invitees.length === 0) return null;
+    const MAX_VISIBLE = 3;
+    const visible = invitees.slice(0, MAX_VISIBLE);
+    const remaining = invitees.length - MAX_VISIBLE;
+
+    return (
+        <div className="flex items-center gap-2">
+            <div className="flex -space-x-2">
+                {visible.map(inv => (
+                    <div
+                        key={inv.user.id}
+                        className="w-6 h-6 rounded-full border-2 border-white overflow-hidden bg-meteorite-100 shadow-sm"
+                        title={inv.user.name || "Invitado"}
+                    >
+                        {inv.user.image ? (
+                            <img src={inv.user.image} alt={inv.user.name || ""} className="w-full h-full object-cover" />
+                        ) : (
+                            <div className="w-full h-full flex items-center justify-center text-[9px] font-bold text-meteorite-600">
+                                {inv.user.name?.charAt(0)?.toUpperCase() || "?"}
+                            </div>
+                        )}
+                    </div>
+                ))}
+                {remaining > 0 && (
+                    <div className="w-6 h-6 rounded-full border-2 border-white bg-meteorite-200 flex items-center justify-center text-[9px] font-bold text-meteorite-700 shadow-sm">
+                        +{remaining}
+                    </div>
+                )}
+            </div>
+            <span className="text-[10px] text-meteorite-400 font-medium">
+                {invitees.length} invitado{invitees.length !== 1 ? "s" : ""}
+            </span>
         </div>
     );
 }
@@ -568,8 +634,10 @@ function Tag({ isGeneral, isBoard, areaName, areaCode, event }: { isGeneral: boo
         );
     }
 
-    // Area badge
-    if (event?.eventScope === "PROJECT" && event?.targetProjectArea) {
+    // Area badge — skip for INDIVIDUAL_GROUP (the "👥 Reunión" tag is sufficient)
+    if (event?.eventType === "INDIVIDUAL_GROUP") {
+        // No extra area/general tag needed
+    } else if (event?.eventScope === "PROJECT" && event?.targetProjectArea) {
         const style = "bg-violet-50 text-violet-600 border-violet-200";
         tags.push(
             <span key="pArea" className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide border ${style}`}>

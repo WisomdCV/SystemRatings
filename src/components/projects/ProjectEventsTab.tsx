@@ -19,6 +19,10 @@ interface ProjectEvent {
     tracksAttendance: boolean | null;
     targetProjectArea: { id: string; name: string } | null;
     createdBy: { name: string | null; role: string | null } | null;
+    invitees?: {
+        userId: string;
+        user: { id: string; name: string | null; image: string | null };
+    }[];
 }
 
 interface ProjectEventsTabProps {
@@ -162,6 +166,11 @@ export default function ProjectEventsTab({
                                                     General
                                                 </span>
                                             )}
+                                            {event.eventType === "INDIVIDUAL_GROUP" && (
+                                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-teal-50 text-teal-600 border border-teal-100 shrink-0">
+                                                    👥 Reunión
+                                                </span>
+                                            )}
                                         </div>
                                         <div className="flex items-center gap-3 mt-0.5 text-xs text-meteorite-400">
                                             {event.time && (
@@ -175,6 +184,32 @@ export default function ProjectEventsTab({
                                             )}
                                         </div>
                                     </div>
+
+                                    {/* Invitee Avatars */}
+                                    {event.eventType === "INDIVIDUAL_GROUP" && event.invitees && event.invitees.length > 0 && (
+                                        <div className="flex items-center -space-x-1.5 shrink-0">
+                                            {event.invitees.slice(0, 3).map(inv => (
+                                                <div
+                                                    key={inv.user.id}
+                                                    className="w-6 h-6 rounded-full border-2 border-white overflow-hidden bg-meteorite-100 shadow-sm"
+                                                    title={inv.user.name || "Invitado"}
+                                                >
+                                                    {inv.user.image ? (
+                                                        <img src={inv.user.image} alt={inv.user.name || ""} className="w-full h-full object-cover" />
+                                                    ) : (
+                                                        <div className="w-full h-full flex items-center justify-center text-[9px] font-bold text-meteorite-600">
+                                                            {inv.user.name?.charAt(0)?.toUpperCase() || "?"}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ))}
+                                            {event.invitees.length > 3 && (
+                                                <div className="w-6 h-6 rounded-full border-2 border-white bg-meteorite-200 flex items-center justify-center text-[9px] font-bold text-meteorite-700 shadow-sm">
+                                                    +{event.invitees.length - 3}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
 
                                     {/* Actions */}
                                     {canCreateEvents && (

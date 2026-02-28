@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { User } from "next-auth";
 import {
     Zap,
@@ -29,6 +29,10 @@ import {
     CheckCircle2,
     TrendingUp,
     BarChart3,
+    CalendarPlus,
+    FileText,
+    Settings,
+    Search,
 } from "lucide-react";
 import { logoutAction } from "@/server/actions/auth.actions";
 import { submitJustificationAction, acknowledgeRejectionAction } from "@/server/actions/attendance.actions";
@@ -90,29 +94,70 @@ interface DashboardViewProps {
 
 export default function DashboardView({ user, upcomingEvents = [], pendingJustifications = [], attendanceHistory = [], currentSemester, dashboardData }: DashboardViewProps) {
     const [chartView, setChartView] = useState<"monthly" | "semester">("monthly");
-    const [eventIndex, setEventIndex] = useState(0);
 
-    // Carousel Effect
+    // Carousel References and State
+    const carouselRef = useRef<HTMLDivElement>(null);
+    const [isHoveringCarousel, setIsHoveringCarousel] = useState(false);
+
     useEffect(() => {
-        if (upcomingEvents.length <= 1) return;
+        if (!carouselRef.current || upcomingEvents.length <= 1) return;
+
         const interval = setInterval(() => {
-            setEventIndex((prev) => (prev + 1) % upcomingEvents.length);
-        }, 5000); // 5s rotation
+            if (!isHoveringCarousel && carouselRef.current) {
+                const { scrollLeft, scrollWidth, clientWidth } = carouselRef.current;
+
+                // Detectar si hemos llegado al final. 
+                // Usamos un margen generoso de 5 pixels para evitar issues con sub-pixeles en pantallas HD
+                if (Math.ceil(scrollLeft + clientWidth) >= scrollWidth - 5) {
+                    carouselRef.current.scrollTo({ left: 0, behavior: 'smooth' });
+                } else {
+                    carouselRef.current.scrollTo({ left: scrollLeft + clientWidth, behavior: 'smooth' });
+                }
+            }
+        }, 5000);
+
         return () => clearInterval(interval);
-    }, [upcomingEvents.length]);
+    }, [isHoveringCarousel, upcomingEvents.length]);
+
+    const getRoleLabel = (role: string | null | undefined) => {
+        if (!role) return "Voluntario";
+        const labels: Record<string, string> = {
+            "DEV": "Desarrollador",
+            "PRESIDENT": "Presidente",
+            "VICEPRESIDENT": "Vicepresidente",
+            "SECRETARY": "Secretario",
+            "TREASURER": "Tesorero",
+            "DIRECTOR": "Director",
+            "SUBDIRECTOR": "Subdirector",
+            "MEMBER": "Miembro",
+            "VOLUNTEER": "Voluntario"
+        };
+        return labels[role] || role;
+    };
 
 
     // --- Logic for Dynamic UI ---
     const isManagementRole = ["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER", "DIRECTOR", "SUBDIRECTOR"].includes((user as any).role || "");
     const eventsLink = isManagementRole ? "/admin/events" : "/dashboard/agenda";
 
+    const getGreeting = () => {
+        const hour = new Date().getHours();
+        if (hour < 12) return "Buenos días";
+        if (hour < 19) return "Buenas tardes";
+        return "Buenas noches";
+    };
 
+    const greeting = getGreeting();
 
-    // We need to parse dates carefully. 
-    // upcomingEvents are sorted by date ASC.
-    // However, the first event might be "In Progress" or "Just Finished" depending on when query ran vs render.
-    // Use current index.
-    const nextEvent = upcomingEvents.length > 0 ? upcomingEvents[eventIndex] : null;
+    const quickActions = isManagementRole ? [
+        { label: "Organizar Eventos", icon: CalendarPlus, href: "/admin/events", color: "bg-indigo-100/50 text-indigo-700 border-indigo-200" },
+        { label: "Evaluar Equipos", icon: FileText, href: "/dashboard/management/grades", color: "bg-emerald-100/50 text-emerald-700 border-emerald-200" },
+        { label: "Configuración", icon: Settings, href: "/admin", color: "bg-gray-100/50 text-gray-700 border-gray-200" }
+    ] : [
+        { label: "Buscar Eventos", icon: Search, href: "/dashboard/agenda", color: "bg-blue-100/50 text-blue-700 border-blue-200" },
+        { label: "Mis Proyectos", icon: FolderKanban, href: "/dashboard/projects", color: "bg-violet-100/50 text-violet-700 border-violet-200" },
+        { label: "Mi Perfil", icon: UserIcon, href: "/dashboard/profile", color: "bg-orange-100/50 text-orange-700 border-orange-200" }
+    ];
 
     const getEventStatusLabel = (event: any) => {
         if (!event) return { label: "", style: "" };
@@ -179,8 +224,6 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
 
         return { label: new Date(event.date).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }), style: "bg-white/20" };
     };
-
-    const statusObj = getEventStatusLabel(nextEvent);
 
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
     const [isJustifyModalOpen, setIsJustifyModalOpen] = useState(false);
@@ -466,22 +509,22 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
 
                 <div className="relative z-10 p-4 border-t border-meteorite-800/50 bg-meteorite-900/30">
                     <div className="flex items-center justify-between p-2 rounded-xl hover:bg-meteorite-800 transition-colors group">
-                        <Link href="/dashboard/profile" className="flex items-center cursor-pointer flex-1">
+                        <Link href="/dashboard/profile" className="flex items-center cursor-pointer flex-1 min-w-0">
                             {user.image ? (
                                 <img
                                     src={user.image}
                                     alt="User"
-                                    className="w-10 h-10 rounded-full border-2 border-meteorite-400 group-hover:border-meteorite-300 transition-colors"
+                                    className="w-10 h-10 rounded-full border-2 border-meteorite-400 group-hover:border-meteorite-300 transition-colors flex-shrink-0"
                                 />
                             ) : (
-                                <div className="w-10 h-10 rounded-full bg-meteorite-700 flex items-center justify-center border-2 border-meteorite-400 group-hover:border-meteorite-300 transition-colors">
+                                <div className="w-10 h-10 rounded-full bg-meteorite-700 flex items-center justify-center border-2 border-meteorite-400 group-hover:border-meteorite-300 transition-colors flex-shrink-0">
                                     <UserIcon className="text-white w-5 h-5" />
                                 </div>
                             )}
-                            <div className="ml-3 overflow-hidden">
-                                <p className="text-sm font-semibold text-white truncate group-hover:text-meteorite-100 transition-colors">{user.name}</p>
-                                <p className="text-xs text-meteorite-300 truncate">
-                                    {(user as any).role || "Miembro"}
+                            <div className="ml-3 overflow-hidden min-w-0 flex-1">
+                                <p className="text-sm font-semibold text-white whitespace-normal break-words leading-tight group-hover:text-meteorite-100 transition-colors">{user.name}</p>
+                                <p className="text-[11px] text-meteorite-300 truncate mt-0.5" title={`${getRoleLabel((user as any).role)} • ${(user as any).areaName || "Sin Área"}`}>
+                                    {getRoleLabel((user as any).role)} • {(user as any).areaName || "Sin Área"}
                                 </p>
                             </div>
                         </Link>
@@ -521,10 +564,10 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
 
                     <div className="hidden lg:block">
                         <h1 className="text-2xl font-bold text-meteorite-950">
-                            Resumen Semestral
+                            {greeting}, {user.name?.split(" ")[0]} 👋
                         </h1>
                         <p className="text-sm text-meteorite-600 font-medium">
-                            Bienvenido de nuevo, {user.name?.split(" ")[0]} 👋
+                            Tienes {upcomingEvents.length} eventos y {pendingJustifications.length} justificaciones pendientes
                         </p>
                     </div>
 
@@ -565,6 +608,21 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
 
                 {/* Scrollable Content */}
                 <div className="flex-1 overflow-y-auto px-4 lg:px-8 pb-24 lg:pb-8 z-10 scroll-smooth">
+                    {/* ACCIONES RÁPIDAS (Quick Actions) */}
+                    <div className="mb-6 lg:mb-8 mt-2 lg:mt-6 overflow-x-auto hide-scroll pb-2">
+                        <div className="flex gap-3 lg:gap-4 min-w-max">
+                            {quickActions.map((action, idx) => {
+                                const Icon = action.icon;
+                                return (
+                                    <Link key={idx} href={action.href} className={`flex items-center gap-2 lg:gap-3 px-4 py-2.5 lg:px-5 lg:py-3 rounded-full border shadow-sm backdrop-blur-md transition-all hover:scale-105 active:scale-95 ${action.color}`}>
+                                        <Icon className="w-4 h-4 lg:w-5 lg:h-5" />
+                                        <span className="text-xs lg:text-sm font-bold whitespace-nowrap">{action.label}</span>
+                                    </Link>
+                                );
+                            })}
+                        </div>
+                    </div>
+
                     {/* A. KPI CARDS */}
                     <div className="flex lg:grid lg:grid-cols-4 gap-4 lg:gap-6 mb-6 lg:mb-8 overflow-x-auto hide-scroll snap-x py-2">
 
@@ -666,45 +724,83 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
                         </div>
 
                         {/* Próximo Evento */}
-                        {/* Próximo Evento */}
-                        <div className="card-glass p-5 lg:p-6 rounded-2xl min-w-[280px] lg:min-w-0 snap-center relative overflow-hidden group bg-gradient-to-br from-meteorite-600 to-meteorite-800 text-white border-none transition-all">
-                            <div className="absolute right-0 top-0 w-32 h-32 bg-white opacity-10 rounded-bl-full -mr-6 -mt-6"></div>
+                        {/* Próximo Evento (Ahora Slider/Carousel Deslizable Inteligente) */}
+                        <div
+                            className="card-glass rounded-2xl min-w-[280px] lg:min-w-0 snap-center relative overflow-hidden bg-meteorite-800 text-white border-none transition-all p-0"
+                            onMouseEnter={() => setIsHoveringCarousel(true)}
+                            onMouseLeave={() => setIsHoveringCarousel(false)}
+                            onTouchStart={() => setIsHoveringCarousel(true)}
+                            onTouchEnd={() => setIsHoveringCarousel(false)}
+                        >
+                            {/* Ocultamos scrollbar con class personalizada o global */}
+                            <div
+                                className="flex overflow-x-auto snap-x snap-mandatory hide-scroll h-[180px] lg:h-full w-full"
+                                ref={carouselRef}
+                            >
+                                {upcomingEvents.length > 0 ? (
+                                    upcomingEvents.map((ev, idx) => {
+                                        const statusObjEv = getEventStatusLabel(ev);
+                                        // Badge Logic para Slides
+                                        let badgeColor = "bg-white/20 text-white";
+                                        let badgeLabel = "Event";
+                                        let slideGradient = "from-meteorite-600 to-meteorite-800"; // General default
 
-                            {/* Carousel Content */}
-                            <div className="relative z-10 flex flex-col h-full justify-between">
-                                {nextEvent ? (
-                                    <div key={nextEvent.id} className="animate-in fade-in slide-in-from-right-8 duration-700 h-full flex flex-col justify-between">
-                                        <div>
-                                            <div className="flex justify-between items-start mb-3">
-                                                <span className={`inline-block px-3 py-1 rounded-lg text-[10px] font-bold backdrop-blur-md transition-all ${statusObj.style}`}>
-                                                    {statusObj.label}
-                                                </span>
-                                                {upcomingEvents.length > 1 && (
-                                                    <div className="flex gap-1 mt-1">
-                                                        {upcomingEvents.slice(0, 5).map((_, i) => (
-                                                            <div
-                                                                key={i}
-                                                                className={`w-1.5 h-1.5 rounded-full transition-all ${i === eventIndex ? "bg-white scale-125" : "bg-white/30"}`}
-                                                            />
-                                                        ))}
+                                        if (ev.eventScope === "PROJECT") {
+                                            badgeColor = "bg-white/20 text-white border border-white/30";
+                                            badgeLabel = ev.project?.name || "Proyecto";
+                                            slideGradient = "from-indigo-500 to-violet-700";
+                                        } else if (ev.eventScope === "IISE") {
+                                            if (ev.targetAreaId) {
+                                                badgeColor = "bg-white/20 text-white border border-white/30";
+                                                badgeLabel = ev.targetArea?.name || "Área";
+                                                slideGradient = "from-orange-500 to-amber-600";
+                                            } else {
+                                                badgeColor = "bg-white/20 text-white border border-white/30";
+                                                badgeLabel = "General";
+                                                slideGradient = "from-meteorite-600 to-meteorite-800";
+                                            }
+                                        }
+
+                                        return (
+                                            <div key={ev.id} className={`w-full h-full flex-shrink-0 snap-center p-5 lg:p-6 relative flex flex-col justify-between bg-gradient-to-br transition-all duration-700 ${slideGradient}`}>
+                                                <div className="absolute right-0 top-0 w-32 h-32 bg-white opacity-10 rounded-bl-full -mr-6 -mt-6 pointer-events-none"></div>
+                                                <div className="relative z-10 flex flex-col h-full justify-between">
+                                                    <div>
+                                                        <div className="flex justify-between items-start mb-3 xl:mb-4">
+                                                            <div className="flex flex-col gap-1.5 items-start">
+                                                                <span className={`inline-block px-3 py-1 rounded-lg text-[10px] font-bold backdrop-blur-md transition-all ${statusObjEv.style}`}>
+                                                                    {statusObjEv.label}
+                                                                </span>
+                                                                <span className={`inline-block px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider backdrop-blur-md ${badgeColor} shadow-sm max-w-[150px] truncate`}>
+                                                                    {badgeLabel}
+                                                                </span>
+                                                            </div>
+                                                            {upcomingEvents.length > 1 && (
+                                                                <div className="flex gap-1 justify-center items-center bg-black/20 px-2.5 py-1.5 rounded-full backdrop-blur-sm self-start">
+                                                                    {upcomingEvents.map((_, i) => (
+                                                                        <div key={i} className={`w-1.5 h-1.5 rounded-full transition-all ${i === idx ? "bg-white scale-125" : "bg-white/40"}`} />
+                                                                    ))}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                        <h3 className="text-lg font-bold leading-tight line-clamp-2" title={ev.title}>
+                                                            {ev.title}
+                                                        </h3>
                                                     </div>
-                                                )}
+                                                    <div className="flex items-center mt-3">
+                                                        <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center backdrop-blur-sm border border-white/10">
+                                                            {ev.isVirtual ? <Video className="w-4 h-4" /> : <MapPin className="w-4 h-4" />}
+                                                        </div>
+                                                        <span className="ml-2 text-sm font-medium opacity-90 truncate">
+                                                            {ev.isVirtual ? "Virtual" : "Campus"}
+                                                        </span>
+                                                    </div>
+                                                </div>
                                             </div>
-                                            <h3 className="text-lg font-bold leading-tight line-clamp-2" title={nextEvent.title}>
-                                                {nextEvent.title}
-                                            </h3>
-                                        </div>
-                                        <div className="flex items-center mt-4">
-                                            <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center backdrop-blur-sm border border-white/10">
-                                                {nextEvent.isVirtual ? <Video className="w-4 h-4" /> : <MapPin className="w-4 h-4" />}
-                                            </div>
-                                            <span className="ml-2 text-sm font-medium opacity-90 truncate">
-                                                {nextEvent.isVirtual ? "Virtual" : "Campus"}
-                                            </span>
-                                        </div>
-                                    </div>
+                                        )
+                                    })
                                 ) : (
-                                    <div className="flex flex-col items-center justify-center h-full text-center opacity-80">
+                                    <div className="flex flex-col items-center justify-center w-full h-full text-center opacity-80 p-6 min-h-[180px]">
                                         <Calendar className="w-8 h-8 mb-2 opacity-50" />
                                         <p className="text-sm font-bold">Sin eventos próximos</p>
                                     </div>
@@ -746,8 +842,18 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
                                 </button>
                             </div>
                         </div>
-                        <div className="h-64 w-full">
-                            <Line data={lineData} options={lineOptions} />
+                        <div className="h-64 w-full relative">
+                            {hasGradesData ? (
+                                <Line data={lineData} options={lineOptions} />
+                            ) : (
+                                <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/40 rounded-xl backdrop-blur-sm border border-white/50">
+                                    <div className="bg-gradient-to-br from-meteorite-100 to-meteorite-50 w-16 h-16 rounded-full flex items-center justify-center mb-4 shadow-sm">
+                                        <TrendingUp className="w-8 h-8 text-meteorite-300" />
+                                    </div>
+                                    <p className="text-meteorite-800 font-bold text-lg mb-1">Sin historial de calificaciones</p>
+                                    <p className="text-meteorite-500 text-sm text-center max-w-xs">Aún no hay evoluciones registradas en este semestre. ¡Revisa la agenda y participa!</p>
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -762,7 +868,17 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
                                 </button>
                             </div>
                             <div className="flex-1 flex items-center justify-center relative h-64">
-                                <Radar data={radarData} options={radarOptions} />
+                                {hasGradesData ? (
+                                    <Radar data={radarData} options={radarOptions} />
+                                ) : (
+                                    <div className="absolute inset-0 flex flex-col items-center justify-center pt-4">
+                                        <div className="bg-gradient-to-br from-meteorite-100 to-meteorite-50 w-16 h-16 rounded-full flex items-center justify-center mb-4 shadow-sm">
+                                            <Award className="w-8 h-8 text-meteorite-300" />
+                                        </div>
+                                        <p className="text-meteorite-800 font-bold text-center leading-tight">Mapeo de<br />Competencias</p>
+                                        <p className="text-meteorite-400 text-xs text-center mt-2 px-4">Se generará al recibir primeras notas.</p>
+                                    </div>
+                                )}
                             </div>
                         </div>
 
@@ -790,10 +906,23 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
                                         const status = getEventStatusLabel(event);
                                         const isInProgress = status.label.includes("En curso");
 
+                                        // Badge Logic para List
+                                        let listBadgeColor = "bg-meteorite-100 text-meteorite-700 border-meteorite-200";
+                                        let listBadgeLabel = "General";
+                                        if (event.eventScope === "PROJECT") {
+                                            listBadgeColor = "bg-indigo-100 text-indigo-700 border-indigo-200";
+                                            listBadgeLabel = event.project?.name || "Proyecto";
+                                        } else if (event.eventScope === "IISE") {
+                                            if (event.targetAreaId) {
+                                                listBadgeColor = "bg-orange-100 text-orange-700 border-orange-200";
+                                                listBadgeLabel = event.targetArea?.name || "Área";
+                                            }
+                                        }
+
                                         return (
                                             <div key={event.id} className={`flex items-center p-3 rounded-xl transition-all group cursor-pointer border ${isInProgress
                                                 ? "bg-red-50/80 border-red-300 shadow-sm animate-pulse-slow"
-                                                : "hover:bg-meteorite-50 border-transparent hover:border-meteorite-100"
+                                                : "hover:bg-meteorite-50 border-transparent hover:border-meteorite-200"
                                                 }`}>
                                                 <div className={`w-12 h-12 rounded-xl flex flex-col items-center justify-center font-bold shadow-sm transition-colors ${isInProgress ? "bg-red-500 text-white" :
                                                     event.targetAreaId ? 'bg-orange-50 text-orange-600 group-hover:bg-orange-100' : 'bg-meteorite-100 text-meteorite-600 group-hover:bg-meteorite-200'
@@ -806,16 +935,19 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
                                                     </span>
                                                 </div>
                                                 <div className="ml-4 flex-1">
-                                                    <div className="flex justify-between items-start">
-                                                        <div className="flex flex-col">
-                                                            <h4 className={`font-bold text-sm ${isInProgress ? "text-red-900" : (event.targetAreaId ? 'text-gray-800 group-hover:text-orange-700' : 'text-gray-800 group-hover:text-meteorite-700')}`}>
+                                                    <div className="flex justify-between items-start mb-1">
+                                                        <div className="flex flex-col gap-1">
+                                                            <div className="flex items-center gap-2">
+                                                                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase tracking-wider ${listBadgeColor}`}>{listBadgeLabel}</span>
+                                                                {isInProgress && (
+                                                                    <span className="text-[9px] font-black text-red-500 uppercase tracking-wider animate-pulse">
+                                                                        ● En Curso
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            <h4 className={`font-bold text-sm leading-tight ${isInProgress ? "text-red-900" : 'text-gray-800 group-hover:text-meteorite-700'}`}>
                                                                 {event.title}
                                                             </h4>
-                                                            {isInProgress && (
-                                                                <span className="text-[9px] font-black text-red-500 uppercase tracking-wider animate-pulse">
-                                                                    ● En Curso
-                                                                </span>
-                                                            )}
                                                         </div>
                                                         {event.isMandatory && !isInProgress && (
                                                             <span className="text-[10px] font-bold bg-green-100 text-green-600 px-2 py-0.5 rounded border border-green-200">
@@ -829,12 +961,12 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
                                                         <span className={`mx-2 ${isInProgress ? "text-red-300" : "text-gray-300"}`}>|</span>
                                                         {event.isVirtual ? (
                                                             <>
-                                                                <Video className={`w-3 h-3 mr-1.5 ${isInProgress ? "text-red-500" : (event.targetAreaId ? 'text-orange-400' : 'text-meteorite-400')}`} />
+                                                                <Video className={`w-3 h-3 mr-1.5 ${isInProgress ? "text-red-500" : 'text-meteorite-400'}`} />
                                                                 Virtual
                                                             </>
                                                         ) : (
                                                             <>
-                                                                <MapPin className={`w-3 h-3 mr-1.5 ${isInProgress ? "text-red-500" : (event.targetAreaId ? 'text-orange-400' : 'text-meteorite-400')}`} />
+                                                                <MapPin className={`w-3 h-3 mr-1.5 ${isInProgress ? "text-red-500" : 'text-meteorite-400'}`} />
                                                                 Campus
                                                             </>
                                                         )}
@@ -1027,7 +1159,7 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
             <nav className="lg:hidden fixed bottom-0 left-0 w-full bg-meteorite-950 border-t border-meteorite-800 text-white z-50 pb-safe shadow-[0_-5px_20px_rgba(0,0,0,0.2)]">
                 <div className="flex justify-around items-center h-16">
                     <a
-                        href="#"
+                        href="/dashboard"
                         className="flex flex-col items-center justify-center w-full h-full text-meteorite-400 hover:text-white group"
                     >
                         <div className="mb-1 p-1.5 rounded-xl bg-meteorite-800 text-white shadow-lg shadow-meteorite-900/50 transition-all transform group-hover:-translate-y-1">
@@ -1052,15 +1184,17 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
                             <span className="text-[10px] font-medium">Agenda</span>
                         </a>
                     )}
+                    {["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER", "DIRECTOR"].includes((user as any).role) && (
+                        <a
+                            href="/dashboard/management/grades"
+                            className="flex flex-col items-center justify-center w-full h-full text-meteorite-400 hover:text-white transition-colors"
+                        >
+                            <GraduationCap className="w-5 h-5 mb-1" />
+                            <span className="text-[10px] font-medium">Notas</span>
+                        </a>
+                    )}
                     <a
-                        href="#"
-                        className="flex flex-col items-center justify-center w-full h-full text-meteorite-400 hover:text-white transition-colors"
-                    >
-                        <GraduationCap className="w-5 h-5 mb-1" />
-                        <span className="text-[10px] font-medium">Notas</span>
-                    </a>
-                    <a
-                        href="#"
+                        href="/dashboard/profile"
                         className="flex flex-col items-center justify-center w-full h-full text-meteorite-400 hover:text-white transition-colors"
                     >
                         <UserIcon className="w-5 h-5 mb-1" />

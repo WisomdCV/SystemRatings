@@ -19,6 +19,18 @@ export default async function DashboardPage() {
     const currentAreaId = session.user.currentAreaId;
     const role = session.user.role;
 
+    // Fetch current area name for the user
+    let currentAreaName = "General";
+    if (currentAreaId) {
+        const areaData = await db.query.areas.findFirst({
+            where: eq(areas.id, currentAreaId),
+            columns: { name: true }
+        });
+        if (areaData) {
+            currentAreaName = areaData.name;
+        }
+    }
+
     // 1. Get Active Semester
     const activeSemester = await db.query.semesters.findFirst({
         where: eq(semesters.isActive, true)
@@ -63,7 +75,12 @@ export default async function DashboardPage() {
             orderBy: [asc(events.date), asc(events.startTime)],
             limit: 6,
             with: {
-                targetArea: true
+                targetArea: true,
+                project: {
+                    columns: {
+                        name: true
+                    }
+                }
             }
         });
     }
@@ -75,8 +92,14 @@ export default async function DashboardPage() {
     // 3. Fetch Dashboard KPI & Grades Data
     const { data: dashboardData } = await getMyDashboardDataAction();
 
+    // Attach area name to user object so we don't change too many props
+    const userWithArea = {
+        ...session.user,
+        areaName: currentAreaName
+    };
+
     return <DashboardView
-        user={session.user}
+        user={userWithArea}
         upcomingEvents={upcomingEvents}
         pendingJustifications={pendingJustifications || []}
         attendanceHistory={attendanceHistory || []}

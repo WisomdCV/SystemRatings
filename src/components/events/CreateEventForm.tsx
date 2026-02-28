@@ -42,6 +42,7 @@ interface CreateEventFormProps {
     availableScopes?: string[];
     availableTypes?: string[];
     users?: { id: string; name: string | null; image: string | null }[];
+    projectMembersMap?: Record<string, { id: string; name: string | null; image: string | null }[]>;
     defaultProjectId?: string;
 }
 
@@ -59,6 +60,7 @@ export default function CreateEventForm({
     availableScopes = ["IISE"],
     availableTypes = ["GENERAL", "AREA"],
     users = [],
+    projectMembersMap = {},
     defaultProjectId,
 }: CreateEventFormProps) {
     const router = useRouter();
@@ -166,7 +168,13 @@ export default function CreateEventForm({
         syncInvitees(next);
     };
 
-    const filteredUsers = users.filter(u =>
+    // Determine which users to show in the invitee picker based on scope
+    const watchProjectId = form.watch("projectId");
+    const inviteePool = (watchScope === "PROJECT" && watchProjectId && projectMembersMap[watchProjectId])
+        ? projectMembersMap[watchProjectId]
+        : users;
+
+    const filteredUsers = inviteePool.filter(u =>
         u.name?.toLowerCase().includes(inviteeSearch.toLowerCase())
     );
 

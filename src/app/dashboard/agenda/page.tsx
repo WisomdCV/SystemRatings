@@ -72,8 +72,22 @@ export default async function AgendaPage() {
                 targetArea: true,
                 project: { columns: { id: true, name: true } },
                 targetProjectArea: { columns: { id: true, name: true } },
-                createdBy: { columns: { name: true, role: true } }
+                createdBy: { columns: { name: true, role: true } },
+                invitees: {
+                    with: {
+                        user: { columns: { id: true, name: true, image: true } }
+                    }
+                }
             }
+        });
+
+        // Privacy: INDIVIDUAL_GROUP events are only visible to their invitees + creator
+        eventsData = eventsData.filter((event: any) => {
+            if (event.eventType === "INDIVIDUAL_GROUP") {
+                if (event.createdById === userId) return true;
+                return event.invitees?.some((inv: any) => inv.userId === userId);
+            }
+            return true;
         });
     }
 
@@ -131,6 +145,7 @@ export default async function AgendaPage() {
             events={eventsData}
             activeSemesterName={activeSemester?.name || "Semestre Inactivo"}
             userRole={role}
+            userId={userId}
             userAreaId={currentAreaId}
             userAreaName={userAreaName}
             areas={availableAreas}

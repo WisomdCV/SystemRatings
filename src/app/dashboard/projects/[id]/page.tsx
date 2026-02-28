@@ -51,13 +51,27 @@ export default async function ProjectDetailPage(props: { params: Promise<{ id: s
 
     // ── Project Events ───────────────────────────────────────────────────────
     // Fetch events for this project
-    const projectEvents = await db.query.events.findMany({
+    const allProjectEvents = await db.query.events.findMany({
         where: eq(events.projectId, params.id),
         orderBy: [desc(events.date)],
         with: {
             targetProjectArea: { columns: { id: true, name: true } },
-            createdBy: { columns: { name: true, role: true } }
+            createdBy: { columns: { name: true, role: true } },
+            invitees: {
+                with: {
+                    user: { columns: { id: true, name: true, image: true } }
+                }
+            }
         }
+    });
+
+    // Privacy: INDIVIDUAL_GROUP events are only visible to invitees + creator
+    const projectEvents = allProjectEvents.filter(event => {
+        if (event.eventType === "INDIVIDUAL_GROUP") {
+            if (event.createdById === session.user!.id) return true;
+            return event.invitees?.some(inv => inv.userId === session.user!.id);
+        }
+        return true;
     });
 
     // Determine creatable event types via centralized permission engine
