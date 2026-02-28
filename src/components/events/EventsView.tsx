@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState } from "react";
 import {
     CalendarCheck,
     Filter,
@@ -36,6 +36,13 @@ type EventItem = {
     status: string | null;
     createdById: string | null;
     targetAreaId: string | null;
+    // Events v2 fields
+    eventScope?: string | null;
+    eventType?: string | null;
+    tracksAttendance?: boolean | null;
+    projectId?: string | null;
+    project?: { id: string; name: string } | null;
+    targetProjectArea?: { id: string; name: string } | null;
     targetArea: {
         id: string;
         name: string;
@@ -59,6 +66,12 @@ interface EventsViewProps {
     userAreaName: string | null;
     areas: any[];
     readOnly?: boolean;
+    // v2 props
+    availableScopes?: string[];
+    availableTypes?: string[];
+    projects?: { id: string; name: string }[];
+    projectAreas?: { id: string; name: string }[];
+    users?: { id: string; name: string | null; image: string | null }[];
 }
 
 export default function EventsView({
@@ -68,7 +81,12 @@ export default function EventsView({
     userAreaId,
     userAreaName,
     areas,
-    readOnly = false
+    readOnly = false,
+    availableScopes,
+    availableTypes,
+    projects,
+    projectAreas,
+    users,
 }: EventsViewProps) {
     const router = useRouter();
     const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
@@ -165,6 +183,11 @@ export default function EventsView({
                                 userAreaId={userAreaId}
                                 userAreaName={userAreaName}
                                 areas={areas}
+                                availableScopes={availableScopes}
+                                availableTypes={availableTypes}
+                                projects={projects}
+                                projectAreas={projectAreas}
+                                users={users}
                             />
                         )}
                     </div>
@@ -308,8 +331,8 @@ function canManageEvent(role: string, userAreaId: string | null, event: EventIte
 }
 
 function canTakeAttendance(role: string, userAreaId: string | null, event: EventItem) {
-    // Logic is identical to management for now based on the matrix
-    // "Tomar Asistencia" vs "Crear Eventos" columns are identical in scope
+    // Events that don't track attendance (INDIVIDUAL_GROUP) should not show the button
+    if (event.tracksAttendance === false) return false;
     return canManageEvent(role, userAreaId, event);
 }
 
@@ -357,7 +380,7 @@ function EventCardGrid({ event, isDeleting, onEdit, onDelete, canEdit, canDelete
             </div>
 
             <div className="mb-2">
-                <Tag isGeneral={isGeneral} isBoard={isBoard} areaName={event.targetArea?.name} areaCode={event.targetArea?.code} />
+                <Tag isGeneral={isGeneral} isBoard={isBoard} areaName={event.targetArea?.name} areaCode={event.targetArea?.code} event={event} />
             </div>
 
             <h3 className="text-xl font-bold text-gray-900 mb-3 leading-tight mobile-title-clamp">{event.title}</h3>
@@ -442,7 +465,7 @@ function EventCardList({ event, isDeleting, onEdit, onDelete, canEdit, canDelete
                 <div className="flex flex-col md:flex-row md:items-center gap-2 mb-1">
                     <h3 className="text-lg font-bold text-gray-900 leading-tight">{event.title}</h3>
                     <div className="flex justify-center md:justify-start gap-2 items-center">
-                        <Tag isGeneral={isGeneral} isBoard={isBoard} areaName={event.targetArea?.name} areaCode={event.targetArea?.code} />
+                        <Tag isGeneral={isGeneral} isBoard={isBoard} areaName={event.targetArea?.name} areaCode={event.targetArea?.code} event={event} />
                         {canAttendance && (event.pendingJustificationCount || 0) > 0 && (
                             <div className="bg-amber-100 text-amber-700 font-bold text-[10px] px-2 py-0.5 rounded-full flex items-center border border-amber-200" title={`${event.pendingJustificationCount} justificaciones pendientes`}>
                                 <div className="w-1.5 h-1.5 bg-amber-500 rounded-full mr-1.5 animate-pulse"></div>
@@ -524,14 +547,49 @@ function getAreaStyle(code?: string | null) {
     }
 }
 
-function Tag({ isGeneral, isBoard, areaName, areaCode }: { isGeneral: boolean, isBoard: boolean, areaName?: string, areaCode?: string | null }) {
-    if (isGeneral) {
-        return <span className="inline-block px-2 py-0.5 rounded-md bg-gray-100 text-gray-600 text-[10px] font-bold uppercase tracking-wide border border-gray-200">General</span>;
+function Tag({ isGeneral, isBoard, areaName, areaCode, event }: { isGeneral: boolean, isBoard: boolean, areaName?: string, areaCode?: string | null, event?: EventItem }) {
+    const tags: React.ReactElement[] = [];
+
+    // Scope badge (only for PROJECT events)
+    if (event?.eventScope === "PROJECT") {
+        tags.push(
+            <span key="scope" className="inline-block px-2 py-0.5 rounded-md bg-violet-100 text-violet-700 text-[10px] font-bold uppercase tracking-wide border border-violet-200">
+                📁 {event.project?.name || "Proyecto"}
+            </span>
+        );
     }
-    // Board is handled by isLeadershipArea boolean
-    if (isBoard) {
-        return <span className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide border bg-amber-100 text-amber-700 border-amber-200`}>{areaName || "Mesa Directiva"}</span>;
+
+    // Type badge for INDIVIDUAL_GROUP
+    if (event?.eventType === "INDIVIDUAL_GROUP") {
+        tags.push(
+            <span key="type" className="inline-block px-2 py-0.5 rounded-md bg-teal-100 text-teal-700 text-[10px] font-bold uppercase tracking-wide border border-teal-200">
+                👥 Reunión
+            </span>
+        );
     }
-    const style = getAreaStyle(areaCode);
-    return <span className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide border ${style}`}>{areaName}</span>;
+
+    // Area badge
+    if (event?.eventScope === "PROJECT" && event?.targetProjectArea) {
+        const style = "bg-violet-50 text-violet-600 border-violet-200";
+        tags.push(
+            <span key="pArea" className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide border ${style}`}>
+                {event.targetProjectArea.name}
+            </span>
+        );
+    } else if (isGeneral) {
+        tags.push(
+            <span key="area" className="inline-block px-2 py-0.5 rounded-md bg-gray-100 text-gray-600 text-[10px] font-bold uppercase tracking-wide border border-gray-200">General</span>
+        );
+    } else if (isBoard) {
+        tags.push(
+            <span key="area" className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide border bg-amber-100 text-amber-700 border-amber-200`}>{areaName || "Mesa Directiva"}</span>
+        );
+    } else {
+        const style = getAreaStyle(areaCode);
+        tags.push(
+            <span key="area" className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide border ${style}`}>{areaName}</span>
+        );
+    }
+
+    return <div className="flex flex-wrap gap-1">{tags}</div>;
 }

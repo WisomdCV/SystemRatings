@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { CreateEventSchema, CreateEventDTO } from "@/lib/validators/event";
@@ -13,7 +13,12 @@ import {
     AlignLeft,
     CheckCircle2,
     AlertCircle,
-    Loader2
+    Loader2,
+    Globe,
+    FolderKanban,
+    Users,
+    Megaphone,
+    UserPlus,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
@@ -26,11 +31,17 @@ interface CreateEventFormProps {
     userRole: string;
     userAreaId: string | null;
     userAreaName: string | null;
-    areas: any[]; // List of areas for admin selection
+    areas: any[];
     onSuccess?: () => void;
-    initialData?: any; // Should be stricter, but EventItem is fine
+    initialData?: any;
     eventId?: string;
     isEditing?: boolean;
+    // v2 props
+    projects?: { id: string; name: string }[];
+    projectAreas?: { id: string; name: string }[];
+    availableScopes?: string[];
+    availableTypes?: string[];
+    users?: { id: string; name: string | null; image: string | null }[];
 }
 
 export default function CreateEventForm({
@@ -41,42 +52,66 @@ export default function CreateEventForm({
     onSuccess,
     initialData,
     eventId,
-    isEditing = false
+    isEditing = false,
+    projects = [],
+    projectAreas = [],
+    availableScopes = ["IISE"],
+    availableTypes = ["GENERAL", "AREA"],
+    users = [],
 }: CreateEventFormProps) {
     const router = useRouter();
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitError, setSubmitError] = useState<string | null>(null);
+    const [selectedInvitees, setSelectedInvitees] = useState<string[]>([]);
+    const [inviteeSearch, setInviteeSearch] = useState("");
 
-    // Determine default values
     const defaultValues = isEditing && initialData ? {
         title: initialData.title,
         description: initialData.description || "",
-        targetAreaId: initialData.targetAreaId || "", // null -> "" for select
-        date: new Date(initialData.date).toISOString().split('T')[0], // Ensure YYYY-MM-DD format for input type="date"
+        eventScope: initialData.eventScope || "IISE",
+        eventType: initialData.eventType || "GENERAL",
+        targetAreaId: initialData.targetAreaId || "",
+        projectId: initialData.projectId || "",
+        targetProjectAreaId: initialData.targetProjectAreaId || "",
+        date: new Date(initialData.date).toISOString().split('T')[0],
         startTime: initialData.startTime,
         endTime: initialData.endTime,
-        isVirtual: initialData.isVirtual
+        isVirtual: initialData.isVirtual,
+        inviteeUserIds: [],
     } : {
         title: "",
         description: "",
+        eventScope: "IISE",
+        eventType: "GENERAL",
         targetAreaId: userRole === "DIRECTOR" || userRole === "SUBDIRECTOR" ? (userAreaId || "") : "",
+        projectId: "",
+        targetProjectAreaId: "",
         date: undefined,
         startTime: "",
         endTime: "",
-        isVirtual: true
+        isVirtual: true,
+        inviteeUserIds: [],
     };
 
     const form = useForm<CreateEventDTO>({
-        resolver: zodResolver(CreateEventSchema) as any, // Cast resolver to stricter/looser type to avoid optional/required mismatch
-        defaultValues: defaultValues as any // Cast default values to avoid Date vs string strictness issues
+        resolver: zodResolver(CreateEventSchema) as any,
+        defaultValues: defaultValues as any
     });
 
+    const watchScope = form.watch("eventScope") || "IISE";
+    const watchType = form.watch("eventType") || "GENERAL";
     const isVirtual = form.watch("isVirtual");
-    const canSelectArea = ["DEV", "PRESIDENT", "SECRETARY"].includes(userRole);
+
+    const canSelectArea = ["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER"].includes(userRole);
 
     const onSubmit = async (data: CreateEventDTO) => {
         setIsSubmitting(true);
         setSubmitError(null);
+
+        // Attach invitees
+        if (watchType === "INDIVIDUAL_GROUP") {
+            data.inviteeUserIds = selectedInvitees;
+        }
 
         try {
             let result;
@@ -87,7 +122,10 @@ export default function CreateEventForm({
             }
 
             if (result.success) {
-                if (!isEditing) form.reset();
+                if (!isEditing) {
+                    form.reset();
+                    setSelectedInvitees([]);
+                }
                 if (onSuccess) onSuccess();
                 router.refresh();
             } else {
@@ -103,77 +141,137 @@ export default function CreateEventForm({
     const handleQuickTime = (minutes: number) => {
         const now = new Date();
         const futureDate = new Date(now.getTime() + minutes * 60000);
-
-        // Update Date (Format YYYY-MM-DD for input type="date")
-        // Note: Using local string construction to avoid UTC discrepancies if needed, but ISO split is usually fine for "Today" if timezone is not edge case.
-        // Better: helpers to ensure local date string.
         const year = futureDate.getFullYear();
         const month = String(futureDate.getMonth() + 1).padStart(2, '0');
         const day = String(futureDate.getDate()).padStart(2, '0');
-        const dateString = `${year}-${month}-${day}`;
-
-        form.setValue("date", dateString as any); // cast as any because schema expects Date but input needs string
-
-        // Update Start Time (HH:MM format)
+        form.setValue("date", `${year}-${month}-${day}` as any);
         const hours = futureDate.getHours().toString().padStart(2, '0');
         const mins = futureDate.getMinutes().toString().padStart(2, '0');
-        const startTime = `${hours}:${mins}`;
-        form.setValue("startTime", startTime);
-
-        // Update End Time (+1 hour from start)
+        form.setValue("startTime", `${hours}:${mins}`);
         const endDate = new Date(futureDate.getTime() + 60 * 60000);
         const endHours = endDate.getHours().toString().padStart(2, '0');
         const endMins = endDate.getMinutes().toString().padStart(2, '0');
         form.setValue("endTime", `${endHours}:${endMins}`);
     };
 
-    return (
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+    const toggleInvitee = (userId: string) => {
+        setSelectedInvitees(prev =>
+            prev.includes(userId) ? prev.filter(id => id !== userId) : [...prev, userId]
+        );
+    };
 
-            {/* Header / Context */}
-            <div className="bg-meteorite-50/50 p-4 rounded-xl border border-meteorite-100 flex items-start gap-3">
-                <div className="p-2 bg-meteorite-100 rounded-lg text-meteorite-600 mt-1">
-                    <Calendar className="w-5 h-5" />
-                </div>
+    const filteredUsers = users.filter(u =>
+        u.name?.toLowerCase().includes(inviteeSearch.toLowerCase())
+    );
+
+    const SCOPE_LABELS: Record<string, { label: string; icon: any; color: string }> = {
+        IISE: { label: "IISE (Organización)", icon: Globe, color: "meteorite" },
+        PROJECT: { label: "Proyecto", icon: FolderKanban, color: "violet" },
+    };
+
+    const TYPE_LABELS: Record<string, { label: string; icon: any; desc: string }> = {
+        GENERAL: { label: "General", icon: Megaphone, desc: "Para toda la organización o proyecto" },
+        AREA: { label: "Área", icon: Users, desc: "Para un área específica" },
+        INDIVIDUAL_GROUP: { label: "Individual/Grupal", icon: UserPlus, desc: "Reunión con invitados específicos" },
+    };
+
+    return (
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+            {/* Step 1: Scope Selection */}
+            {!isEditing && availableScopes.length > 1 && (
                 <div>
-                    <h4 className="font-bold text-meteorite-900 text-sm">{isEditing ? "Editar Evento" : "Nuevo Evento"}</h4>
-                    <p className="text-xs text-meteorite-500 mt-1">
-                        {isEditing
-                            ? "Modifica los detalles del evento. Se sincronizará con Google."
-                            : "Programar una nueva reunión o actividad. Se sincronizará automáticamente con Google Calendar."}
-                    </p>
+                    <label className="block text-xs font-black text-gray-500 uppercase tracking-wider mb-2 ml-1">
+                        Alcance del Evento
+                    </label>
+                    <div className="grid grid-cols-2 gap-3">
+                        {availableScopes.map(scope => {
+                            const cfg = SCOPE_LABELS[scope] || { label: scope, icon: Globe, color: "gray" };
+                            const Icon = cfg.icon;
+                            const isActive = watchScope === scope;
+                            return (
+                                <button
+                                    key={scope}
+                                    type="button"
+                                    onClick={() => {
+                                        form.setValue("eventScope", scope as any);
+                                        // Reset type when switching scope
+                                        form.setValue("eventType", "GENERAL" as any);
+                                    }}
+                                    className={`p-3 rounded-xl border-2 transition-all text-left flex items-center gap-3 ${isActive
+                                        ? `border-${cfg.color}-500 bg-${cfg.color}-50 shadow-md`
+                                        : "border-gray-200 bg-white hover:border-gray-300"
+                                        }`}
+                                >
+                                    <div className={`p-2 rounded-lg ${isActive ? `bg-${cfg.color}-100 text-${cfg.color}-600` : "bg-gray-100 text-gray-400"}`}>
+                                        <Icon className="w-5 h-5" />
+                                    </div>
+                                    <span className={`text-sm font-bold ${isActive ? `text-${cfg.color}-700` : "text-gray-600"}`}>
+                                        {cfg.label}
+                                    </span>
+                                </button>
+                            );
+                        })}
+                    </div>
                 </div>
+            )}
+
+            {/* Step 2: Type Selection */}
+            {!isEditing && (
+                <div>
+                    <label className="block text-xs font-black text-gray-500 uppercase tracking-wider mb-2 ml-1">
+                        Tipo de Evento
+                    </label>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        {availableTypes.map(type => {
+                            const cfg = TYPE_LABELS[type] || { label: type, icon: Calendar, desc: "" };
+                            const Icon = cfg.icon;
+                            const isActive = watchType === type;
+                            return (
+                                <button
+                                    key={type}
+                                    type="button"
+                                    onClick={() => form.setValue("eventType", type as any)}
+                                    className={`p-3 rounded-xl border-2 transition-all text-left ${isActive
+                                        ? "border-meteorite-500 bg-meteorite-50 shadow-md"
+                                        : "border-gray-200 bg-white hover:border-gray-300"
+                                        }`}
+                                >
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <Icon className={`w-4 h-4 ${isActive ? "text-meteorite-600" : "text-gray-400"}`} />
+                                        <span className={`text-sm font-bold ${isActive ? "text-meteorite-700" : "text-gray-600"}`}>
+                                            {cfg.label}
+                                        </span>
+                                    </div>
+                                    <p className="text-[10px] text-gray-400 leading-tight">{cfg.desc}</p>
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
+
+            {/* Step 3: Title */}
+            <div>
+                <label className="block text-sm font-bold text-gray-700 mb-1.5 ml-1">
+                    Título del Evento
+                </label>
+                <input
+                    {...form.register("title")}
+                    placeholder="Ej: Reunión Semanal de Staff"
+                    className="w-full pl-4 pr-4 py-2.5 rounded-xl border border-gray-200 bg-gray-50/50 focus:bg-white focus:border-meteorite-500 focus:ring-2 focus:ring-meteorite-200 transition-all outline-none text-sm font-medium text-gray-900 placeholder:text-gray-400"
+                />
+                {form.formState.errors.title && (
+                    <p className="text-red-500 text-xs mt-1 ml-1 font-medium">{form.formState.errors.title.message}</p>
+                )}
             </div>
 
-            {/* Title & Area Selection */}
-            <div className="grid grid-cols-1 gap-5">
-                <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-1.5 ml-1">
-                        Título del Evento
-                    </label>
-                    <div className="relative">
-                        <input
-                            {...form.register("title")}
-                            placeholder="Ej: Reunión Semanal de Staff"
-                            className="w-full pl-4 pr-4 py-2.5 rounded-xl border border-gray-200 bg-gray-50/50 focus:bg-white focus:border-meteorite-500 focus:ring-2 focus:ring-meteorite-200 transition-all outline-none text-sm font-medium text-gray-900 placeholder:text-gray-400"
-                        />
-                    </div>
-                    {form.formState.errors.title && (
-                        <p className="text-red-500 text-xs mt-1 ml-1 font-medium">{form.formState.errors.title.message}</p>
-                    )}
-                </div>
-
+            {/* Conditional: Area Target (IISE + AREA or IISE + GENERAL) */}
+            {watchScope === "IISE" && watchType !== "INDIVIDUAL_GROUP" && (
                 <div>
                     <label className="block text-sm font-bold text-gray-700 mb-1.5 ml-1">
                         Área Destino
                     </label>
-
-                    {/* Logic: 
-                        - PRESI/DEV/SECRETARY: Full Select
-                        - TREASURER: Select (General + MD)
-                        - DIRECTOR/SUBDIRECTOR: Fixed Badge (Own Area)
-                    */}
-                    {["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER"].includes(userRole) ? (
+                    {canSelectArea ? (
                         <select
                             {...form.register("targetAreaId")}
                             className="w-full px-4 py-2.5 rounded-xl border border-gray-200 bg-gray-50/50 focus:bg-white focus:border-meteorite-500 focus:ring-2 focus:ring-meteorite-200 transition-all outline-none text-sm font-medium text-gray-700 appearance-none cursor-pointer"
@@ -191,69 +289,143 @@ export default function CreateEventForm({
                             Evento para: {userAreaName || "Mi Área"}
                         </div>
                     )}
-                    <p className="text-[10px] text-gray-400 mt-1 ml-1">
-                        {["DIRECTOR", "SUBDIRECTOR"].includes(userRole)
-                            ? `Como ${userRole === "DIRECTOR" ? "Director" : "Subdirector"}, solo puedes crear eventos para tu área.`
-                            : "Elige el alcance del evento."}
-                    </p>
                 </div>
-            </div>
+            )}
 
-            {/* Quick Time Actions */}
-            <div className="flex gap-2 mb-2 overflow-x-auto pb-2 hide-scroll">
-                <button
-                    type="button"
-                    onClick={() => handleQuickTime(5)}
-                    className="px-3 py-1.5 rounded-lg bg-meteorite-100 text-meteorite-700 text-xs font-bold hover:bg-meteorite-200 transition-colors whitespace-nowrap"
-                >
-                    🚀 En 5 min
-                </button>
-                <button
-                    type="button"
-                    onClick={() => handleQuickTime(15)}
-                    className="px-3 py-1.5 rounded-lg bg-meteorite-100 text-meteorite-700 text-xs font-bold hover:bg-meteorite-200 transition-colors whitespace-nowrap"
-                >
-                    ⏱️ En 15 min
-                </button>
-                <button
-                    type="button"
-                    onClick={() => handleQuickTime(30)}
-                    className="px-3 py-1.5 rounded-lg bg-meteorite-100 text-meteorite-700 text-xs font-bold hover:bg-meteorite-200 transition-colors whitespace-nowrap"
-                >
-                    🕜 En 30 min
-                </button>
-                <button
-                    type="button"
-                    onClick={() => handleQuickTime(60)}
-                    className="px-3 py-1.5 rounded-lg bg-meteorite-100 text-meteorite-700 text-xs font-bold hover:bg-meteorite-200 transition-colors whitespace-nowrap"
-                >
-                    🕐 En 1 hora
-                </button>
+            {/* Conditional: Project Selection (PROJECT scope) */}
+            {watchScope === "PROJECT" && (
+                <div className="space-y-3">
+                    <div>
+                        <label className="block text-sm font-bold text-gray-700 mb-1.5 ml-1">
+                            Proyecto
+                        </label>
+                        <select
+                            {...form.register("projectId")}
+                            className="w-full px-4 py-2.5 rounded-xl border border-gray-200 bg-gray-50/50 focus:bg-white focus:border-violet-500 focus:ring-2 focus:ring-violet-200 transition-all outline-none text-sm font-medium text-gray-700 appearance-none cursor-pointer"
+                        >
+                            <option value="">Seleccionar proyecto...</option>
+                            {projects.map(proj => (
+                                <option key={proj.id} value={proj.id}>📁 {proj.name}</option>
+                            ))}
+                        </select>
+                        {form.formState.errors.projectId && (
+                            <p className="text-red-500 text-xs mt-1 ml-1 font-medium">{(form.formState.errors.projectId as any)?.message}</p>
+                        )}
+                    </div>
+                    {watchType === "AREA" && (
+                        <div>
+                            <label className="block text-sm font-bold text-gray-700 mb-1.5 ml-1">
+                                Área del Proyecto
+                            </label>
+                            <select
+                                {...form.register("targetProjectAreaId")}
+                                className="w-full px-4 py-2.5 rounded-xl border border-gray-200 bg-gray-50/50 focus:bg-white focus:border-violet-500 focus:ring-2 focus:ring-violet-200 transition-all outline-none text-sm font-medium text-gray-700 appearance-none cursor-pointer"
+                            >
+                                <option value="">Seleccionar área...</option>
+                                {projectAreas.map(pa => (
+                                    <option key={pa.id} value={pa.id}>📂 {pa.name}</option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* Conditional: Invitees (INDIVIDUAL_GROUP) */}
+            {watchType === "INDIVIDUAL_GROUP" && (
+                <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-1.5 ml-1">
+                        Invitados ({selectedInvitees.length} seleccionados)
+                    </label>
+                    <input
+                        type="text"
+                        value={inviteeSearch}
+                        onChange={(e) => setInviteeSearch(e.target.value)}
+                        placeholder="Buscar usuarios..."
+                        className="w-full px-4 py-2 rounded-xl border border-gray-200 bg-gray-50/50 focus:bg-white focus:border-meteorite-500 focus:ring-2 focus:ring-meteorite-200 transition-all outline-none text-sm font-medium mb-2"
+                    />
+                    <div className="max-h-40 overflow-y-auto rounded-xl border border-gray-200 bg-white divide-y divide-gray-100">
+                        {filteredUsers.length === 0 ? (
+                            <p className="p-3 text-xs text-gray-400 text-center">No se encontraron usuarios</p>
+                        ) : (
+                            filteredUsers.map(user => (
+                                <label
+                                    key={user.id}
+                                    className={`flex items-center gap-3 p-2.5 cursor-pointer hover:bg-gray-50 transition-colors ${selectedInvitees.includes(user.id) ? "bg-meteorite-50" : ""}`}
+                                >
+                                    <input
+                                        type="checkbox"
+                                        checked={selectedInvitees.includes(user.id)}
+                                        onChange={() => toggleInvitee(user.id)}
+                                        className="w-4 h-4 rounded border-gray-300 text-meteorite-600 focus:ring-meteorite-500"
+                                    />
+                                    {user.image ? (
+                                        <img src={user.image} alt="" className="w-6 h-6 rounded-full" />
+                                    ) : (
+                                        <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-[10px] font-bold text-gray-500">
+                                            {user.name?.charAt(0) || "?"}
+                                        </div>
+                                    )}
+                                    <span className="text-sm font-medium text-gray-700">{user.name || "Sin nombre"}</span>
+                                </label>
+                            ))
+                        )}
+                    </div>
+                    {selectedInvitees.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 mt-2">
+                            {selectedInvitees.map(uid => {
+                                const user = users.find(u => u.id === uid);
+                                return (
+                                    <span
+                                        key={uid}
+                                        className="px-2 py-1 bg-meteorite-100 text-meteorite-700 text-xs font-bold rounded-lg flex items-center gap-1 cursor-pointer hover:bg-meteorite-200"
+                                        onClick={() => toggleInvitee(uid)}
+                                    >
+                                        {user?.name?.split(' ')[0] || uid.slice(0, 6)}
+                                        <span className="text-meteorite-400">×</span>
+                                    </span>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* Quick Time */}
+            <div className="flex gap-2 overflow-x-auto pb-1 hide-scroll">
+                {[
+                    { label: "🚀 En 5 min", min: 5 },
+                    { label: "⏱️ En 15 min", min: 15 },
+                    { label: "🕜 En 30 min", min: 30 },
+                    { label: "🕐 En 1 hora", min: 60 },
+                ].map(qt => (
+                    <button
+                        key={qt.min}
+                        type="button"
+                        onClick={() => handleQuickTime(qt.min)}
+                        className="px-3 py-1.5 rounded-lg bg-meteorite-100 text-meteorite-700 text-xs font-bold hover:bg-meteorite-200 transition-colors whitespace-nowrap"
+                    >
+                        {qt.label}
+                    </button>
+                ))}
             </div>
 
             {/* Date & Time */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                {/* Date */}
-                <div className="md:col-span-2 lg:col-span-1">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
                     <div className="flex justify-between items-center mb-1.5 ml-1">
-                        <label className="text-sm font-bold text-gray-700">
-                            Fecha
-                        </label>
+                        <label className="text-sm font-bold text-gray-700">Fecha</label>
                         <button
                             type="button"
                             onClick={() => {
                                 const now = new Date();
-                                const year = now.getFullYear();
-                                const month = String(now.getMonth() + 1).padStart(2, '0');
-                                const day = String(now.getDate()).padStart(2, '0');
-                                form.setValue("date", `${year}-${month}-${day}` as any);
+                                form.setValue("date", `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}` as any);
                             }}
                             className="text-[10px] bg-meteorite-100 text-meteorite-700 font-bold px-2 py-0.5 rounded hover:bg-meteorite-200 transition-colors"
                         >
                             📅 Hoy
                         </button>
                     </div>
-
                     <input
                         type="date"
                         className="w-full px-4 py-2.5 rounded-xl border border-gray-200 bg-gray-50/50 focus:bg-white focus:border-meteorite-500 focus:ring-2 focus:ring-meteorite-200 transition-all outline-none text-sm font-medium text-gray-900"
@@ -264,11 +436,8 @@ export default function CreateEventForm({
                     )}
                 </div>
 
-                {/* Start Time */}
                 <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-1.5 ml-1">
-                        Inicio
-                    </label>
+                    <label className="block text-sm font-bold text-gray-700 mb-1.5 ml-1">Inicio</label>
                     <div className="relative">
                         <Clock className="w-4 h-4 text-gray-400 absolute left-3 top-3" />
                         <input
@@ -282,11 +451,8 @@ export default function CreateEventForm({
                     )}
                 </div>
 
-                {/* End Time */}
                 <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-1.5 ml-1">
-                        Fin
-                    </label>
+                    <label className="block text-sm font-bold text-gray-700 mb-1.5 ml-1">Fin</label>
                     <div className="relative">
                         <Clock className="w-4 h-4 text-gray-400 absolute left-3 top-3" />
                         <input
@@ -303,9 +469,7 @@ export default function CreateEventForm({
 
             {/* Description */}
             <div>
-                <label className="block text-sm font-bold text-gray-700 mb-1.5 ml-1">
-                    Descripción (Opcional)
-                </label>
+                <label className="block text-sm font-bold text-gray-700 mb-1.5 ml-1">Descripción (Opcional)</label>
                 <div className="relative">
                     <AlignLeft className="w-4 h-4 text-gray-400 absolute left-3 top-3" />
                     <textarea
@@ -317,25 +481,26 @@ export default function CreateEventForm({
                 </div>
             </div>
 
-            {/* Checkbox Virtual/Presential */}
+            {/* Virtual Toggle */}
             <div>
-                <label className="block text-sm font-bold text-gray-700 mb-2 ml-1">
-                    Modalidad
-                </label>
-                <div className={`flex items-center p-4 border rounded-xl cursor-pointer transition-all duration-300 ${form.watch("isVirtual") ? "bg-blue-50/50 border-blue-100 hover:bg-blue-50" : "bg-gray-50 border-gray-200 hover:bg-gray-100"}`} onClick={() => form.setValue("isVirtual", !form.getValues("isVirtual"))}>
-                    <div className={`w-5 h-5 rounded-md border flex items-center justify-center transition-all ${form.watch("isVirtual") ? "bg-blue-500 border-blue-500" : "bg-white border-gray-300"}`}>
-                        {form.watch("isVirtual") ? <CheckCircle2 className="w-3.5 h-3.5 text-white" /> : null}
+                <label className="block text-sm font-bold text-gray-700 mb-2 ml-1">Modalidad</label>
+                <div
+                    className={`flex items-center p-4 border rounded-xl cursor-pointer transition-all duration-300 ${isVirtual ? "bg-blue-50/50 border-blue-100 hover:bg-blue-50" : "bg-gray-50 border-gray-200 hover:bg-gray-100"}`}
+                    onClick={() => form.setValue("isVirtual", !form.getValues("isVirtual"))}
+                >
+                    <div className={`w-5 h-5 rounded-md border flex items-center justify-center transition-all ${isVirtual ? "bg-blue-500 border-blue-500" : "bg-white border-gray-300"}`}>
+                        {isVirtual ? <CheckCircle2 className="w-3.5 h-3.5 text-white" /> : null}
                     </div>
                     <input type="checkbox" {...form.register("isVirtual")} className="hidden" />
                     <div className="ml-3 select-none flex-1">
-                        <span className={`block text-sm font-bold ${form.watch("isVirtual") ? "text-blue-900" : "text-gray-700"}`}>
-                            {form.watch("isVirtual") ? "Reunión Virtual (Google Meet)" : "Reunión Presencial"}
+                        <span className={`block text-sm font-bold ${isVirtual ? "text-blue-900" : "text-gray-700"}`}>
+                            {isVirtual ? "Reunión Virtual (Google Meet)" : "Reunión Presencial"}
                         </span>
-                        <span className={`block text-xs ${form.watch("isVirtual") ? "text-blue-600/80" : "text-gray-500"}`}>
-                            {form.watch("isVirtual") ? "Se generará un enlace automáticamente." : "No se generará enlace de Meet."}
+                        <span className={`block text-xs ${isVirtual ? "text-blue-600/80" : "text-gray-500"}`}>
+                            {isVirtual ? "Se generará un enlace automáticamente." : "No se generará enlace de Meet."}
                         </span>
                     </div>
-                    {form.watch("isVirtual") ? <Video className="w-5 h-5 text-blue-400" /> : <MapPin className="w-5 h-5 text-gray-400" />}
+                    {isVirtual ? <Video className="w-5 h-5 text-blue-400" /> : <MapPin className="w-5 h-5 text-gray-400" />}
                 </div>
             </div>
 
@@ -347,7 +512,7 @@ export default function CreateEventForm({
                 </div>
             )}
 
-            {/* Submit Button */}
+            {/* Submit */}
             <div className="pt-2">
                 <button
                     type="submit"

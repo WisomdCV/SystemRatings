@@ -50,6 +50,8 @@ export default async function AgendaPage() {
             orderBy: [desc(events.date)],
             with: {
                 targetArea: true,
+                project: { columns: { id: true, name: true } },
+                targetProjectArea: { columns: { id: true, name: true } },
                 createdBy: { columns: { name: true, role: true } }
             }
         });

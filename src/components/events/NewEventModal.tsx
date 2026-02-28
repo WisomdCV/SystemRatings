@@ -9,9 +9,25 @@ interface NewEventModalProps {
     userAreaId: string | null;
     userAreaName: string | null;
     areas: any[];
+    // v2 props
+    availableScopes?: string[];
+    availableTypes?: string[];
+    projects?: { id: string; name: string }[];
+    projectAreas?: { id: string; name: string }[];
+    users?: { id: string; name: string | null; image: string | null }[];
 }
 
-export default function NewEventModal({ userRole, userAreaId, userAreaName, areas }: NewEventModalProps) {
+export default function NewEventModal({
+    userRole,
+    userAreaId,
+    userAreaName,
+    areas,
+    availableScopes,
+    availableTypes,
+    projects,
+    projectAreas,
+    users,
+}: NewEventModalProps) {
     const [isOpen, setIsOpen] = useState(false);
 
     return (
@@ -51,6 +67,11 @@ export default function NewEventModal({ userRole, userAreaId, userAreaName, area
                                 userAreaName={userAreaName}
                                 areas={areas}
                                 onSuccess={() => setIsOpen(false)}
+                                availableScopes={availableScopes}
+                                availableTypes={availableTypes}
+                                projects={projects}
+                                projectAreas={projectAreas}
+                                users={users}
                             />
                         </div>
                     </div>

@@ -19,6 +19,11 @@ export async function getAttendanceSheetAction(eventId: string) {
         const event = await getEventByIdDAO(eventId);
         if (!event) return { success: false, error: "Evento no encontrado" };
 
+        // Guard: If event doesn't track attendance, block access
+        if (event.tracksAttendance === false) {
+            return { success: false, error: "Este evento no tiene seguimiento de asistencia." };
+        }
+
         const isDevOrPresi = isAdmin(role);
 
         if (!isDevOrPresi) {
@@ -87,6 +92,11 @@ export async function saveAttendanceAction(eventId: string, records: { userId: s
         // Same Permission Logic
         const event = await getEventByIdDAO(eventId);
         if (!event) return { success: false, error: "Evento no encontrado" };
+
+        // Guard: If event doesn't track attendance, block saving
+        if (event.tracksAttendance === false) {
+            return { success: false, error: "Este evento no tiene seguimiento de asistencia." };
+        }
 
         const isDevOrPresi = isAdmin(role);
         const isDirLevel = isDirectorLevel(role);

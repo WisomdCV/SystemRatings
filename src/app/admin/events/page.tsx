@@ -1,8 +1,8 @@
 import { auth } from "@/server/auth";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
-import { events, areas, semesters, attendanceRecords } from "@/db/schema";
-import { desc, eq, and, or, isNull, inArray } from "drizzle-orm";
+import { events, areas, semesters, attendanceRecords, projects, users } from "@/db/schema";
+import { desc, eq, and, or, isNull, inArray, ne, asc } from "drizzle-orm";
 import EventsList from "@/components/events/EventsList";
 import CreateEventForm from "@/components/events/CreateEventForm";
 import { CalendarCheck, Plus, Filter } from "lucide-react";
@@ -47,6 +47,8 @@ export default async function EventsPage() {
                 orderBy: [desc(events.date)],
                 with: {
                     targetArea: true,
+                    project: { columns: { id: true, name: true } },
+                    targetProjectArea: { columns: { id: true, name: true } },
                     createdBy: { columns: { name: true, role: true } }
                 }
             });
@@ -66,6 +68,8 @@ export default async function EventsPage() {
                 orderBy: [desc(events.date)],
                 with: {
                     targetArea: true,
+                    project: { columns: { id: true, name: true } },
+                    targetProjectArea: { columns: { id: true, name: true } },
                     createdBy: { columns: { name: true, role: true } }
                 }
             });
@@ -102,6 +106,8 @@ export default async function EventsPage() {
                 orderBy: [desc(events.date)],
                 with: {
                     targetArea: true,
+                    project: { columns: { id: true, name: true } },
+                    targetProjectArea: { columns: { id: true, name: true } },
                     createdBy: { columns: { name: true, role: true } }
                 }
             });
@@ -139,6 +145,16 @@ export default async function EventsPage() {
         pendingJustificationCount: pendingCounts[e.id] || 0
     }));
 
+    // 5. Fetch active users for invitee picker
+    const activeUsers = await db.query.users.findMany({
+        where: and(eq(users.status, "ACTIVE"), ne(users.role, "DEV")),
+        columns: { id: true, name: true, image: true },
+        orderBy: [asc(users.name)],
+    });
+
+    // 6. Determine available event types based on role
+    const availableTypes = ["GENERAL", "AREA", "INDIVIDUAL_GROUP"];
+
     return (
         <EventsView
             events={eventsWithCounts}
@@ -147,6 +163,8 @@ export default async function EventsPage() {
             userAreaId={currentAreaId}
             userAreaName={userAreaName}
             areas={areasList}
+            availableTypes={availableTypes}
+            users={activeUsers}
         />
     );
 }
