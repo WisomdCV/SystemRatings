@@ -1,9 +1,10 @@
 import { auth } from "@/server/auth";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
-import { events, semesters, areas } from "@/db/schema";
-import { desc, eq, and, or, isNull } from "drizzle-orm";
+import { events, semesters, areas, users } from "@/db/schema";
+import { desc, eq, and, or, isNull, ne, asc } from "drizzle-orm";
 import EventsView from "@/components/events/EventsView";
+import { getCreatableIISEEventTypes } from "@/server/services/event-permissions.service";
 
 export default async function AgendaPage() {
     const session = await auth();
@@ -34,8 +35,6 @@ export default async function AgendaPage() {
         // Logic for Members:
         // - General Events (targetAreaId is null)
         // - Specific Area Events (targetAreaId == currentAreaId)
-        // - Exclude Board (MD) events unless they are in MD (unlikely for normal member)
-
         const conditions = [isNull(events.targetAreaId)]; // General
 
         if (currentAreaId) {
@@ -57,6 +56,31 @@ export default async function AgendaPage() {
         });
     }
 
+    // 2. DYNAMIC permission check — ZERO hardcode
+    // Queries 3 layers: system role → custom role → area capabilities
+    const creatableTypes = await getCreatableIISEEventTypes({
+        userRole: role,
+        userAreaId: currentAreaId,
+        customPermissions: session.user.customPermissions,
+    });
+
+    const canCreate = creatableTypes.length > 0;
+
+    // 3. Only fetch extra data when user can actually create events
+    let activeUsers: { id: string; name: string | null; image: string | null }[] = [];
+    if (canCreate) {
+        availableAreas = await db.query.areas.findMany({
+            columns: { id: true, name: true, code: true },
+            orderBy: [asc(areas.name)],
+        });
+
+        activeUsers = await db.query.users.findMany({
+            where: and(eq(users.status, "ACTIVE"), ne(users.role, "DEV")),
+            columns: { id: true, name: true, image: true },
+            orderBy: [asc(users.name)],
+        });
+    }
+
     return (
         <EventsView
             events={eventsData}
@@ -65,7 +89,9 @@ export default async function AgendaPage() {
             userAreaId={currentAreaId}
             userAreaName={userAreaName}
             areas={availableAreas}
-            readOnly={true}
+            readOnly={!canCreate}
+            availableTypes={creatableTypes}
+            users={canCreate ? activeUsers : undefined}
         />
     );
 }

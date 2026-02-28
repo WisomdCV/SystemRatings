@@ -30,7 +30,8 @@ interface Task {
     createdAt: Date | null;
     dueDate: Date | null;
     position: number | null;
-    createdBy: { id: string; name: string | null };
+    projectArea: { id: string; name: string; color: string | null } | null;
+    createdBy: { id: string; name: string | null; image: string | null };
     assignments: TaskAssignment[];
 }
 
