@@ -7,6 +7,9 @@ export type UserFilters = {
     search?: string;
     role?: string;
     status?: string;
+    areaId?: string;
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc';
 };
 
 export type PaginationOptions = {
@@ -15,13 +18,14 @@ export type PaginationOptions = {
 };
 
 export async function getAllUsers(filters?: UserFilters, pagination?: PaginationOptions) {
-    const { search, role, status } = filters || {};
+    const { search, role, status, areaId, sortBy, sortOrder = 'desc' } = filters || {};
     const { page = 1, limit = 10 } = pagination || {};
     const offset = (page - 1) * limit;
 
     // Build conditions array
     const conditions = [];
 
+    // Base filters are added to conditions beforehand so we can check if they exist
     if (search) {
         const searchLower = `%${search.toLowerCase()}%`;
         conditions.push(
@@ -41,12 +45,65 @@ export async function getAllUsers(filters?: UserFilters, pagination?: Pagination
         conditions.push(eq(users.status, status));
     }
 
+    if (areaId && areaId !== "ALL") {
+        conditions.push(eq(users.currentAreaId, areaId));
+    }
+
     // GHOST MODE: Exclude DEV role always from this list
     conditions.push(ne(users.role, "DEV"));
 
+    // Combine conditions
+    const whereCondition = conditions.length > 0 ? and(...conditions) : undefined;
+
+    // Build Order By dynamically
+    let orderByClause: any[] = [];
+
+    // Sort logic helper
+    const orderDirection = sortOrder === 'asc' ? asc : desc;
+
+    if (sortBy === 'name') {
+        orderByClause = [orderDirection(users.name)];
+    } else if (sortBy === 'cui') {
+        orderByClause = [orderDirection(users.cui)];
+    } else if (sortBy === 'status') {
+        orderByClause = [orderDirection(users.status)];
+    } else if (sortBy === 'category') {
+        orderByClause = [orderDirection(users.category)];
+    } else if (sortBy === 'role') {
+        // Custom Role Weight Sorting using Postgres CASE
+        const roleOrderAsc = sql`(CASE 
+             WHEN ${users.role} = 'DEV' THEN 1
+             WHEN ${users.role} = 'PRESIDENT' THEN 2
+             WHEN ${users.role} = 'VICEPRESIDENT' THEN 3
+             WHEN ${users.role} = 'DIRECTOR' THEN 4
+             WHEN ${users.role} = 'SUBDIRECTOR' THEN 5
+             WHEN ${users.role} = 'SECRETARY' THEN 6
+             WHEN ${users.role} = 'TREASURER' THEN 7
+             WHEN ${users.role} = 'MEMBER' THEN 8
+             WHEN ${users.role} = 'VOLUNTEER' THEN 9
+             ELSE 10 END) ASC`;
+
+        const roleOrderDesc = sql`(CASE 
+             WHEN ${users.role} = 'DEV' THEN 1
+             WHEN ${users.role} = 'PRESIDENT' THEN 2
+             WHEN ${users.role} = 'VICEPRESIDENT' THEN 3
+             WHEN ${users.role} = 'DIRECTOR' THEN 4
+             WHEN ${users.role} = 'SUBDIRECTOR' THEN 5
+             WHEN ${users.role} = 'SECRETARY' THEN 6
+             WHEN ${users.role} = 'TREASURER' THEN 7
+             WHEN ${users.role} = 'MEMBER' THEN 8
+             WHEN ${users.role} = 'VOLUNTEER' THEN 9
+             ELSE 10 END) DESC`;
+
+        orderByClause = sortOrder === 'asc' ? [roleOrderAsc] : [roleOrderDesc];
+    } else {
+        // Default sorting
+        orderByClause = [desc(users.joinedAt), asc(users.name)];
+    }
+
     // Execute Query
     const data = await db.query.users.findMany({
-        where: conditions.length > 0 ? and(...conditions) : undefined,
+        where: whereCondition,
         with: {
             currentArea: true,
             customRoles: {
@@ -55,7 +112,7 @@ export async function getAllUsers(filters?: UserFilters, pagination?: Pagination
                 },
             },
         },
-        orderBy: [desc(users.joinedAt), asc(users.firstName)], // Default sorting
+        orderBy: orderByClause,
         limit: limit,
         offset: offset,
     });

@@ -9,6 +9,7 @@ import { ArrowLeft, FolderKanban } from "lucide-react";
 import { db } from "@/db";
 import { users, projectRoles, projectAreas, events, projectMembers } from "@/db/schema";
 import { eq, desc, asc, and, ne } from "drizzle-orm";
+import { getCreatableProjectEventTypes } from "@/server/services/event-permissions.service";
 
 export default async function ProjectDetailPage(props: { params: Promise<{ id: string }> }) {
     const params = await props.params;
@@ -59,22 +60,23 @@ export default async function ProjectDetailPage(props: { params: Promise<{ id: s
         }
     });
 
-    // Determine if current user can create events in this project
-    const currentMembership = projectResult.data.members.find(m => m.user.id === session.user!.id);
+    // Determine creatable event types via centralized permission engine
     const isSystemAdmin = hasPermission(session.user.role, "project:manage");
 
-    let canCreateProjectEvents = isSystemAdmin;
-    if (!canCreateProjectEvents && currentMembership) {
-        // Check project role canCreateEvents
-        const memberRole = allRoles.find(r => r.id === currentMembership.projectRole.id);
-        if (memberRole?.canCreateEvents) canCreateProjectEvents = true;
+    const creatableProjectTypes = await getCreatableProjectEventTypes({
+        userRole: session.user.role,
+        userAreaId: session.user.currentAreaId,
+        customPermissions: session.user.customPermissions,
+        projectId: params.id,
+        userId: session.user.id,
+    });
 
-        // Check project area membersCanCreateEvents
-        if (!canCreateProjectEvents && currentMembership.projectArea) {
-            const memberArea = allAreas.find(a => a.id === currentMembership.projectArea!.id);
-            if (memberArea?.membersCanCreateEvents) canCreateProjectEvents = true;
-        }
-    }
+    // System admins always get all types
+    const finalCreatableTypes = isSystemAdmin
+        ? ["GENERAL", "AREA", "INDIVIDUAL_GROUP"]
+        : creatableProjectTypes;
+
+    const canCreateProjectEvents = finalCreatableTypes.length > 0;
 
     // Users for invitee picker (project members)
     const projectUsersForPicker = projectResult.data.members.map(m => ({
@@ -120,6 +122,7 @@ export default async function ProjectDetailPage(props: { params: Promise<{ id: s
                         projectName={projectResult.data.name}
                         events={projectEvents as any}
                         canCreateEvents={canCreateProjectEvents}
+                        creatableEventTypes={finalCreatableTypes}
                         projectAreas={allAreas.map(a => ({ id: a.id, name: a.name }))}
                         users={projectUsersForPicker}
                         userRole={session.user.role || ""}

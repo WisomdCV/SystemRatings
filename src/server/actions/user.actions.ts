@@ -21,6 +21,9 @@ export async function getUsersAction(
     search?: string,
     role?: string,
     status?: string,
+    areaId?: string,
+    sortBy?: string,
+    sortOrder?: 'asc' | 'desc',
     page: number = 1
 ): Promise<ActionResult<any>> {
     try {
@@ -28,8 +31,8 @@ export async function getUsersAction(
         if (!session?.user) return { success: false, error: "No autenticado" };
 
         const result = await getUsersListService(
-            { search, role, status },
-            { page, limit: 20 }
+            { search, role, status, areaId, sortBy, sortOrder },
+            { page, limit: 10 }
         );
 
         return { success: true, data: result };

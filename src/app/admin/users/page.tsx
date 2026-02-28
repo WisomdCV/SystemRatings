@@ -16,11 +16,14 @@ export default async function AdminUsersPage(props: PageProps) {
     const search = typeof searchParams.search === 'string' ? searchParams.search : undefined;
     const role = typeof searchParams.role === 'string' ? searchParams.role : undefined;
     const status = typeof searchParams.status === 'string' ? searchParams.status : undefined;
+    const areaId = typeof searchParams.area === 'string' ? searchParams.area : undefined;
+    const sortBy = typeof searchParams.sort === 'string' ? searchParams.sort : undefined;
+    const sortOrder = searchParams.order === 'asc' || searchParams.order === 'desc' ? searchParams.order : undefined;
     const page = typeof searchParams.page === 'string' ? parseInt(searchParams.page) : 1;
 
     // Fetch data in parallel
     const [usersResult, areasResult, customRolesResult] = await Promise.all([
-        getUsersAction(search, role, status, page),
+        getUsersAction(search, role, status, areaId, sortBy, sortOrder, page),
         getAreasAction(),
         getCustomRolesAction(),
     ]);
@@ -71,7 +74,7 @@ export default async function AdminUsersPage(props: PageProps) {
 
                 {/* Filters */}
                 <div className="mb-6">
-                    <UserFilters />
+                    <UserFilters areas={areasResult.success ? areasResult.data : []} />
                 </div>
 
                 {/* Data Table */}

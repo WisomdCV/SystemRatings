@@ -26,6 +26,7 @@ interface ProjectEventsTabProps {
     projectName: string;
     events: ProjectEvent[];
     canCreateEvents: boolean;
+    creatableEventTypes: string[];
     projectAreas: { id: string; name: string }[];
     users: { id: string; name: string | null; image: string | null }[];
     userRole: string;
@@ -38,6 +39,7 @@ export default function ProjectEventsTab({
     projectName,
     events,
     canCreateEvents,
+    creatableEventTypes,
     projectAreas,
     users,
     userRole,
@@ -116,7 +118,7 @@ export default function ProjectEventsTab({
                                 areas={[]}
                                 onSuccess={() => { setShowCreateForm(false); router.refresh(); }}
                                 availableScopes={["PROJECT"]}
-                                availableTypes={["GENERAL", "AREA"]}
+                                availableTypes={creatableEventTypes}
                                 projects={[{ id: projectId, name: projectName }]}
                                 projectAreas={projectAreas}
                                 users={users}

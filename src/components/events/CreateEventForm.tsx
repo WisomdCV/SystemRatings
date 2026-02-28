@@ -67,6 +67,12 @@ export default function CreateEventForm({
     const [selectedInvitees, setSelectedInvitees] = useState<string[]>([]);
     const [inviteeSearch, setInviteeSearch] = useState("");
 
+    // Keep inviteeUserIds in sync with selectedInvitees so Zod sees them during validation
+    const syncInvitees = (ids: string[]) => {
+        setSelectedInvitees(ids);
+        form.setValue("inviteeUserIds", ids, { shouldValidate: false });
+    };
+
     const defaultValues = isEditing && initialData ? {
         title: initialData.title,
         description: initialData.description || "",
@@ -110,10 +116,7 @@ export default function CreateEventForm({
         setIsSubmitting(true);
         setSubmitError(null);
 
-        // Attach invitees
-        if (watchType === "INDIVIDUAL_GROUP") {
-            data.inviteeUserIds = selectedInvitees;
-        }
+        // Invitees are already synced via syncInvitees → form.setValue
 
         try {
             let result;
@@ -126,7 +129,7 @@ export default function CreateEventForm({
             if (result.success) {
                 if (!isEditing) {
                     form.reset();
-                    setSelectedInvitees([]);
+                    syncInvitees([]);
                 }
                 if (onSuccess) onSuccess();
                 router.refresh();
@@ -157,9 +160,10 @@ export default function CreateEventForm({
     };
 
     const toggleInvitee = (userId: string) => {
-        setSelectedInvitees(prev =>
-            prev.includes(userId) ? prev.filter(id => id !== userId) : [...prev, userId]
-        );
+        const next = selectedInvitees.includes(userId)
+            ? selectedInvitees.filter(id => id !== userId)
+            : [...selectedInvitees, userId];
+        syncInvitees(next);
     };
 
     const filteredUsers = users.filter(u =>
@@ -505,6 +509,14 @@ export default function CreateEventForm({
                     {isVirtual ? <Video className="w-5 h-5 text-blue-400" /> : <MapPin className="w-5 h-5 text-gray-400" />}
                 </div>
             </div>
+
+            {/* Invitee validation error */}
+            {(form.formState.errors as any).inviteeUserIds && (
+                <div className="p-3 bg-amber-50 border border-amber-100 rounded-xl flex items-center text-amber-700 text-sm">
+                    <AlertCircle className="w-4 h-4 mr-2 flex-shrink-0" />
+                    {(form.formState.errors as any).inviteeUserIds.message || "Selecciona al menos un invitado."}
+                </div>
+            )}
 
             {/* Errors */}
             {submitError && (
