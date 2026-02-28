@@ -65,11 +65,27 @@ export default async function ProjectDetailPage(props: { params: Promise<{ id: s
         }
     });
 
-    // Privacy: INDIVIDUAL_GROUP events are only visible to invitees + creator
+    // Find current user's membership in this project (for area-based visibility)
+    const currentUserMembership = projectResult.data.members.find(
+        m => m.user.id === session.user!.id
+    );
+    const currentUserProjectAreaId = currentUserMembership?.projectArea?.id || null;
+    const currentUserProjectRoleLevel = currentUserMembership?.projectRole?.hierarchyLevel ?? 0;
+
+    // Privacy filter for project events:
+    // - GENERAL: visible to all project members
+    // - AREA: visible to members of that area + coordinators/directors (hierarchyLevel >= 70)
+    // - INDIVIDUAL_GROUP: visible to invitees + creator only
     const projectEvents = allProjectEvents.filter(event => {
         if (event.eventType === "INDIVIDUAL_GROUP") {
             if (event.createdById === session.user!.id) return true;
             return event.invitees?.some(inv => inv.userId === session.user!.id);
+        }
+        if (event.eventType === "AREA" && event.targetProjectArea?.id) {
+            // Project coordinators/directors (level >= 70) see all area events
+            if (currentUserProjectRoleLevel >= 70) return true;
+            // Area members only see their own area events
+            return currentUserProjectAreaId === event.targetProjectArea.id;
         }
         return true;
     });

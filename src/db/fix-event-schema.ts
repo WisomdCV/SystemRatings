@@ -78,7 +78,7 @@ async function main() {
 
     const roles = await db.query.projectRoles.findMany();
     for (const role of roles) {
-        const shouldCreate = role.hierarchyLevel >= 70;
+        const shouldCreate = role.hierarchyLevel >= 60;
         await db.update(projectRoles).set({
             canCreateEvents: shouldCreate,
         }).where(eq(projectRoles.id, role.id));

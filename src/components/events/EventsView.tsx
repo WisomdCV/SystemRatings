@@ -321,6 +321,12 @@ export default function EventsView({
                                 initialData={editingEvent}
                                 eventId={editingEvent.id}
                                 isEditing={true}
+                                availableScopes={availableScopes}
+                                availableTypes={availableTypes}
+                                projects={projects}
+                                projectAreas={projectAreas}
+                                users={users}
+                                projectMembersMap={projectMembersMap}
                             />
                         </div>
                     </div>

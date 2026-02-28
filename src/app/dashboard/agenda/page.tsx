@@ -41,16 +41,23 @@ export default async function AgendaPage() {
 
         // Also include PROJECT events for user's projects
         let projectIds: string[] = [];
+        // Store user's project area + role level per project for visibility filtering
+        let userProjectMemberships: { projectId: string; projectAreaId: string | null; hierarchyLevel: number }[] = [];
         if (userId) {
             const memberships = await db.query.projectMembers.findMany({
                 where: eq(projectMembers.userId, userId),
                 with: {
-                    project: { columns: { id: true, semesterId: true } }
+                    project: { columns: { id: true, semesterId: true } },
+                    projectRole: { columns: { hierarchyLevel: true } },
                 }
             });
-            projectIds = memberships
-                .filter(m => m.project?.semesterId === activeSemester.id)
-                .map(m => m.project!.id);
+            const activeMemberships = memberships.filter(m => m.project?.semesterId === activeSemester.id);
+            projectIds = activeMemberships.map(m => m.project!.id);
+            userProjectMemberships = activeMemberships.map(m => ({
+                projectId: m.project!.id,
+                projectAreaId: m.projectAreaId,
+                hierarchyLevel: m.projectRole?.hierarchyLevel ?? 0,
+            }));
         }
 
         // Build combined query conditions
@@ -81,11 +88,22 @@ export default async function AgendaPage() {
             }
         });
 
-        // Privacy: INDIVIDUAL_GROUP events are only visible to their invitees + creator
+        // Privacy filters:
+        // - INDIVIDUAL_GROUP: only visible to invitees + creator
+        // - PROJECT AREA: only visible to members of that area + coordinators/directors (level >= 70)
         eventsData = eventsData.filter((event: any) => {
             if (event.eventType === "INDIVIDUAL_GROUP") {
                 if (event.createdById === userId) return true;
                 return event.invitees?.some((inv: any) => inv.userId === userId);
+            }
+            // PROJECT scope AREA events: filter by user's project area
+            if (event.eventScope === "PROJECT" && event.eventType === "AREA" && event.targetProjectArea?.id && event.projectId) {
+                const membership = userProjectMemberships.find(m => m.projectId === event.projectId);
+                if (!membership) return false;
+                // Coordinators/Directors (level >= 70) see all area events
+                if (membership.hierarchyLevel >= 70) return true;
+                // Others only see their own area's events
+                return membership.projectAreaId === event.targetProjectArea.id;
             }
             return true;
         });

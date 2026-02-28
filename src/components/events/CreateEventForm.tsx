@@ -66,7 +66,12 @@ export default function CreateEventForm({
     const router = useRouter();
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitError, setSubmitError] = useState<string | null>(null);
-    const [selectedInvitees, setSelectedInvitees] = useState<string[]>([]);
+
+    // Pre-populate invitees from initialData when editing
+    const initialInviteeIds = (isEditing && initialData?.invitees)
+        ? initialData.invitees.map((inv: any) => inv.userId || inv.user?.id).filter(Boolean) as string[]
+        : [];
+    const [selectedInvitees, setSelectedInvitees] = useState<string[]>(initialInviteeIds);
     const [inviteeSearch, setInviteeSearch] = useState("");
 
     // Keep inviteeUserIds in sync with selectedInvitees so Zod sees them during validation
@@ -87,7 +92,7 @@ export default function CreateEventForm({
         startTime: initialData.startTime,
         endTime: initialData.endTime,
         isVirtual: initialData.isVirtual,
-        inviteeUserIds: [],
+        inviteeUserIds: (initialData.invitees || []).map((inv: any) => inv.userId || inv.user?.id).filter(Boolean),
     } : {
         title: "",
         description: "",

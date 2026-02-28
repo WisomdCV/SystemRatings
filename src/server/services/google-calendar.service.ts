@@ -69,7 +69,7 @@ export async function deleteGoogleEvent(accessToken: string, googleEventId: stri
         },
     });
 
-    if (!response.ok && response.status !== 410) { // 410 = Already deleted (Gone)
+    if (!response.ok && response.status !== 410 && response.status !== 404) { // 410 = Gone, 404 = Not Found (already deleted or different calendar)
         const errorText = await response.text();
         throw new Error(`Google API Error (Delete): ${response.status} ${response.statusText} - ${errorText}`);
     }
