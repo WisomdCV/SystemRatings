@@ -11,6 +11,7 @@ import {
     Plus, Loader2, GripVertical, Trash2, Edit2,
     Save, X, ShieldAlert, CheckCircle2, AlertCircle, LayoutGrid, Users
 } from "lucide-react";
+import { CalendarCheck } from "lucide-react";
 
 interface Area {
     id: string;
@@ -19,6 +20,7 @@ interface Area {
     color: string | null;
     position: number | null;
     isSystem: boolean | null;
+    membersCanCreateEvents: boolean | null;
 }
 
 interface Role {
@@ -28,6 +30,7 @@ interface Role {
     hierarchyLevel: number;
     color: string | null;
     isSystem: boolean | null;
+    canCreateEvents: boolean | null;
 }
 
 interface Props {
@@ -124,7 +127,8 @@ export default function ProjectSettings({ initialAreas, initialRoles }: Props) {
             const payload = {
                 name: editingArea.name,
                 description: editingArea.description || undefined,
-                color: editingArea.color || "#94a3b8"
+                color: editingArea.color || "#94a3b8",
+                membersCanCreateEvents: editingArea.membersCanCreateEvents ?? false,
             };
             const res = await updateProjectAreaAction(editingArea.id, payload);
             if (res.success) { showFeedback("success", res.message!); setEditingArea(null); router.refresh(); }
@@ -163,7 +167,8 @@ export default function ProjectSettings({ initialAreas, initialRoles }: Props) {
             const payload = {
                 name: editingRole.name,
                 description: editingRole.description || undefined,
-                color: editingRole.color || "#6366f1"
+                color: editingRole.color || "#6366f1",
+                canCreateEvents: editingRole.canCreateEvents ?? false,
             };
             const res = await updateProjectRoleAction(editingRole.id, payload);
             if (res.success) { showFeedback("success", res.message!); setEditingRole(null); router.refresh(); }
@@ -263,13 +268,23 @@ export default function ProjectSettings({ initialAreas, initialRoles }: Props) {
                                                     </div>
 
                                                     {editingRole?.id === role.id ? (
-                                                        <div className="flex-1 flex gap-2">
-                                                            <input autoFocus type="text" value={editingRole.name} onChange={e => setEditingRole({ ...editingRole, name: e.target.value })}
-                                                                className="px-3 py-1.5 rounded-lg border border-gray-200 font-bold text-sm text-meteorite-950" />
-                                                            <input type="text" value={editingRole.description || ""} onChange={e => setEditingRole({ ...editingRole, description: e.target.value })}
-                                                                className="flex-1 px-3 py-1.5 rounded-lg border border-gray-200 text-sm text-meteorite-950" />
-                                                            <input type="color" value={editingRole.color || "#6366f1"} onChange={e => setEditingRole({ ...editingRole, color: e.target.value })}
-                                                                className="w-8 h-8 rounded cursor-pointer border-none bg-transparent self-center shrink-0" />
+                                                        <div className="flex-1 space-y-2">
+                                                            <div className="flex gap-2">
+                                                                <input autoFocus type="text" value={editingRole.name} onChange={e => setEditingRole({ ...editingRole, name: e.target.value })}
+                                                                    className="px-3 py-1.5 rounded-lg border border-gray-200 font-bold text-sm text-meteorite-950" />
+                                                                <input type="text" value={editingRole.description || ""} onChange={e => setEditingRole({ ...editingRole, description: e.target.value })}
+                                                                    className="flex-1 px-3 py-1.5 rounded-lg border border-gray-200 text-sm text-meteorite-950" />
+                                                                <input type="color" value={editingRole.color || "#6366f1"} onChange={e => setEditingRole({ ...editingRole, color: e.target.value })}
+                                                                    className="w-8 h-8 rounded cursor-pointer border-none bg-transparent self-center shrink-0" />
+                                                            </div>
+                                                            <label className="flex items-center gap-2 cursor-pointer">
+                                                                <input type="checkbox" checked={editingRole.canCreateEvents ?? false}
+                                                                    onChange={e => setEditingRole({ ...editingRole, canCreateEvents: e.target.checked })}
+                                                                    className="w-4 h-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500" />
+                                                                <span className="text-xs font-bold text-meteorite-600 flex items-center gap-1">
+                                                                    <CalendarCheck className="w-3.5 h-3.5" /> Puede crear eventos
+                                                                </span>
+                                                            </label>
                                                         </div>
                                                     ) : (
                                                         <div className="flex-1 min-w-0">
@@ -282,10 +297,15 @@ export default function ProjectSettings({ initialAreas, initialRoles }: Props) {
                                                                     </span>
                                                                 )}
                                                             </div>
-                                                            <div className="flex items-center gap-2 mt-0.5 text-xs text-meteorite-400 font-medium">
+                                                            <div className="flex items-center gap-2 mt-0.5 text-xs text-meteorite-400 font-medium flex-wrap">
                                                                 <span className="bg-gray-100 text-gray-600 font-bold px-1.5 py-0.5 rounded">
                                                                     LVL: {role.hierarchyLevel}
                                                                 </span>
+                                                                {role.canCreateEvents && (
+                                                                    <span className="bg-emerald-50 text-emerald-600 font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5">
+                                                                        <CalendarCheck className="w-3 h-3" /> Eventos
+                                                                    </span>
+                                                                )}
                                                                 <span className="truncate">{role.description || "Sin descripción"}</span>
                                                             </div>
                                                         </div>
@@ -365,6 +385,14 @@ export default function ProjectSettings({ initialAreas, initialRoles }: Props) {
                                                                 <input autoFocus type="text" value={editingArea.name} onChange={e => setEditingArea({ ...editingArea, name: e.target.value })} className="flex-1 px-3 py-1 rounded-lg border text-sm font-bold shadow-inner text-meteorite-950" />
                                                             </div>
                                                             <textarea value={editingArea.description || ""} onChange={e => setEditingArea({ ...editingArea, description: e.target.value })} className="w-full px-3 py-2 rounded-lg border text-xs resize-none shadow-inner text-meteorite-950" rows={2} />
+                                                            <label className="flex items-center gap-2 cursor-pointer">
+                                                                <input type="checkbox" checked={editingArea.membersCanCreateEvents ?? false}
+                                                                    onChange={e => setEditingArea({ ...editingArea, membersCanCreateEvents: e.target.checked })}
+                                                                    className="w-4 h-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500" />
+                                                                <span className="text-xs font-bold text-meteorite-600 flex items-center gap-1">
+                                                                    <CalendarCheck className="w-3.5 h-3.5" /> Miembros pueden crear eventos
+                                                                </span>
+                                                            </label>
                                                             <div className="flex gap-2 justify-end">
                                                                 <button onClick={() => setEditingArea(null)} className="px-3 py-1 bg-gray-100 text-meteorite-600 hover:text-meteorite-800 hover:bg-gray-200 rounded-lg text-xs font-bold transition-colors">Cancelar</button>
                                                                 <button onClick={handleUpdateArea} disabled={isPending} className="px-3 py-1 bg-violet-600 text-white rounded-lg text-xs font-bold">Guardar</button>
@@ -392,6 +420,11 @@ export default function ProjectSettings({ initialAreas, initialRoles }: Props) {
                                                             <p className="text-xs text-meteorite-500 line-clamp-2 min-h-8">
                                                                 {area.description || "Sin descripción proporcionada."}
                                                             </p>
+                                                            {area.membersCanCreateEvents && (
+                                                                <span className="self-start bg-emerald-50 text-emerald-600 text-[10px] font-black px-2 py-0.5 rounded flex items-center gap-1 w-fit">
+                                                                    <CalendarCheck className="w-3 h-3" /> Eventos Habilitados
+                                                                </span>
+                                                            )}
                                                         </>
                                                     )}
                                                 </div>

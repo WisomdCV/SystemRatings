@@ -51,7 +51,7 @@ export async function createProjectAreaAction(data: { name: string; description?
     }
 }
 
-export async function updateProjectAreaAction(id: string, data: { name: string; description?: string; color: string }) {
+export async function updateProjectAreaAction(id: string, data: { name: string; description?: string; color: string; membersCanCreateEvents?: boolean }) {
     try {
         if (!(await isAdminUser())) return { success: false as const, error: "No autorizado." };
         if (!data.name.trim()) return { success: false as const, error: "El nombre es obligatorio." };
@@ -64,6 +64,7 @@ export async function updateProjectAreaAction(id: string, data: { name: string; 
             name: data.name.trim(),
             description: data.description?.trim() || null,
             color: data.color,
+            membersCanCreateEvents: data.membersCanCreateEvents ?? false,
         }).where(eq(projectAreas.id, id));
 
         revalidatePath("/admin/project-settings");
@@ -152,7 +153,7 @@ export async function createProjectRoleAction(data: { name: string; description?
     }
 }
 
-export async function updateProjectRoleAction(id: string, data: { name: string; description?: string; color: string }) {
+export async function updateProjectRoleAction(id: string, data: { name: string; description?: string; color: string; canCreateEvents?: boolean }) {
     try {
         if (!(await isAdminUser())) return { success: false as const, error: "No autorizado." };
         if (!data.name.trim()) return { success: false as const, error: "El nombre es obligatorio." };
@@ -164,6 +165,7 @@ export async function updateProjectRoleAction(id: string, data: { name: string; 
             name: data.name.trim(),
             description: data.description?.trim() || null,
             color: data.color,
+            canCreateEvents: data.canCreateEvents ?? false,
         }).where(eq(projectRoles.id, id));
 
         revalidatePath("/admin/project-settings");

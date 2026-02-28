@@ -42,6 +42,7 @@ interface CreateEventFormProps {
     availableScopes?: string[];
     availableTypes?: string[];
     users?: { id: string; name: string | null; image: string | null }[];
+    defaultProjectId?: string;
 }
 
 export default function CreateEventForm({
@@ -58,6 +59,7 @@ export default function CreateEventForm({
     availableScopes = ["IISE"],
     availableTypes = ["GENERAL", "AREA"],
     users = [],
+    defaultProjectId,
 }: CreateEventFormProps) {
     const router = useRouter();
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -81,10 +83,10 @@ export default function CreateEventForm({
     } : {
         title: "",
         description: "",
-        eventScope: "IISE",
+        eventScope: defaultProjectId ? "PROJECT" : "IISE",
         eventType: "GENERAL",
         targetAreaId: userRole === "DIRECTOR" || userRole === "SUBDIRECTOR" ? (userAreaId || "") : "",
-        projectId: "",
+        projectId: defaultProjectId || "",
         targetProjectAreaId: "",
         date: undefined,
         startTime: "",

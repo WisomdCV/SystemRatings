@@ -3,11 +3,12 @@ import { redirect } from "next/navigation";
 import { getProjectByIdAction } from "@/server/actions/project.actions";
 import { hasPermission } from "@/lib/permissions";
 import ProjectDetail from "@/components/projects/ProjectDetail";
+import ProjectEventsTab from "@/components/projects/ProjectEventsTab";
 import Link from "next/link";
 import { ArrowLeft, FolderKanban } from "lucide-react";
 import { db } from "@/db";
-import { users, projectRoles, projectAreas } from "@/db/schema";
-import { eq, desc, asc } from "drizzle-orm";
+import { users, projectRoles, projectAreas, events, projectMembers } from "@/db/schema";
+import { eq, desc, asc, and, ne } from "drizzle-orm";
 
 export default async function ProjectDetailPage(props: { params: Promise<{ id: string }> }) {
     const params = await props.params;
@@ -47,6 +48,41 @@ export default async function ProjectDetailPage(props: { params: Promise<{ id: s
         orderBy: [asc(projectAreas.position)],
     });
 
+    // ── Project Events ───────────────────────────────────────────────────────
+    // Fetch events for this project
+    const projectEvents = await db.query.events.findMany({
+        where: eq(events.projectId, params.id),
+        orderBy: [desc(events.date)],
+        with: {
+            targetProjectArea: { columns: { id: true, name: true } },
+            createdBy: { columns: { name: true, role: true } }
+        }
+    });
+
+    // Determine if current user can create events in this project
+    const currentMembership = projectResult.data.members.find(m => m.user.id === session.user!.id);
+    const isSystemAdmin = hasPermission(session.user.role, "project:manage");
+
+    let canCreateProjectEvents = isSystemAdmin;
+    if (!canCreateProjectEvents && currentMembership) {
+        // Check project role canCreateEvents
+        const memberRole = allRoles.find(r => r.id === currentMembership.projectRole.id);
+        if (memberRole?.canCreateEvents) canCreateProjectEvents = true;
+
+        // Check project area membersCanCreateEvents
+        if (!canCreateProjectEvents && currentMembership.projectArea) {
+            const memberArea = allAreas.find(a => a.id === currentMembership.projectArea!.id);
+            if (memberArea?.membersCanCreateEvents) canCreateProjectEvents = true;
+        }
+    }
+
+    // Users for invitee picker (project members)
+    const projectUsersForPicker = projectResult.data.members.map(m => ({
+        id: m.user.id,
+        name: m.user.name,
+        image: m.user.image,
+    }));
+
     return (
         <div className="min-h-screen bg-meteorite-50 relative overflow-hidden p-4 md:p-6 2xl:p-10">
             {/* Background */}
@@ -69,14 +105,28 @@ export default async function ProjectDetailPage(props: { params: Promise<{ id: s
                     </div>
                 </div>
 
-                <ProjectDetail
-                    project={projectResult.data}
-                    eligibleUsers={eligibleUsers}
-                    allProjectRoles={allRoles}
-                    allProjectAreas={allAreas}
-                    currentUserId={session.user.id!}
-                    isSystemAdmin={hasPermission(session.user.role, "project:manage")}
-                />
+                <div className="space-y-6">
+                    <ProjectDetail
+                        project={projectResult.data}
+                        eligibleUsers={eligibleUsers}
+                        allProjectRoles={allRoles}
+                        allProjectAreas={allAreas}
+                        currentUserId={session.user.id!}
+                        isSystemAdmin={isSystemAdmin}
+                    />
+
+                    <ProjectEventsTab
+                        projectId={params.id}
+                        projectName={projectResult.data.name}
+                        events={projectEvents as any}
+                        canCreateEvents={canCreateProjectEvents}
+                        projectAreas={allAreas.map(a => ({ id: a.id, name: a.name }))}
+                        users={projectUsersForPicker}
+                        userRole={session.user.role || ""}
+                        userAreaId={session.user.currentAreaId}
+                        userAreaName={null}
+                    />
+                </div>
             </div>
         </div>
     );

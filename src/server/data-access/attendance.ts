@@ -1,5 +1,5 @@
 import { db } from "@/db";
-import { attendanceRecords, events, users } from "@/db/schema";
+import { attendanceRecords, events, users, projectMembers } from "@/db/schema";
 import { eq, and, inArray, ne } from "drizzle-orm";
 
 export type AttendanceStatus = "PRESENT" | "ABSENT" | "LATE" | "EXCUSED";
@@ -23,13 +23,16 @@ export interface AttendanceSheetItem {
 }
 
 export async function getAttendanceSheetDAO(eventId: string): Promise<AttendanceSheetItem[]> {
-    // 1. Get Event to know targetAreaId and Code
+    // 1. Get Event to know scope, targetAreaId, projectId
     const event = await db.query.events.findFirst({
         where: eq(events.id, eventId),
         columns: {
             id: true,
             targetAreaId: true,
             createdById: true,
+            eventScope: true,
+            projectId: true,
+            targetProjectAreaId: true,
         },
         with: {
             targetArea: {
@@ -63,7 +66,29 @@ export async function getAttendanceSheetDAO(eventId: string): Promise<Attendance
         currentAreaId: string | null;
     }[];
 
-    if (!event.targetAreaId) {
+    // ── Branch 4: PROJECT scope ──────────────────────────────────────
+    if (event.eventScope === "PROJECT" && event.projectId) {
+        const members = await db.query.projectMembers.findMany({
+            where: eq(projectMembers.projectId, event.projectId),
+            with: {
+                user: {
+                    columns: { id: true, name: true, image: true, email: true, currentAreaId: true }
+                }
+            }
+        });
+
+        if (event.targetProjectAreaId) {
+            // Area-specific project event → only members of that project area
+            eligibleUsers = members
+                .filter(m => m.projectAreaId === event.targetProjectAreaId)
+                .map(m => m.user);
+        } else {
+            // General project event → all project members
+            eligibleUsers = members.map(m => m.user);
+        }
+    }
+    // ── Branch 1-3: IISE scope ───────────────────────────────────────
+    else if (!event.targetAreaId) {
         // Evento General
         eligibleUsers = await db.query.users.findMany({
             where: and(
@@ -80,11 +105,7 @@ export async function getAttendanceSheetDAO(eventId: string): Promise<Attendance
             orderBy: (users, { asc }) => [asc(users.name)]
         });
     } else if (event.targetArea?.isLeadershipArea) {
-        // Lógica Mesa Directiva: Presidenta toma lista a sus líderes
-        // DEV is excluded implicitly by inArray check below, but explicit check implies intention if roles changed.
-        // Actually, inArray(["DIRECTOR"...]) already excludes "DEV" unless DEV is added to that list. 
-        // So no change needed here strictly, but let's be safe if logic changes later? 
-        // No, strict list is safer.
+        // Mesa Directiva
         eligibleUsers = await db.query.users.findMany({
             where: and(
                 eq(users.status, "ACTIVE"),

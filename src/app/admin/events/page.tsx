@@ -1,7 +1,7 @@
 import { auth } from "@/server/auth";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
-import { events, areas, semesters, attendanceRecords, projects, users } from "@/db/schema";
+import { events, areas, semesters, attendanceRecords, projects, users, projectMembers, projectAreas } from "@/db/schema";
 import { desc, eq, and, or, isNull, inArray, ne, asc } from "drizzle-orm";
 import EventsList from "@/components/events/EventsList";
 import CreateEventForm from "@/components/events/CreateEventForm";
@@ -9,6 +9,7 @@ import { CalendarCheck, Plus, Filter } from "lucide-react";
 import Link from "next/link";
 import EventsView from "@/components/events/EventsView";
 import { hasPermission } from "@/lib/permissions";
+import { getCreatableIISEEventTypes } from "@/server/services/event-permissions.service";
 
 export default async function EventsPage() {
     const session = await auth();
@@ -34,7 +35,6 @@ export default async function EventsPage() {
     let userAreaName: string | null = null;
 
     if (activeSemester) {
-        // Fetch MD Area ID globally as it's needed for multiple roles
         const mdArea = await db.query.areas.findFirst({
             where: eq(areas.isLeadershipArea, true),
             columns: { id: true }
@@ -57,8 +57,8 @@ export default async function EventsPage() {
 
         // B. Treasurer: Fetch General + MD Only
         else if (role === "TREASURER") {
-            const visibilityConditions = [isNull(events.targetAreaId)]; // General
-            if (mdArea) visibilityConditions.push(eq(events.targetAreaId, mdArea.id)); // MD
+            const visibilityConditions = [isNull(events.targetAreaId)];
+            if (mdArea) visibilityConditions.push(eq(events.targetAreaId, mdArea.id));
 
             eventsData = await db.query.events.findMany({
                 where: and(
@@ -73,15 +73,11 @@ export default async function EventsPage() {
                     createdBy: { columns: { name: true, role: true } }
                 }
             });
-            // Treasurer might need areas list if allowed to create MD/General events?
-            // The prompt says "Permítele elegir entre General y Mesa Directiva".
-            // So we need to provide MD in areasList or handle it in Form.
             if (mdArea) areasList = await db.select({ id: areas.id, name: areas.name }).from(areas).where(eq(areas.isLeadershipArea, true));
         }
 
         // C. Director/Subdirector: Fetch Own Events + General Events + BOARD (MD) Events
         else if (role === "DIRECTOR" || role === "SUBDIRECTOR") {
-            // Fetch Area Name
             if (currentAreaId) {
                 const areaObj = await db.query.areas.findFirst({
                     where: eq(areas.id, currentAreaId),
@@ -91,8 +87,8 @@ export default async function EventsPage() {
             }
 
             const visibilityConditions = [
-                isNull(events.targetAreaId), // General
-                eq(events.targetAreaId, currentAreaId || "impossible_id") // Own Area
+                isNull(events.targetAreaId),
+                eq(events.targetAreaId, currentAreaId || "impossible_id")
             ];
             if (mdArea) {
                 visibilityConditions.push(eq(events.targetAreaId, mdArea.id));
@@ -117,14 +113,12 @@ export default async function EventsPage() {
     // 4. Fetch Pending Justifications Count Aggregation
     const eventIds = eventsData.map(e => e.id);
     const pendingCounts: Record<string, number> = {};
-
     if (eventIds.length > 0) {
-        /* 
-           Fetch attendance records for these events. 
-           We filter for PENDING status in memory to avoid complex JSON SQL queries for now.
-        */
         const allAttendance = await db.query.attendanceRecords.findMany({
-            where: (att, { inArray }) => inArray(att.eventId, eventIds),
+            where: and(
+                inArray(attendanceRecords.eventId, eventIds),
+                eq(attendanceRecords.status, "ABSENT")
+            ),
             columns: {
                 eventId: true,
                 justificationStatus: true
@@ -132,14 +126,12 @@ export default async function EventsPage() {
         });
 
         for (const att of allAttendance) {
-            // Check if justificationStatus is PENDING
             if (att.justificationStatus === "PENDING") {
                 pendingCounts[att.eventId] = (pendingCounts[att.eventId] || 0) + 1;
             }
         }
     }
 
-    // Merge counts
     const eventsWithCounts = eventsData.map(e => ({
         ...e,
         pendingJustificationCount: pendingCounts[e.id] || 0
@@ -152,8 +144,47 @@ export default async function EventsPage() {
         orderBy: [asc(users.name)],
     });
 
-    // 6. Determine available event types based on role
-    const availableTypes = ["GENERAL", "AREA", "INDIVIDUAL_GROUP"];
+    // 6. Dynamic type filtering — ZERO hardcode
+    const creatableTypes = await getCreatableIISEEventTypes({
+        userRole: role,
+        userAreaId: currentAreaId,
+        customPermissions: session.user.customPermissions,
+    });
+
+    // 7. Fetch user's active projects for the scope selector
+    let userProjects: { id: string; name: string }[] = [];
+    let allProjectAreas: { id: string; name: string }[] = [];
+    let availableScopes: string[] = ["IISE"];
+
+    if (activeSemester) {
+        if (hasPermission(role, "project:manage")) {
+            userProjects = await db.query.projects.findMany({
+                where: eq(projects.semesterId, activeSemester.id),
+                columns: { id: true, name: true },
+                orderBy: [asc(projects.name)],
+            });
+        } else if (userId) {
+            const memberships = await db.query.projectMembers.findMany({
+                where: eq(projectMembers.userId, userId),
+                with: {
+                    project: {
+                        columns: { id: true, name: true, semesterId: true }
+                    }
+                }
+            });
+            userProjects = memberships
+                .filter(m => m.project?.semesterId === activeSemester.id)
+                .map(m => ({ id: m.project!.id, name: m.project!.name }));
+        }
+
+        if (userProjects.length > 0) {
+            availableScopes = ["IISE", "PROJECT"];
+            allProjectAreas = await db.query.projectAreas.findMany({
+                columns: { id: true, name: true },
+                orderBy: [asc(projectAreas.name)],
+            });
+        }
+    }
 
     return (
         <EventsView
@@ -163,8 +194,11 @@ export default async function EventsPage() {
             userAreaId={currentAreaId}
             userAreaName={userAreaName}
             areas={areasList}
-            availableTypes={availableTypes}
+            availableTypes={creatableTypes}
             users={activeUsers}
+            availableScopes={availableScopes}
+            projects={userProjects}
+            projectAreas={allProjectAreas}
         />
     );
 }
