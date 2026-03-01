@@ -93,6 +93,7 @@ export const areas = sqliteTable("area", {
   name: text("name").notNull(),
   code: text("code").unique(),
   description: text("description"),
+  color: text("color").default("#6366f1"), // Hex color for UI badges/charts
   isLeadershipArea: integer("is_leadership_area", { mode: "boolean" }).default(false),
 
   // Event capabilities (Configurable from /admin/areas)

@@ -21,6 +21,7 @@ import {
 import CreateEventForm from "@/components/events/CreateEventForm";
 import NewEventModal from "@/components/events/NewEventModal";
 import { deleteEventAction } from "@/server/actions/event.actions";
+import { getAreaColorStyle } from "@/lib/utils/area-colors";
 import { useRouter } from "next/navigation";
 import Link from "next/link"; // Ensure Link is imported
 
@@ -47,6 +48,7 @@ type EventItem = {
         id: string;
         name: string;
         code: string | null;
+        color: string | null;
         isLeadershipArea: boolean | null;
     } | null;
     createdBy?: {
@@ -388,7 +390,7 @@ function EventCardGrid({ event, isDeleting, onEdit, onDelete, canEdit, canDelete
             </div>
 
             <div className="mb-2">
-                <Tag isGeneral={isGeneral} isBoard={isBoard} areaName={event.targetArea?.name} areaCode={event.targetArea?.code} event={event} />
+                <Tag isGeneral={isGeneral} isBoard={isBoard} areaName={event.targetArea?.name} areaColor={event.targetArea?.color} event={event} />
             </div>
 
             <h3 className="text-xl font-bold text-gray-900 mb-3 leading-tight mobile-title-clamp">{event.title}</h3>
@@ -478,7 +480,7 @@ function EventCardList({ event, isDeleting, onEdit, onDelete, canEdit, canDelete
                 <div className="flex flex-col md:flex-row md:items-center gap-2 mb-1">
                     <h3 className="text-lg font-bold text-gray-900 leading-tight">{event.title}</h3>
                     <div className="flex justify-center md:justify-start gap-2 items-center">
-                        <Tag isGeneral={isGeneral} isBoard={isBoard} areaName={event.targetArea?.name} areaCode={event.targetArea?.code} event={event} />
+                        <Tag isGeneral={isGeneral} isBoard={isBoard} areaName={event.targetArea?.name} areaColor={event.targetArea?.color} event={event} />
                         {canAttendance && (event.pendingJustificationCount || 0) > 0 && (
                             <div className="bg-amber-100 text-amber-700 font-bold text-[10px] px-2 py-0.5 rounded-full flex items-center border border-amber-200" title={`${event.pendingJustificationCount} justificaciones pendientes`}>
                                 <div className="w-1.5 h-1.5 bg-amber-500 rounded-full mr-1.5 animate-pulse"></div>
@@ -586,23 +588,7 @@ function InviteeAvatars({ invitees }: { invitees?: EventItem["invitees"] }) {
     );
 }
 
-function getAreaStyle(code?: string | null) {
-    if (!code) return "bg-meteorite-100 text-meteorite-700 border-meteorite-200";
-    switch (code) {
-        case "LO": return "bg-blue-100 text-blue-700 border-blue-200";
-        case "MK": return "bg-red-100 text-red-700 border-red-200";
-        case "PM": return "bg-slate-100 text-slate-700 border-slate-200";
-        case "TH": return "bg-pink-100 text-pink-700 border-pink-200";
-        case "TI": return "bg-cyan-100 text-cyan-700 border-cyan-200";
-        case "MC": return "bg-emerald-100 text-emerald-700 border-emerald-200";
-        case "RP": return "bg-purple-100 text-purple-700 border-purple-200";
-        case "IN": return "bg-orange-100 text-orange-700 border-orange-200";
-        case "MD": return "bg-amber-100 text-amber-700 border-amber-200";
-        default: return "bg-meteorite-100 text-meteorite-700 border-meteorite-200";
-    }
-}
-
-function Tag({ isGeneral, isBoard, areaName, areaCode, event }: { isGeneral: boolean, isBoard: boolean, areaName?: string, areaCode?: string | null, event?: EventItem }) {
+function Tag({ isGeneral, isBoard, areaName, areaColor, event }: { isGeneral: boolean, isBoard: boolean, areaName?: string, areaColor?: string | null, event?: EventItem }) {
     const tags: React.ReactElement[] = [];
 
     // Scope badge (only for PROJECT events)
@@ -642,9 +628,9 @@ function Tag({ isGeneral, isBoard, areaName, areaCode, event }: { isGeneral: boo
             <span key="area" className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide border bg-amber-100 text-amber-700 border-amber-200`}>{areaName || "Mesa Directiva"}</span>
         );
     } else {
-        const style = getAreaStyle(areaCode);
+        const colorStyle = getAreaColorStyle(areaColor);
         tags.push(
-            <span key="area" className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide border ${style}`}>{areaName}</span>
+            <span key="area" className="inline-block px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide border" style={colorStyle}>{areaName}</span>
         );
     }
 

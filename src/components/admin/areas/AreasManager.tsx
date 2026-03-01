@@ -12,12 +12,14 @@ import {
     Plus, Edit2, Trash2, ToggleLeft, ToggleRight,
     CheckCircle2, XCircle, Loader2, MapPin, Zap, Crown
 } from "lucide-react";
+import { AREA_COLOR_PRESETS } from "@/lib/utils/area-colors";
 
 interface Area {
     id: string;
     name: string;
     code: string | null;
     description: string | null;
+    color: string | null;
     isLeadershipArea: boolean | null;
     canCreateEvents: boolean | null;
     canCreateIndividualEvents: boolean | null;
@@ -44,6 +46,7 @@ export default function AreasManager({ initialAreas, semesterStatus, activeSemes
     const [formName, setFormName] = useState("");
     const [formCode, setFormCode] = useState("");
     const [formDescription, setFormDescription] = useState("");
+    const [formColor, setFormColor] = useState("#6366f1");
     const [formIsLeadershipArea, setFormIsLeadershipArea] = useState(false);
     const [formCanCreateEvents, setFormCanCreateEvents] = useState(false);
     const [formCanCreateIndividualEvents, setFormCanCreateIndividualEvents] = useState(false);
@@ -67,6 +70,7 @@ export default function AreasManager({ initialAreas, semesterStatus, activeSemes
         setFormName("");
         setFormCode("");
         setFormDescription("");
+        setFormColor("#6366f1");
         setFormIsLeadershipArea(false);
         setFormCanCreateEvents(false);
         setFormCanCreateIndividualEvents(false);
@@ -80,6 +84,7 @@ export default function AreasManager({ initialAreas, semesterStatus, activeSemes
                 name: formName,
                 code: formCode || null,
                 description: formDescription || null,
+                color: formColor,
                 isLeadershipArea: formIsLeadershipArea,
                 canCreateEvents: formCanCreateEvents,
                 canCreateIndividualEvents: formCanCreateIndividualEvents,
@@ -101,6 +106,7 @@ export default function AreasManager({ initialAreas, semesterStatus, activeSemes
                 name: formName,
                 code: formCode || null,
                 description: formDescription || null,
+                color: formColor,
                 isLeadershipArea: formIsLeadershipArea,
                 canCreateEvents: formCanCreateEvents,
                 canCreateIndividualEvents: formCanCreateIndividualEvents,
@@ -155,6 +161,7 @@ export default function AreasManager({ initialAreas, semesterStatus, activeSemes
         setFormName(area.name);
         setFormCode(area.code || "");
         setFormDescription(area.description || "");
+        setFormColor(area.color || "#6366f1");
         setFormIsLeadershipArea(area.isLeadershipArea ?? false);
         setFormCanCreateEvents(area.canCreateEvents ?? false);
         setFormCanCreateIndividualEvents(area.canCreateIndividualEvents ?? false);
@@ -257,6 +264,27 @@ export default function AreasManager({ initialAreas, semesterStatus, activeSemes
                                 className="w-full px-4 py-2.5 rounded-xl border border-meteorite-200 focus:border-meteorite-500 focus:ring-2 focus:ring-meteorite-200 outline-none transition-all bg-white text-meteorite-950 font-medium"
                             />
                         </div>
+                        <div>
+                            <label className="block text-sm font-bold text-meteorite-700 mb-1">Color</label>
+                            <div className="flex items-center gap-2 flex-wrap">
+                                {AREA_COLOR_PRESETS.map((c) => (
+                                    <button
+                                        key={c}
+                                        type="button"
+                                        onClick={() => setFormColor(c)}
+                                        className={`w-7 h-7 rounded-full border-2 transition-all ${formColor === c ? 'border-meteorite-700 scale-110 ring-2 ring-meteorite-300' : 'border-transparent hover:scale-105'}`}
+                                        style={{ backgroundColor: c }}
+                                    />
+                                ))}
+                                <input
+                                    type="color"
+                                    value={formColor}
+                                    onChange={e => setFormColor(e.target.value)}
+                                    className="w-7 h-7 rounded-full cursor-pointer border-0 p-0"
+                                    title="Color personalizado"
+                                />
+                            </div>
+                        </div>
                         <div className="flex flex-col justify-end pb-1">
                             <label className="flex items-center gap-3 cursor-pointer group">
                                 <div className="relative flex items-center">
@@ -344,10 +372,19 @@ export default function AreasManager({ initialAreas, semesterStatus, activeSemes
                     >
                         <div className="flex items-start justify-between mb-3">
                             <div className="flex items-center gap-3">
-                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-sm shadow-inner ${area.isActiveInSemester
-                                    ? "bg-emerald-100 text-emerald-700"
-                                    : "bg-gray-100 text-gray-500"
-                                    }`}>
+                                <div
+                                    className="w-10 h-10 rounded-xl flex items-center justify-center font-black text-sm shadow-inner"
+                                    style={area.color ? {
+                                        backgroundColor: `${area.color}20`,
+                                        color: area.color,
+                                    } : area.isActiveInSemester ? {
+                                        backgroundColor: 'rgb(209 250 229)',
+                                        color: 'rgb(21 128 61)',
+                                    } : {
+                                        backgroundColor: 'rgb(243 244 246)',
+                                        color: 'rgb(107 114 128)',
+                                    }}
+                                >
                                     {area.code || area.name.substring(0, 2).toUpperCase()}
                                 </div>
                                 <div>

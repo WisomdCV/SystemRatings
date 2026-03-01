@@ -4,7 +4,7 @@ import { DrizzleAdapter } from "@auth/drizzle-adapter";
 import { db } from "@/db";
 import { authConfig } from "../../auth.config";
 import { accounts, sessions, users, verificationTokens } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, count } from "drizzle-orm";
 import { getCustomPermissionsForUser } from "@/server/data-access/custom-roles";
 
 
@@ -95,8 +95,17 @@ export const {
 
             const dbUser = await db.query.users.findFirst({
                 where: eq(users.id, user.id),
-                columns: { status: true, suspendedUntil: true }
+                columns: { status: true, suspendedUntil: true, role: true }
             });
+
+            // Auto-DEV: If this is the very first user in the system, promote to DEV
+            if (dbUser && (dbUser.role === "VOLUNTEER" || !dbUser.role)) {
+                const [{ total }] = await db.select({ total: count() }).from(users);
+                if (total <= 1) {
+                    await db.update(users).set({ role: "DEV", status: "ACTIVE" }).where(eq(users.id, user.id!));
+                    console.log(`🔑 Auto-DEV: First user ${user.email} promoted to DEV role`);
+                }
+            }
 
             if (!dbUser) return true;
 

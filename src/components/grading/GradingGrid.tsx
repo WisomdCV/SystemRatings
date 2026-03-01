@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { Loader2, CheckCircle2, AlertCircle, Info, ArrowLeft, Search, Filter } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getKpiStatus } from "@/lib/utils/kpi-colors";
+import { getAreaColorStyle } from "@/lib/utils/area-colors";
 import Link from "next/link";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
@@ -144,30 +145,8 @@ export default function GradingGrid({ initialData, currentUserRole }: GradingGri
         return "bg-gray-50 text-gray-700 border-gray-200";
     };
 
-    const getAreaBadgeStyle = (areaName: string | undefined) => {
-        if (!areaName) return "bg-gray-100 text-gray-500 border-gray-200";
-        const lower = areaName.toLowerCase();
-
-        // MD (Mesa Directiva)
-        if (lower === "md" || lower.includes("mesa") || lower.includes("directiva")) return "bg-indigo-100 text-indigo-700 border-indigo-200";
-        // MEJORA CONTINUA (MC)
-        if (lower === "mc" || lower.includes("mejora") || lower.includes("continua")) return "bg-lime-100 text-lime-700 border-lime-200";
-        // PMO (Proyectos)
-        if (lower === "pmo" || lower.includes("proyectos")) return "bg-purple-100 text-purple-700 border-purple-200";
-        // LOGÍSTICA
-        if (lower.includes("logística") || lower.includes("logistica")) return "bg-cyan-100 text-cyan-700 border-cyan-200";
-        // RELACIONES PÚBLICAS (RRPP/RP)
-        if (lower === "rp" || lower.includes("relaciones") || lower.includes("publicas") || lower.includes("públicas")) return "bg-pink-100 text-pink-700 border-pink-200";
-        // TIC'S (Tecnologías)
-        if (lower.includes("tic") || lower.includes("tecnolog")) return "bg-slate-100 text-slate-700 border-slate-200";
-        // INNOVACIÓN
-        if (lower.includes("innovaci")) return "bg-amber-100 text-amber-700 border-amber-200";
-        // TALENTO HUMANO
-        if (lower.includes("talento") || lower.includes("humano")) return "bg-orange-100 text-orange-700 border-orange-200";
-        // MARKETING
-        if (lower.includes("marketing")) return "bg-rose-100 text-rose-700 border-rose-200";
-
-        return "bg-gray-100 text-gray-500 border-gray-200";
+    const getAreaBadgeStyle = (areaColor: string | null | undefined) => {
+        return getAreaColorStyle(areaColor);
     };
 
     return (
@@ -299,10 +278,10 @@ export default function GradingGrid({ initialData, currentUserRole }: GradingGri
                                     <td className="px-6 py-4">
                                         <div className="flex flex-col gap-1.5 align-top min-w-max">
                                             <span className="text-xs font-bold text-gray-700">{user.role}</span>
-                                            <span className={cn(
-                                                "text-[10px] px-2 py-0.5 rounded-md w-fit font-medium border transition-colors",
-                                                getAreaBadgeStyle(user.currentArea?.name)
-                                            )}>
+                                            <span
+                                            className="text-[10px] px-2 py-0.5 rounded-md w-fit font-medium border transition-colors"
+                                            style={getAreaBadgeStyle(user.currentArea?.color)}
+                                        >
                                                 {user.currentArea?.name || "Sin Área"}
                                             </span>
                                         </div>

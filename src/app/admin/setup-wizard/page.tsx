@@ -2,6 +2,8 @@ import { auth } from "@/server/auth";
 import { redirect } from "next/navigation";
 import { getAllAreasAction, getAreasWithLeadersAction, getMembersForAssignmentAction } from "@/server/actions/area.actions";
 import { getAllSemestersAction } from "@/server/actions/semester.actions";
+import { getPillarsBySemesterAction } from "@/server/actions/pillar.actions";
+import { getProjectAreasAction, getProjectRolesAction } from "@/server/actions/project-settings.actions";
 import { hasPermission } from "@/lib/permissions";
 import SetupWizard from "@/components/admin/setup/SetupWizard";
 import Link from "next/link";
@@ -16,12 +18,36 @@ export default async function SetupWizardPage() {
         return redirect("/dashboard?error=AccessDenied");
     }
 
-    const [semestersResult, areasResult, leadersResult, membersResult] = await Promise.all([
+    const [semestersResult, areasResult, leadersResult, membersResult, projectAreasResult, projectRolesResult] = await Promise.all([
         getAllSemestersAction(),
         getAllAreasAction(),
         getAreasWithLeadersAction(),
         getMembersForAssignmentAction(),
+        getProjectAreasAction(),
+        getProjectRolesAction(),
     ]);
+
+    const semesters = semestersResult.success && semestersResult.data ? semestersResult.data : [];
+    const areas = areasResult.success && areasResult.data ? areasResult.data : [];
+    const leaders = leadersResult.success && leadersResult.data ? leadersResult.data : [];
+    const members = membersResult.success && membersResult.data ? membersResult.data : [];
+    const projectAreas = projectAreasResult.success && projectAreasResult.data ? projectAreasResult.data : [];
+    const projectRoles = projectRolesResult.success && projectRolesResult.data ? projectRolesResult.data : [];
+
+    // Fetch pillars for the first inactive semester (most likely to be the one being configured)
+    // Also build the "other semesters" list for the clone feature
+    const inactiveSemesters = semesters.filter(s => !s.isActive);
+    const targetSemester = inactiveSemesters[0];
+    let pillars: any[] = [];
+    if (targetSemester) {
+        const pillarsResult = await getPillarsBySemesterAction(targetSemester.id);
+        if (pillarsResult.success && pillarsResult.data) {
+            pillars = pillarsResult.data;
+        }
+    }
+    const otherSemesters = semesters
+        .filter(s => s.id !== targetSemester?.id)
+        .map(s => ({ id: s.id, name: s.name }));
 
     return (
         <div className="min-h-screen bg-meteorite-50 relative overflow-hidden p-4 md:p-6 2xl:p-10">
@@ -58,10 +84,14 @@ export default async function SetupWizardPage() {
 
                 {/* Wizard */}
                 <SetupWizard
-                    existingSemesters={semestersResult.success && semestersResult.data ? semestersResult.data : []}
-                    areas={areasResult.success && areasResult.data ? areasResult.data : []}
-                    areasWithLeaders={leadersResult.success && leadersResult.data ? leadersResult.data : []}
-                    eligibleUsers={membersResult.success && membersResult.data ? membersResult.data : []}
+                    existingSemesters={semesters}
+                    areas={areas}
+                    areasWithLeaders={leaders}
+                    eligibleUsers={members}
+                    initialPillars={pillars}
+                    otherSemesters={otherSemesters}
+                    initialProjectAreas={projectAreas}
+                    initialProjectRoles={projectRoles}
                 />
             </div>
         </div>

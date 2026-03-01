@@ -35,7 +35,7 @@ ChartJS.register(
 
 interface AreaComparisonProps {
     data: {
-        areas: Array<{ id: string; name: string; code: string | null }>;
+        areas: Array<{ id: string; name: string; code: string | null; color: string | null }>;
         months: Array<{ month: number; year: number; label: string }>;
         data: Record<string, Record<string, number>>;
         rankings: Record<string, Record<string, number>>;
@@ -161,9 +161,7 @@ export default function AreaComparison({ data }: AreaComparisonProps) {
         datasets: data.areas.filter(area => {
             return data.months.some(m => data.data[area.id]?.[`${m.month}-${m.year}`]);
         }).map((area, index) => {
-            // Predictable color palette
-            const colors = ["#7a44e3", "#f59e0b", "#10b981", "#ef4444", "#3b82f6", "#ec4899"];
-            const color = colors[index % colors.length];
+            const color = area.color || ["#7a44e3", "#f59e0b", "#10b981", "#ef4444", "#3b82f6", "#ec4899"][index % 6];
             return {
                 label: area.code || area.name,
                 data: data.months.map(m => data.data[area.id]?.[`${m.month}-${m.year}`] || null),
@@ -217,7 +215,10 @@ export default function AreaComparison({ data }: AreaComparisonProps) {
         datasets: [{
             label: "KPI Promedio",
             data: sortedAreas.map(a => a.kpi),
-            backgroundColor: sortedAreas.map((_, i) => i === 0 ? "rgba(122, 68, 227, 0.9)" : "rgba(122, 68, 227, 0.4)"),
+            backgroundColor: sortedAreas.map((a) => {
+                const c = a.color || "#7a44e3";
+                return sortedAreas.indexOf(a) === 0 ? `${c}e6` : `${c}66`;
+            }),
             borderRadius: 8,
         }],
     };

@@ -7,7 +7,7 @@ import { eq, and, asc, desc, inArray } from "drizzle-orm";
 import { hasPermission } from "@/lib/permissions";
 
 export interface AreaComparisonData {
-    areas: Array<{ id: string; name: string; code: string | null }>;
+    areas: Array<{ id: string; name: string; code: string | null; color: string | null }>;
     months: Array<{ month: number; year: number; label: string }>;
     data: Record<string, Record<string, number>>; // areaId -> "month-year" -> kpi
     rankings: Record<string, Record<string, number>>; // areaId -> "month-year" -> position
@@ -113,7 +113,8 @@ export async function getAreaComparisonAction(): Promise<{
                 areas: allAreas.map(a => ({
                     id: a.id,
                     name: a.name,
-                    code: a.code
+                    code: a.code,
+                    color: a.color
                 })),
                 months,
                 data,

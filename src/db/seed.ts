@@ -34,14 +34,14 @@ async function main() {
     // Usamos onConflictDoNothing: Si el código "LO" ya existe, lo ignora.
     console.log("🏢 Sincronizando Áreas...");
     const areasData = [
-        { name: "Logística", code: "LO" },
-        { name: "Marketing", code: "MK" },
-        { name: "PMO", code: "PM" },
-        { name: "Talento Humano", code: "TH", canCreateEvents: true, canCreateIndividualEvents: true },
-        { name: "Optimización de Procesos y Tecnología", code: "OPT" },
-        { name: "Relaciones Públicas", code: "RP" },
-        { name: "Innovación", code: "IN" },
-        { name: "Mesa Directiva", code: "MD", isLeadershipArea: true },
+        { name: "Logística", code: "LO", color: "#3b82f6" },              // blue-500
+        { name: "Marketing", code: "MK", color: "#ef4444" },              // red-500
+        { name: "PMO", code: "PM", color: "#64748b" },                    // slate-500
+        { name: "Talento Humano", code: "TH", color: "#ec4899", canCreateEvents: true, canCreateIndividualEvents: true }, // pink-500
+        { name: "Optimización de Procesos y Tecnología", code: "OPT", color: "#06b6d4" }, // cyan-500
+        { name: "Relaciones Públicas", code: "RP", color: "#a855f7" },    // purple-500
+        { name: "Innovación", code: "IN", color: "#f97316" },             // orange-500
+        { name: "Mesa Directiva", code: "MD", color: "#f59e0b", isLeadershipArea: true }, // amber-500
     ];
 
     await db.insert(areas).values(areasData).onConflictDoNothing({
