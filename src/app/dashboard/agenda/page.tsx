@@ -5,6 +5,7 @@ import { events, semesters, areas, users, projectMembers, projectAreas, projects
 import { desc, eq, and, or, isNull, ne, asc } from "drizzle-orm";
 import EventsView from "@/components/events/EventsView";
 import { getCreatableIISEEventTypes } from "@/server/services/event-permissions.service";
+import { prepareEventsForClient, type VisibilityContext, type ProjectMembershipContext } from "@/server/services/event-visibility.service";
 
 export default async function AgendaPage() {
     const session = await auth();
@@ -41,14 +42,14 @@ export default async function AgendaPage() {
 
         // Also include PROJECT events for user's projects
         let projectIds: string[] = [];
-        // Store user's project area + role level per project for visibility filtering
-        let userProjectMemberships: { projectId: string; projectAreaId: string | null; hierarchyLevel: number }[] = [];
+        // Build project memberships for visibility context
+        let userProjectMemberships: ProjectMembershipContext[] = [];
         if (userId) {
             const memberships = await db.query.projectMembers.findMany({
                 where: eq(projectMembers.userId, userId),
                 with: {
                     project: { columns: { id: true, semesterId: true } },
-                    projectRole: { columns: { hierarchyLevel: true } },
+                    projectRole: { columns: { canViewAllAreaEvents: true, canCreateEvents: true } },
                 }
             });
             const activeMemberships = memberships.filter(m => m.project?.semesterId === activeSemester.id);
@@ -56,7 +57,8 @@ export default async function AgendaPage() {
             userProjectMemberships = activeMemberships.map(m => ({
                 projectId: m.project!.id,
                 projectAreaId: m.projectAreaId,
-                hierarchyLevel: m.projectRole?.hierarchyLevel ?? 0,
+                canViewAllAreaEvents: m.projectRole?.canViewAllAreaEvents ?? false,
+                canCreateEvents: m.projectRole?.canCreateEvents ?? false,
             }));
         }
 
@@ -88,25 +90,15 @@ export default async function AgendaPage() {
             }
         });
 
-        // Privacy filters:
-        // - INDIVIDUAL_GROUP: only visible to invitees + creator
-        // - PROJECT AREA: only visible to members of that area + coordinators/directors (level >= 70)
-        eventsData = eventsData.filter((event: any) => {
-            if (event.eventType === "INDIVIDUAL_GROUP") {
-                if (event.createdById === userId) return true;
-                return event.invitees?.some((inv: any) => inv.userId === userId);
-            }
-            // PROJECT scope AREA events: filter by user's project area
-            if (event.eventScope === "PROJECT" && event.eventType === "AREA" && event.targetProjectArea?.id && event.projectId) {
-                const membership = userProjectMemberships.find(m => m.projectId === event.projectId);
-                if (!membership) return false;
-                // Coordinators/Directors (level >= 70) see all area events
-                if (membership.hierarchyLevel >= 70) return true;
-                // Others only see their own area's events
-                return membership.projectAreaId === event.targetProjectArea.id;
-            }
-            return true;
-        });
+        // Centralized visibility + permission enrichment
+        const visibilityCtx: VisibilityContext = {
+            userId,
+            userRole: role,
+            userAreaId: currentAreaId,
+            customPermissions: session.user.customPermissions,
+            projectMemberships: userProjectMemberships,
+        };
+        eventsData = await prepareEventsForClient(eventsData, visibilityCtx);
     }
 
     // 2. DYNAMIC permission check — ZERO hardcode

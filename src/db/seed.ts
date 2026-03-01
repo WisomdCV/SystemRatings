@@ -37,11 +37,11 @@ async function main() {
         { name: "Logística", code: "LO" },
         { name: "Marketing", code: "MK" },
         { name: "PMO", code: "PM" },
-        { name: "Talento Humano", code: "TH" },
+        { name: "Talento Humano", code: "TH", canCreateEvents: true, canCreateIndividualEvents: true },
         { name: "Optimización de Procesos y Tecnología", code: "OPT" },
         { name: "Relaciones Públicas", code: "RP" },
         { name: "Innovación", code: "IN" },
-        { name: "Mesa Directiva", code: "MD" },
+        { name: "Mesa Directiva", code: "MD", isLeadershipArea: true },
     ];
 
     await db.insert(areas).values(areasData).onConflictDoNothing({
@@ -144,7 +144,7 @@ async function main() {
             { name: "Marketing", color: "#e11d48" },           // rose-600
             { name: "Académica", color: "#8b5cf6" },           // violet-500
             { name: "Sistemas", color: "#10b981" },            // emerald-500
-            { name: "Mesa de recursos humanos", color: "#f59e0b", isSystem: true }, // amber-500, no director allowed logic
+            { name: "Mesa de recursos humanos", color: "#f59e0b", isSystem: true, membersCanCreateEvents: true }, // amber-500, RRHH: members can create events
         ]);
         console.log("   ✅ Áreas insertadas.");
     } else {
@@ -155,12 +155,12 @@ async function main() {
     const existingRoles = await db.query.projectRoles.findMany();
     if (existingRoles.length === 0) {
         await db.insert(projectRoles).values([
-            { name: "Coordinador / Project Management", hierarchyLevel: 100, isSystem: true },
-            { name: "Director de proyecto", hierarchyLevel: 80, isSystem: true },
-            { name: "Subdirector de proyecto", hierarchyLevel: 70, isSystem: true },
-            { name: "Tesorero de proyecto", hierarchyLevel: 60, isSystem: true },
-            { name: "Director de Área", hierarchyLevel: 50, isSystem: true },
-            { name: "Miembro de Área", hierarchyLevel: 10, isSystem: true },
+            { name: "Coordinador / Project Management", hierarchyLevel: 100, isSystem: true, canCreateEvents: true, canViewAllAreaEvents: true },
+            { name: "Director de proyecto", hierarchyLevel: 90, isSystem: true, canCreateEvents: true, canViewAllAreaEvents: true },
+            { name: "Subdirector de proyecto", hierarchyLevel: 80, isSystem: true, canCreateEvents: true, canViewAllAreaEvents: true },
+            { name: "Tesorero de proyecto", hierarchyLevel: 70, isSystem: true, canCreateEvents: false, canViewAllAreaEvents: false },
+            { name: "Director de Área", hierarchyLevel: 60, isSystem: true, canCreateEvents: true, canViewAllAreaEvents: false },
+            { name: "Miembro de Área", hierarchyLevel: 50, isSystem: true, canCreateEvents: false, canViewAllAreaEvents: false },
         ]);
         console.log("   ✅ Roles insertados.");
     } else {

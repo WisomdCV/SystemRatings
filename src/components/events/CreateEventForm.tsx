@@ -353,7 +353,7 @@ export default function CreateEventForm({
             {/* Conditional: Invitees (INDIVIDUAL_GROUP) */}
             {watchType === "INDIVIDUAL_GROUP" && (
                 <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-1.5 ml-1">
+                    <label className="block text-sm font-black text-meteorite-950 mb-1.5 ml-1">
                         Invitados ({selectedInvitees.length} seleccionados)
                     </label>
                     <input

@@ -65,6 +65,12 @@ type EventItem = {
             image: string | null;
         };
     }[];
+    // Pre-computed permissions from server (Changes 1+2)
+    _permissions?: {
+        canEdit: boolean;
+        canDelete: boolean;
+        canTakeAttendance: boolean;
+    };
 };
 
 interface EventsViewProps {
@@ -250,9 +256,9 @@ export default function EventsView({
                         {viewMode === "grid" && (
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-8">
                                 {filteredEvents.map((event) => {
-                                    const canEdit = !readOnly && canManageEvent(userRole, userId, userAreaId, event);
-                                    const canDelete = !readOnly && canManageEvent(userRole, userId, userAreaId, event);
-                                    const canAttendance = !readOnly && canTakeAttendance(userRole, userId, userAreaId, event);
+                                    const canEdit = !readOnly && (event._permissions?.canEdit ?? false);
+                                    const canDelete = !readOnly && (event._permissions?.canDelete ?? false);
+                                    const canAttendance = !readOnly && (event._permissions?.canTakeAttendance ?? false);
 
                                     return (
                                         <EventCardGrid
@@ -274,9 +280,9 @@ export default function EventsView({
                         {viewMode === "list" && (
                             <div className="space-y-4 pb-8">
                                 {filteredEvents.map((event) => {
-                                    const canEdit = !readOnly && canManageEvent(userRole, userId, userAreaId, event);
-                                    const canDelete = !readOnly && canManageEvent(userRole, userId, userAreaId, event);
-                                    const canAttendance = !readOnly && canTakeAttendance(userRole, userId, userAreaId, event);
+                                    const canEdit = !readOnly && (event._permissions?.canEdit ?? false);
+                                    const canDelete = !readOnly && (event._permissions?.canDelete ?? false);
+                                    const canAttendance = !readOnly && (event._permissions?.canTakeAttendance ?? false);
 
                                     return (
                                         <EventCardList
@@ -336,32 +342,9 @@ export default function EventsView({
     );
 }
 
-// --- Helpers ---
-// Roles with event:manage permission (aligned with server-side PERMISSIONS map)
-const EVENT_MANAGE_ROLES = ["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER"];
-
-function canManageEvent(role: string, userId: string | null | undefined, userAreaId: string | null, event: EventItem) {
-    // Full admin: event:manage roles can manage any event
-    if (EVENT_MANAGE_ROLES.includes(role)) return true;
-
-    // Creator can always manage their own event
-    if (userId && event.createdById === userId) return true;
-
-    // Director/Subdirector: can manage their area events
-    if ((role === "DIRECTOR" || role === "SUBDIRECTOR") && event.targetAreaId && event.targetAreaId === userAreaId) {
-        return true;
-    }
-
-    return false;
-}
-
-function canTakeAttendance(role: string, userId: string | null | undefined, userAreaId: string | null, event: EventItem) {
-    // Events that don't track attendance (INDIVIDUAL_GROUP) should not show the button
-    if (event.tracksAttendance === false) return false;
-    return canManageEvent(role, userId, userAreaId, event);
-}
-
-// --- Sub-components to keep clean ---
+// --- Sub-components ---
+// NOTE: Per-event permissions are pre-computed on the server (_permissions field)
+// and consumed directly here — ZERO client-side permission logic.
 
 interface EventCardProps {
     event: EventItem;

@@ -20,6 +20,7 @@ import {
     FolderKanban,
     MapPin,
     ChevronRight,
+    ChevronLeft,
     GraduationCap,
     User as UserIcon,
     LogOut,
@@ -94,6 +95,7 @@ interface DashboardViewProps {
 
 export default function DashboardView({ user, upcomingEvents = [], pendingJustifications = [], attendanceHistory = [], currentSemester, dashboardData }: DashboardViewProps) {
     const [chartView, setChartView] = useState<"monthly" | "semester">("monthly");
+    const [isSidebarExpanded, setIsSidebarExpanded] = useState(true);
 
     // Carousel References and State
     const carouselRef = useRef<HTMLDivElement>(null);
@@ -419,18 +421,34 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
     return (
         <div className="flex h-screen overflow-hidden text-gray-800 font-sans bg-meteorite-50">
             {/* 1. SIDEBAR (DESKTOP) */}
-            <aside className="hidden lg:flex w-64 bg-meteorite-950 text-white flex-col justify-between transition-all duration-300 z-50 shadow-2xl relative">
-                <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-b from-meteorite-900 to-meteorite-950 opacity-50 z-0 pointer-events-none"></div>
+            <aside
+                className={`hidden lg:flex flex-col justify-between bg-meteorite-950 text-white transition-all duration-300 ease-in-out z-50 shadow-2xl relative my-4 ml-4 rounded-[2rem] border border-meteorite-700/50 ${isSidebarExpanded ? "w-64" : "w-[88px]"
+                    }`}
+            >
+                <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-b from-meteorite-900 to-meteorite-950 opacity-50 z-0 pointer-events-none rounded-[2rem]"></div>
 
-                <div className="relative z-10">
-                    {/* Logo */}
-                    <div className="h-20 flex items-center px-6 border-b border-meteorite-800/50">
-                        <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-meteorite-400 to-meteorite-600 flex items-center justify-center shadow-lg shadow-meteorite-900/50">
-                            <Zap className="text-white w-5 h-5" />
+                <div className="relative z-10 w-full">
+                    {/* Logo & Toggle */}
+                    <div className="h-20 flex items-center justify-between px-6 border-b border-meteorite-800/50">
+                        <div className="flex items-center">
+                            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-meteorite-400 to-meteorite-600 flex flex-shrink-0 items-center justify-center shadow-lg shadow-meteorite-900/50">
+                                <Zap className="text-white w-5 h-5" />
+                            </div>
+                            <span
+                                className={`ml-3 font-bold text-xl tracking-wide transition-all duration-300 overflow-hidden whitespace-nowrap ${isSidebarExpanded ? "opacity-100 w-auto" : "opacity-0 w-0 ml-0"
+                                    }`}
+                            >
+                                IISE Manager
+                            </span>
                         </div>
-                        <span className="ml-3 font-bold text-xl tracking-wide">
-                            IISE Manager
-                        </span>
+
+                        {/* Expand/Collapse Toggle Button for Desktop */}
+                        <button
+                            onClick={() => setIsSidebarExpanded(!isSidebarExpanded)}
+                            className="text-meteorite-400 hover:text-white transition-colors p-1"
+                        >
+                            {isSidebarExpanded ? <ChevronLeft className="w-5 h-5" /> : <ChevronRight className="w-5 h-5 absolute right-6" />}
+                        </button>
                     </div>
 
                     {/* Menú */}
@@ -438,29 +456,35 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
                         {/* 1. Dashboard (Common) */}
                         <a
                             href="/dashboard"
-                            className="flex items-center px-4 py-3 bg-meteorite-800 text-white rounded-xl shadow-lg shadow-meteorite-900/20 transition-all group border border-meteorite-700/50"
+                            title={!isSidebarExpanded ? "Dashboard" : ""}
+                            className={`flex items-center px-4 py-3 bg-meteorite-800 text-white rounded-xl shadow-lg shadow-meteorite-900/20 transition-all group border border-meteorite-700/50 ${!isSidebarExpanded && "justify-center"}`}
                         >
-                            <LayoutDashboard className="text-meteorite-300 group-hover:text-white transition-colors w-5 h-5" />
-                            <span className="ml-3 font-medium">Dashboard</span>
+                            <LayoutDashboard className="text-meteorite-300 group-hover:text-white transition-colors w-5 h-5 flex-shrink-0" />
+                            <span className={`font-medium transition-all duration-300 overflow-hidden whitespace-nowrap ${isSidebarExpanded ? "ml-3 opacity-100" : "ml-0 w-0 opacity-0"
+                                }`}>Dashboard</span>
                         </a>
 
                         {/* 1.5. Proyectos (Common) */}
                         <a
                             href="/dashboard/projects"
-                            className="flex items-center px-4 py-3 text-meteorite-200 hover:bg-meteorite-900 hover:text-white rounded-xl transition-all group"
+                            title={!isSidebarExpanded ? "Proyectos" : ""}
+                            className={`flex items-center px-4 py-3 text-meteorite-200 hover:bg-meteorite-900 hover:text-white rounded-xl transition-all group ${!isSidebarExpanded && "justify-center"}`}
                         >
-                            <FolderKanban className="text-meteorite-400 group-hover:text-white transition-colors w-5 h-5" />
-                            <span className="ml-3 font-medium">Proyectos</span>
+                            <FolderKanban className="text-meteorite-400 group-hover:text-white transition-colors w-5 h-5 flex-shrink-0" />
+                            <span className={`font-medium transition-all duration-300 overflow-hidden whitespace-nowrap ${isSidebarExpanded ? "ml-3 opacity-100" : "ml-0 w-0 opacity-0"
+                                }`}>Proyectos</span>
                         </a>
 
                         {/* 2. Administración Central */}
                         {["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER", "DIRECTOR", "SUBDIRECTOR"].includes((user as any).role) && (
                             <a
                                 href="/admin"
-                                className="flex items-center px-4 py-3 text-meteorite-200 hover:bg-meteorite-900 hover:text-white rounded-xl transition-all group"
+                                title={!isSidebarExpanded ? "Administración" : ""}
+                                className={`flex items-center px-4 py-3 text-meteorite-200 hover:bg-meteorite-900 hover:text-white rounded-xl transition-all group ${!isSidebarExpanded && "justify-center"}`}
                             >
-                                <Users className="text-meteorite-400 group-hover:text-white transition-colors w-5 h-5" />
-                                <span className="ml-3 font-medium">Administración</span>
+                                <Users className="text-meteorite-400 group-hover:text-white transition-colors w-5 h-5 flex-shrink-0" />
+                                <span className={`font-medium transition-all duration-300 overflow-hidden whitespace-nowrap ${isSidebarExpanded ? "ml-3 opacity-100" : "ml-0 w-0 opacity-0"
+                                    }`}>Administración</span>
                             </a>
                         )}
 
@@ -468,10 +492,12 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
                         {["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER", "DIRECTOR"].includes((user as any).role) && (
                             <a
                                 href="/dashboard/management/grades"
-                                className="flex items-center px-4 py-3 text-meteorite-200 hover:bg-meteorite-900 hover:text-white rounded-xl transition-all group"
+                                title={!isSidebarExpanded ? "Calificaciones" : ""}
+                                className={`flex items-center px-4 py-3 text-meteorite-200 hover:bg-meteorite-900 hover:text-white rounded-xl transition-all group ${!isSidebarExpanded && "justify-center"}`}
                             >
-                                <GraduationCap className="text-meteorite-400 group-hover:text-white transition-colors w-5 h-5" />
-                                <span className="ml-3 font-medium">Calificaciones</span>
+                                <GraduationCap className="text-meteorite-400 group-hover:text-white transition-colors w-5 h-5 flex-shrink-0" />
+                                <span className={`font-medium transition-all duration-300 overflow-hidden whitespace-nowrap ${isSidebarExpanded ? "ml-3 opacity-100" : "ml-0 w-0 opacity-0"
+                                    }`}>Calificaciones</span>
                             </a>
                         )}
 
@@ -479,10 +505,12 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
                         {["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER", "DIRECTOR", "SUBDIRECTOR"].includes((user as any).role) && (
                             <a
                                 href="/dashboard/areas"
-                                className="flex items-center px-4 py-3 text-meteorite-200 hover:bg-meteorite-900 hover:text-white rounded-xl transition-all group"
+                                title={!isSidebarExpanded ? "Áreas KPI" : ""}
+                                className={`flex items-center px-4 py-3 text-meteorite-200 hover:bg-meteorite-900 hover:text-white rounded-xl transition-all group ${!isSidebarExpanded && "justify-center"}`}
                             >
-                                <BarChart3 className="text-meteorite-400 group-hover:text-white transition-colors w-5 h-5" />
-                                <span className="ml-3 font-medium">Áreas KPI</span>
+                                <BarChart3 className="text-meteorite-400 group-hover:text-white transition-colors w-5 h-5 flex-shrink-0" />
+                                <span className={`font-medium transition-all duration-300 overflow-hidden whitespace-nowrap ${isSidebarExpanded ? "ml-3 opacity-100" : "ml-0 w-0 opacity-0"
+                                    }`}>Áreas KPI</span>
                             </a>
                         )}
 
@@ -490,26 +518,30 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
                         {["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER", "DIRECTOR", "SUBDIRECTOR"].includes((user as any).role) ? (
                             <a
                                 href="/admin/events"
-                                className="flex items-center px-4 py-3 text-meteorite-200 hover:bg-meteorite-900 hover:text-white rounded-xl transition-all group"
+                                title={!isSidebarExpanded ? "Meetings" : ""}
+                                className={`flex items-center px-4 py-3 text-meteorite-200 hover:bg-meteorite-900 hover:text-white rounded-xl transition-all group ${!isSidebarExpanded && "justify-center"}`}
                             >
-                                <CalendarCheck className="text-meteorite-400 group-hover:text-white transition-colors w-5 h-5" />
-                                <span className="ml-3 font-medium">Meetings</span>
+                                <CalendarCheck className="text-meteorite-400 group-hover:text-white transition-colors w-5 h-5 flex-shrink-0" />
+                                <span className={`font-medium transition-all duration-300 overflow-hidden whitespace-nowrap ${isSidebarExpanded ? "ml-3 opacity-100" : "ml-0 w-0 opacity-0"
+                                    }`}>Meetings</span>
                             </a>
                         ) : (
                             <a
                                 href="/dashboard/agenda"
-                                className="flex items-center px-4 py-3 text-meteorite-200 hover:bg-meteorite-900 hover:text-white rounded-xl transition-all group"
+                                title={!isSidebarExpanded ? "Meetings" : ""}
+                                className={`flex items-center px-4 py-3 text-meteorite-200 hover:bg-meteorite-900 hover:text-white rounded-xl transition-all group ${!isSidebarExpanded && "justify-center"}`}
                             >
-                                <CalendarCheck className="text-meteorite-400 group-hover:text-white transition-colors w-5 h-5" />
-                                <span className="ml-3 font-medium">Meetings</span>
+                                <CalendarCheck className="text-meteorite-400 group-hover:text-white transition-colors w-5 h-5 flex-shrink-0" />
+                                <span className={`font-medium transition-all duration-300 overflow-hidden whitespace-nowrap ${isSidebarExpanded ? "ml-3 opacity-100" : "ml-0 w-0 opacity-0"
+                                    }`}>Meetings</span>
                             </a>
                         )}
                     </nav>
                 </div>
 
                 <div className="relative z-10 p-4 border-t border-meteorite-800/50 bg-meteorite-900/30">
-                    <div className="flex items-center justify-between p-2 rounded-xl hover:bg-meteorite-800 transition-colors group">
-                        <Link href="/dashboard/profile" className="flex items-center cursor-pointer flex-1 min-w-0">
+                    <div className={`flex items-center justify-between p-2 rounded-xl hover:bg-meteorite-800 transition-colors group ${!isSidebarExpanded && "flex-col gap-3"}`}>
+                        <Link href="/dashboard/profile" title={!isSidebarExpanded ? "Ver Perfil" : ""} className="flex items-center cursor-pointer flex-1 min-w-0">
                             {user.image ? (
                                 <img
                                     src={user.image}
@@ -521,7 +553,7 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
                                     <UserIcon className="text-white w-5 h-5" />
                                 </div>
                             )}
-                            <div className="ml-3 overflow-hidden min-w-0 flex-1">
+                            <div className={`overflow-hidden min-w-0 flex-1 transition-all duration-300 ${isSidebarExpanded ? "ml-3 opacity-100 w-auto" : "ml-0 opacity-0 w-0 h-0"}`}>
                                 <p className="text-sm font-semibold text-white whitespace-normal break-words leading-tight group-hover:text-meteorite-100 transition-colors">{user.name}</p>
                                 <p className="text-[11px] text-meteorite-300 truncate mt-0.5" title={`${getRoleLabel((user as any).role)} • ${(user as any).areaName || "Sin Área"}`}>
                                     {getRoleLabel((user as any).role)} • {(user as any).areaName || "Sin Área"}
@@ -530,7 +562,7 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
                         </Link>
                         <button
                             onClick={async () => await logoutAction()}
-                            className="text-meteorite-400 hover:text-red-400 transition-colors p-2"
+                            className="text-meteorite-400 hover:text-red-400 transition-colors p-2 flex-shrink-0"
                             title="Cerrar Sesión"
                         >
                             <LogOut className="w-5 h-5" />

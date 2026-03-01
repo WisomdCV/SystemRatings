@@ -79,10 +79,12 @@ async function main() {
     const roles = await db.query.projectRoles.findMany();
     for (const role of roles) {
         const shouldCreate = role.hierarchyLevel >= 60;
+        const shouldViewAll = role.hierarchyLevel >= 70;
         await db.update(projectRoles).set({
             canCreateEvents: shouldCreate,
+            canViewAllAreaEvents: shouldViewAll,
         }).where(eq(projectRoles.id, role.id));
-        console.log(`   ${shouldCreate ? "✅" : "⏭️"} "${role.name}" (LVL ${role.hierarchyLevel}) → canCreateEvents=${shouldCreate}`);
+        console.log(`   ${shouldCreate ? "✅" : "⏭️"} "${role.name}" (LVL ${role.hierarchyLevel}) → canCreateEvents=${shouldCreate}, canViewAllAreaEvents=${shouldViewAll}`);
     }
 
     console.log("\n✅ Migration complete!");

@@ -10,6 +10,7 @@ import { db } from "@/db";
 import { users, projectRoles, projectAreas, events, projectMembers } from "@/db/schema";
 import { eq, desc, asc, and, ne } from "drizzle-orm";
 import { getCreatableProjectEventTypes } from "@/server/services/event-permissions.service";
+import { filterVisibleEvents, type VisibilityContext } from "@/server/services/event-visibility.service";
 
 export default async function ProjectDetailPage(props: { params: Promise<{ id: string }> }) {
     const params = await props.params;
@@ -70,25 +71,22 @@ export default async function ProjectDetailPage(props: { params: Promise<{ id: s
         m => m.user.id === session.user!.id
     );
     const currentUserProjectAreaId = currentUserMembership?.projectArea?.id || null;
-    const currentUserProjectRoleLevel = currentUserMembership?.projectRole?.hierarchyLevel ?? 0;
+    const currentUserCanViewAll = currentUserMembership?.projectRole?.canViewAllAreaEvents ?? false;
 
-    // Privacy filter for project events:
-    // - GENERAL: visible to all project members
-    // - AREA: visible to members of that area + coordinators/directors (hierarchyLevel >= 70)
-    // - INDIVIDUAL_GROUP: visible to invitees + creator only
-    const projectEvents = allProjectEvents.filter(event => {
-        if (event.eventType === "INDIVIDUAL_GROUP") {
-            if (event.createdById === session.user!.id) return true;
-            return event.invitees?.some(inv => inv.userId === session.user!.id);
-        }
-        if (event.eventType === "AREA" && event.targetProjectArea?.id) {
-            // Project coordinators/directors (level >= 70) see all area events
-            if (currentUserProjectRoleLevel >= 70) return true;
-            // Area members only see their own area events
-            return currentUserProjectAreaId === event.targetProjectArea.id;
-        }
-        return true;
-    });
+    // Centralized visibility filter (uses canViewAllAreaEvents flag instead of hierarchyLevel)
+    const visibilityCtx: VisibilityContext = {
+        userId: session.user.id,
+        userRole: session.user.role || "",
+        userAreaId: session.user.currentAreaId,
+        customPermissions: session.user.customPermissions,
+        projectMemberships: [{
+            projectId: params.id,
+            projectAreaId: currentUserProjectAreaId,
+            canViewAllAreaEvents: currentUserCanViewAll,
+            canCreateEvents: currentUserMembership?.projectRole?.canCreateEvents ?? false,
+        }],
+    };
+    const projectEvents = filterVisibleEvents(allProjectEvents, visibilityCtx);
 
     // Determine creatable event types via centralized permission engine
     const isSystemAdmin = hasPermission(session.user.role, "project:manage");
