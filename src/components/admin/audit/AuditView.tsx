@@ -1,30 +1,33 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import type { AuditUser, AuditCustomRole, AuditHistoryEntry } from "@/server/actions/audit.actions";
+import type { AuditUser, AuditCustomRole, AuditHistoryEntry, AuditEventCapabilities } from "@/server/actions/audit.actions";
 import UserPermissionsCard from "./UserPermissionsCard";
 import PermissionMatrix from "./PermissionMatrix";
 import PositionHistoryTable from "./PositionHistoryTable";
+import EventCapabilitiesTable from "./EventCapabilitiesTable";
 import { PERMISSIONS, ROLES } from "@/lib/permissions";
 import { UserAvatar } from "@/components/ui/user-avatar";
-import { User, Grid3X3, History, Search, Filter } from "lucide-react";
+import { User, Grid3X3, History, Search, Filter, CalendarCheck } from "lucide-react";
 
 interface AuditViewProps {
     users: AuditUser[];
     customRoles: AuditCustomRole[];
     history: AuditHistoryEntry[];
     allPermissions: string[];
+    eventCapabilities: AuditEventCapabilities;
 }
 
-type TabKey = "users" | "matrix" | "history";
+type TabKey = "users" | "matrix" | "history" | "events";
 
 const TABS: { key: TabKey; label: string; icon: React.ReactNode }[] = [
     { key: "users", label: "Por Usuario", icon: <User className="w-4 h-4" /> },
     { key: "matrix", label: "Matriz de Permisos", icon: <Grid3X3 className="w-4 h-4" /> },
+    { key: "events", label: "Capacidades de Eventos", icon: <CalendarCheck className="w-4 h-4" /> },
     { key: "history", label: "Historial de Cambios", icon: <History className="w-4 h-4" /> },
 ];
 
-export default function AuditView({ users, customRoles, history, allPermissions }: AuditViewProps) {
+export default function AuditView({ users, customRoles, history, allPermissions, eventCapabilities }: AuditViewProps) {
     const [activeTab, setActiveTab] = useState<TabKey>("users");
     const [searchTerm, setSearchTerm] = useState("");
     const [roleFilter, setRoleFilter] = useState<string>("ALL");
@@ -199,6 +202,13 @@ export default function AuditView({ users, customRoles, history, allPermissions 
                         <PermissionMatrix
                             users={users}
                             allPermissions={allPermissions}
+                        />
+                    )}
+
+                    {activeTab === "events" && (
+                        <EventCapabilitiesTable
+                            users={users}
+                            eventCapabilities={eventCapabilities}
                         />
                     )}
 

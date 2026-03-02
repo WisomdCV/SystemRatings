@@ -76,6 +76,7 @@ export default async function AuditPage() {
                     customRoles={result.data.customRoles}
                     history={result.data.history}
                     allPermissions={result.data.allPermissions}
+                    eventCapabilities={result.data.eventCapabilities}
                 />
             </div>
         </div>
