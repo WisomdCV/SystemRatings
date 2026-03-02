@@ -8,7 +8,18 @@ export async function createGoogleMeeting(accessToken: string, eventData: Create
     const dateStr = eventData.date.toISOString().split('T')[0]; // "2025-10-15"
 
     const startDateTime = `${dateStr}T${eventData.startTime}:00`; // "2025-10-15T14:00:00"
-    const endDateTime = `${dateStr}T${eventData.endTime}:00`;     // "2025-10-15T16:00:00"
+
+    // Overnight support: if endTime < startTime, the event ends the next day
+    const [sh, sm] = eventData.startTime.split(":").map(Number);
+    const [eh, em] = eventData.endTime.split(":").map(Number);
+    const isOvernight = (eh * 60 + em) < (sh * 60 + sm);
+    let endDateStr = dateStr;
+    if (isOvernight) {
+        const nextDay = new Date(eventData.date);
+        nextDay.setDate(nextDay.getDate() + 1);
+        endDateStr = nextDay.toISOString().split('T')[0];
+    }
+    const endDateTime = `${endDateStr}T${eventData.endTime}:00`;
 
     // Nota: Es mejor manejar Timezones, pero por simplicidad asumiremos local/UTC handling básico
     // Google API espera formato ISO con timezone o "Z". 
@@ -104,12 +115,22 @@ export async function updateGoogleEvent(accessToken: string, googleEventId: stri
 
         if (dateStr && eventData.startTime && eventData.endTime) {
             const timeZoneOffset = "-05:00";
+            // Overnight support
+            const [sh2, sm2] = eventData.startTime.split(":").map(Number);
+            const [eh2, em2] = eventData.endTime.split(":").map(Number);
+            const isOvernightUpdate = (eh2 * 60 + em2) < (sh2 * 60 + sm2);
+            let endDateStrUpdate = dateStr;
+            if (isOvernightUpdate && eventData.date) {
+                const nextDay = new Date(eventData.date);
+                nextDay.setDate(nextDay.getDate() + 1);
+                endDateStrUpdate = nextDay.toISOString().split('T')[0];
+            }
             body.start = {
                 dateTime: `${dateStr}T${eventData.startTime}:00${timeZoneOffset}`,
                 timeZone: "America/Lima"
             };
             body.end = {
-                dateTime: `${dateStr}T${eventData.endTime}:00${timeZoneOffset}`,
+                dateTime: `${endDateStrUpdate}T${eventData.endTime}:00${timeZoneOffset}`,
                 timeZone: "America/Lima"
             };
         }

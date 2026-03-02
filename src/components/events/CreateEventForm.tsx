@@ -20,6 +20,8 @@ import {
     Users,
     Megaphone,
     UserPlus,
+    Shield,
+    Info,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
@@ -195,8 +197,56 @@ export default function CreateEventForm({
         INDIVIDUAL_GROUP: { label: "Individual/Grupal", icon: UserPlus, desc: "Reunión con invitados específicos" },
     };
 
+    // Build capability description for the indicator header
+    const capabilityChips: { label: string; color: string }[] = [];
+    if (availableTypes.includes("GENERAL")) {
+        capabilityChips.push({ label: "General", color: "bg-blue-100 text-blue-700 border-blue-200" });
+    }
+    if (availableTypes.includes("AREA")) {
+        if (canSelectArea) {
+            capabilityChips.push({ label: "Todas las áreas", color: "bg-emerald-100 text-emerald-700 border-emerald-200" });
+        } else {
+            capabilityChips.push({ label: userAreaName || "Mi Área", color: "bg-indigo-100 text-indigo-700 border-indigo-200" });
+        }
+    }
+    if (availableTypes.includes("INDIVIDUAL_GROUP")) {
+        capabilityChips.push({ label: "Individual/Grupal", color: "bg-teal-100 text-teal-700 border-teal-200" });
+    }
+    const hasProjectScope = availableScopes.includes("PROJECT");
+    const isOvernightHint = (() => {
+        const start = form.watch("startTime");
+        const end = form.watch("endTime");
+        if (!start || !end) return false;
+        const [sh, sm] = start.split(":").map(Number);
+        const [eh, em] = end.split(":").map(Number);
+        return (eh * 60 + em) < (sh * 60 + sm);
+    })();
+
     return (
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+            {/* Permission Capability Banner */}
+            {!isEditing && (
+                <div className="p-3 bg-gradient-to-r from-meteorite-50 to-indigo-50 border border-meteorite-200/60 rounded-xl">
+                    <div className="flex items-center gap-2 mb-2">
+                        <Shield className="w-3.5 h-3.5 text-meteorite-500" />
+                        <span className="text-[11px] font-black text-meteorite-600 uppercase tracking-wider">
+                            Tus capacidades
+                        </span>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                        {capabilityChips.map((chip, i) => (
+                            <span key={i} className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${chip.color}`}>
+                                {chip.label}
+                            </span>
+                        ))}
+                        {hasProjectScope && (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-violet-100 text-violet-700 border-violet-200">
+                                Proyectos
+                            </span>
+                        )}
+                    </div>
+                </div>
+            )}
             {/* Step 1: Scope Selection */}
             {!isEditing && availableScopes.length > 1 && (
                 <div>
@@ -484,6 +534,16 @@ export default function CreateEventForm({
                     )}
                 </div>
             </div>
+
+            {/* Overnight indicator */}
+            {isOvernightHint && (
+                <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-xl text-amber-700">
+                    <Info className="w-4 h-4 flex-shrink-0" />
+                    <span className="text-xs font-medium">
+                        Evento nocturno — la hora de fin corresponde al día siguiente.
+                    </span>
+                </div>
+            )}
 
             {/* Description */}
             <div>

@@ -115,6 +115,7 @@ export default async function AgendaPage() {
     let userProjects: { id: string; name: string }[] = [];
     let allProjectAreas: { id: string; name: string }[] = [];
     let availableScopes: string[] = ["IISE"];
+    const projectMembersMap: Record<string, { id: string; name: string | null; image: string | null }[]> = {};
 
     if (canCreate) {
         availableAreas = await db.query.areas.findMany({
@@ -146,6 +147,19 @@ export default async function AgendaPage() {
                     columns: { id: true, name: true },
                     orderBy: [asc(projectAreas.name)],
                 });
+
+                // Build projectMembersMap for invitee filtering by project
+                for (const proj of userProjects) {
+                    const members = await db.query.projectMembers.findMany({
+                        where: eq(projectMembers.projectId, proj.id),
+                        with: { user: { columns: { id: true, name: true, image: true } } }
+                    });
+                    projectMembersMap[proj.id] = members.map(m => ({
+                        id: m.user.id,
+                        name: m.user.name,
+                        image: m.user.image,
+                    }));
+                }
             }
         }
     }
@@ -165,6 +179,7 @@ export default async function AgendaPage() {
             availableScopes={availableScopes}
             projects={userProjects}
             projectAreas={allProjectAreas}
+            projectMembersMap={projectMembersMap}
         />
     );
 }

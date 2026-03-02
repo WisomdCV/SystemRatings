@@ -57,11 +57,13 @@ export const CreateEventSchema = z.object({
         });
     }
 
-    const eventEndDateTime = new Date(`${dateStr}T${data.endTime}:00`);
-    if (eventEndDateTime <= eventDateTime) {
+    // Overnight support: if endTime <= startTime, the event ends the next day
+    // e.g. 23:06 → 01:06 = overnight meeting (valid)
+    // Only reject if start === end (zero duration)
+    if (data.startTime === data.endTime) {
         ctx.addIssue({
             code: z.ZodIssueCode.custom,
-            message: "Fin debe ser posterior a Inicio",
+            message: "La hora de fin no puede ser igual a la de inicio.",
             path: ["endTime"],
         });
     }
@@ -118,11 +120,11 @@ export const UpdateEventSchema = CreateEventSchema.partial().superRefine((data, 
             });
         }
 
-        const eventEndDateTime = new Date(`${dateStr}T${data.endTime}:00`);
-        if (eventEndDateTime <= eventDateTime) {
+        // Overnight support: if endTime <= startTime, the event ends the next day
+        if (data.startTime === data.endTime) {
             ctx.addIssue({
                 code: z.ZodIssueCode.custom,
-                message: "Fin debe ser posterior a Inicio",
+                message: "La hora de fin no puede ser igual a la de inicio.",
                 path: ["endTime"],
             });
         }
