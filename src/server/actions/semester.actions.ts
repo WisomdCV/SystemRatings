@@ -58,20 +58,24 @@ export async function createSemesterAction(input: CreateSemesterDTO) {
             return { success: false, error: "Ya existe un ciclo con ese nombre." };
         }
 
-        // Insert Semester
-        const [newSemester] = await db.insert(semesters).values({
-            name: semesterData.name,
-            startDate: semesterData.startDate,
-            endDate: semesterData.endDate || null,
-            isActive: activateImmediately || false
-        }).returning();
+        // Insert Semester (wrapped in transaction to ensure atomic activate+deactivate)
+        const newSemester = await db.transaction(async (tx) => {
+            const [created] = await tx.insert(semesters).values({
+                name: semesterData.name,
+                startDate: semesterData.startDate,
+                endDate: semesterData.endDate || null,
+                isActive: activateImmediately || false
+            }).returning();
 
-        // If activating immediately, deactivate others
-        if (activateImmediately && newSemester) {
-            await db.update(semesters)
-                .set({ isActive: false })
-                .where(ne(semesters.id, newSemester.id));
-        }
+            // If activating immediately, deactivate others
+            if (activateImmediately && created) {
+                await tx.update(semesters)
+                    .set({ isActive: false })
+                    .where(ne(semesters.id, created.id));
+            }
+
+            return created;
+        });
 
         revalidatePath("/admin/cycles");
         revalidatePath("/dashboard");

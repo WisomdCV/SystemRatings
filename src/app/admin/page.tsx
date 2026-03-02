@@ -1,8 +1,11 @@
 import { auth } from "@/server/auth";
 import { redirect } from "next/navigation";
 import { hasPermission } from "@/lib/permissions";
+import { db } from "@/db";
+import { users } from "@/db/schema";
+import { eq, sql } from "drizzle-orm";
 import Link from "next/link";
-import { ArrowLeft, Users, MapPin, Shield, RefreshCcw, Settings, ShieldCheck } from "lucide-react";
+import { ArrowLeft, Users, MapPin, Shield, RefreshCcw, Settings, ShieldCheck, UserCheck } from "lucide-react";
 
 export default async function AdminHubPage() {
     const session = await auth();
@@ -15,8 +18,28 @@ export default async function AdminHubPage() {
         return redirect("/dashboard?error=AccessDenied");
     }
 
+    // Fetch pending approval count for badge
+    let pendingCount = 0;
+    if (hasPermission(role, "user:manage", session.user.customPermissions)) {
+        const [result] = await db
+            .select({ count: sql<number>`count(*)` })
+            .from(users)
+            .where(eq(users.status, "PENDING_APPROVAL"));
+        pendingCount = result.count;
+    }
+
     // Definición de las tarjetas y verificación de permisos por cada una
     const adminCards = [
+        {
+            title: "Solicitudes de Acceso",
+            description: "Revisa y aprueba o rechaza a los usuarios que desean ingresar al sistema.",
+            href: "/admin/approvals",
+            icon: <UserCheck className="w-8 h-8 text-white" />,
+            colorClass: "from-orange-500 to-orange-700",
+            shadowClass: "shadow-orange-500/30",
+            hasAccess: hasPermission(role, "user:manage", session.user.customPermissions),
+            badge: pendingCount > 0 ? pendingCount : undefined,
+        },
         {
             title: "Equipo IISE",
             description: "Gestiona a los miembros, asigna roles, áreas y actualiza estados de cuenta.",
@@ -125,8 +148,13 @@ export default async function AdminHubPage() {
                                             {card.icon}
                                         </div>
                                         <div>
-                                            <h3 className="text-xl font-bold text-meteorite-900 mb-2 group-hover:text-meteorite-700 transition-colors">
+                                            <h3 className="text-xl font-bold text-meteorite-900 mb-2 group-hover:text-meteorite-700 transition-colors flex items-center gap-2">
                                                 {card.title}
+                                                {"badge" in card && card.badge ? (
+                                                    <span className="inline-flex items-center justify-center min-w-[1.5rem] h-6 px-2 text-xs font-bold text-white bg-red-500 rounded-full animate-pulse">
+                                                        {card.badge}
+                                                    </span>
+                                                ) : null}
                                             </h3>
                                             <p className="text-meteorite-600 text-sm leading-relaxed">
                                                 {card.description}

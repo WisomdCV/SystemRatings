@@ -46,30 +46,31 @@ export async function upsertGradeAction(input: UpsertGradeDTO) {
             };
         }
 
-        // 4. Upsert Grade (Update if exists, Insert if new)
-        // Check if grade exists
-        const existingGrade = await db.query.grades.findFirst({
-            where: and(
-                eq(grades.userId, targetUserId),
-                eq(grades.definitionId, definitionId)
-            )
-        });
-
-        if (existingGrade) {
-            await db.update(grades).set({
-                score: score,
-                feedback: feedback,
-                assignedById: session.user.id
-            }).where(eq(grades.id, existingGrade.id));
-        } else {
-            await db.insert(grades).values({
-                userId: targetUserId,
-                definitionId: definitionId,
-                assignedById: session.user.id,
-                score: score,
-                feedback: feedback
+        // 4. Upsert Grade atomically (prevents race condition on concurrent grading)
+        await db.transaction(async (tx) => {
+            const existingGrade = await tx.query.grades.findFirst({
+                where: and(
+                    eq(grades.userId, targetUserId),
+                    eq(grades.definitionId, definitionId)
+                )
             });
-        }
+
+            if (existingGrade) {
+                await tx.update(grades).set({
+                    score: score,
+                    feedback: feedback,
+                    assignedById: session.user.id
+                }).where(eq(grades.id, existingGrade.id));
+            } else {
+                await tx.insert(grades).values({
+                    userId: targetUserId,
+                    definitionId: definitionId,
+                    assignedById: session.user.id,
+                    score: score,
+                    feedback: feedback
+                });
+            }
+        });
 
         // 5. TRIGGER USER KPI RECALCULATION
         const newKpi = await recalculateUserKPI(targetUserId, pillar.semesterId);

@@ -11,6 +11,11 @@ export default async function DashboardLayout({
     const session = await auth();
     if (!session?.user) redirect("/login");
 
+    // Gate: PENDING_APPROVAL users cannot access the dashboard
+    if (session.user.status === "PENDING_APPROVAL") {
+        redirect("/pending-approval");
+    }
+
     // Verificar semestre activo
     const activeSemester = await db.query.semesters.findFirst({
         where: eq(semesters.isActive, true)

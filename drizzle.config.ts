@@ -11,11 +11,10 @@ if (!process.env.DATABASE_URL) {
 export default defineConfig({
   schema: './src/db/schema.ts',
   out: './src/db/migrations',
-  dialect: 'sqlite', // 'driver' se reemplaza por 'dialect' para la nueva sintaxis
+  dialect: 'turso',
   dbCredentials: {
-    // El '!' al final le dice a TypeScript que estamos seguros de que este valor existe,
-    // ya que lo comprobamos en la línea de arriba.
     url: process.env.DATABASE_URL!,
+    authToken: process.env.LIBSQL_AUTH_TOKEN,
   },
   verbose: true,
   strict: true,

@@ -52,6 +52,9 @@ export async function getAllUsers(filters?: UserFilters, pagination?: Pagination
     // GHOST MODE: Exclude DEV role always from this list
     conditions.push(ne(users.role, "DEV"));
 
+    // Exclude PENDING_APPROVAL users (they appear in /admin/approvals instead)
+    conditions.push(ne(users.status, "PENDING_APPROVAL"));
+
     // Combine conditions
     const whereCondition = conditions.length > 0 ? and(...conditions) : undefined;
 

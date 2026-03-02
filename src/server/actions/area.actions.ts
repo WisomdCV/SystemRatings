@@ -95,19 +95,23 @@ export async function createAreaAction(input: z.infer<typeof CreateAreaSchema>) 
             return { success: false as const, error: validated.error.issues[0].message };
         }
 
-        if (validated.data.isLeadershipArea) {
-            await db.update(areas).set({ isLeadershipArea: false });
-        }
+        const newArea = await db.transaction(async (tx) => {
+            if (validated.data.isLeadershipArea) {
+                await tx.update(areas).set({ isLeadershipArea: false });
+            }
 
-        const [newArea] = await db.insert(areas).values({
-            name: validated.data.name,
-            code: validated.data.code || null,
-            description: validated.data.description || null,
-            color: validated.data.color,
-            isLeadershipArea: validated.data.isLeadershipArea,
-            canCreateEvents: validated.data.canCreateEvents,
-            canCreateIndividualEvents: validated.data.canCreateIndividualEvents,
-        }).returning();
+            const [created] = await tx.insert(areas).values({
+                name: validated.data.name,
+                code: validated.data.code || null,
+                description: validated.data.description || null,
+                color: validated.data.color,
+                isLeadershipArea: validated.data.isLeadershipArea,
+                canCreateEvents: validated.data.canCreateEvents,
+                canCreateIndividualEvents: validated.data.canCreateIndividualEvents,
+            }).returning();
+
+            return created;
+        });
 
         revalidatePath("/admin/areas");
         return { success: true as const, data: newArea, message: "Área creada exitosamente." };
@@ -134,19 +138,21 @@ export async function updateAreaAction(input: z.infer<typeof UpdateAreaSchema>) 
             return { success: false as const, error: validated.error.issues[0].message };
         }
 
-        if (validated.data.isLeadershipArea) {
-            await db.update(areas).set({ isLeadershipArea: false }).where(ne(areas.id, validated.data.id));
-        }
+        await db.transaction(async (tx) => {
+            if (validated.data.isLeadershipArea) {
+                await tx.update(areas).set({ isLeadershipArea: false }).where(ne(areas.id, validated.data.id));
+            }
 
-        await db.update(areas).set({
-            name: validated.data.name,
-            code: validated.data.code || null,
-            description: validated.data.description || null,
-            color: validated.data.color,
-            isLeadershipArea: validated.data.isLeadershipArea,
-            canCreateEvents: validated.data.canCreateEvents,
-            canCreateIndividualEvents: validated.data.canCreateIndividualEvents,
-        }).where(eq(areas.id, validated.data.id));
+            await tx.update(areas).set({
+                name: validated.data.name,
+                code: validated.data.code || null,
+                description: validated.data.description || null,
+                color: validated.data.color,
+                isLeadershipArea: validated.data.isLeadershipArea,
+                canCreateEvents: validated.data.canCreateEvents,
+                canCreateIndividualEvents: validated.data.canCreateIndividualEvents,
+            }).where(eq(areas.id, validated.data.id));
+        });
 
         revalidatePath("/admin/areas");
         return { success: true as const, message: "Área actualizada." };
@@ -216,11 +222,11 @@ export async function deleteAreaAction(id: string) {
             };
         }
 
-        // 5. Clear the cascade junction table manually to prevent SQLite constraint failures
-        await db.delete(semesterAreas).where(eq(semesterAreas.areaId, id));
-
-        // 6. Finally delete the area
-        await db.delete(areas).where(eq(areas.id, id));
+        // 5-6. Delete junction + area in transaction for atomicity
+        await db.transaction(async (tx) => {
+            await tx.delete(semesterAreas).where(eq(semesterAreas.areaId, id));
+            await tx.delete(areas).where(eq(areas.id, id));
+        });
         revalidatePath("/admin/areas");
         return { success: true as const, message: "Área eliminada limpia y exitosamente." };
     } catch (error) {
@@ -282,26 +288,28 @@ export async function activateAllAreasInSemesterAction(semesterId: string) {
 
         const allAreas = await db.query.areas.findMany();
 
-        for (const area of allAreas) {
-            const existing = await db.query.semesterAreas.findFirst({
-                where: and(
-                    eq(semesterAreas.semesterId, semesterId),
-                    eq(semesterAreas.areaId, area.id),
-                ),
-            });
-
-            if (existing) {
-                await db.update(semesterAreas)
-                    .set({ isActive: true })
-                    .where(eq(semesterAreas.id, existing.id));
-            } else {
-                await db.insert(semesterAreas).values({
-                    semesterId,
-                    areaId: area.id,
-                    isActive: true,
+        await db.transaction(async (tx) => {
+            for (const area of allAreas) {
+                const existing = await tx.query.semesterAreas.findFirst({
+                    where: and(
+                        eq(semesterAreas.semesterId, semesterId),
+                        eq(semesterAreas.areaId, area.id),
+                    ),
                 });
+
+                if (existing) {
+                    await tx.update(semesterAreas)
+                        .set({ isActive: true })
+                        .where(eq(semesterAreas.id, existing.id));
+                } else {
+                    await tx.insert(semesterAreas).values({
+                        semesterId,
+                        areaId: area.id,
+                        isActive: true,
+                    });
+                }
             }
-        }
+        });
 
         revalidatePath("/admin/areas");
         return { success: true as const, message: `${allAreas.length} áreas activadas.` };

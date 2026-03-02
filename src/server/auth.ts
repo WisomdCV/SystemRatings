@@ -143,6 +143,10 @@ export const {
                 if (total <= 1) {
                     await db.update(users).set({ role: "DEV", status: "ACTIVE" }).where(eq(users.id, user.id!));
                     console.log(`🔑 Auto-DEV: First user ${user.email} promoted to DEV role`);
+                } else if (dbUser.status === "ACTIVE") {
+                    // New VOLUNTEER with ACTIVE status → gate them behind approval
+                    await db.update(users).set({ status: "PENDING_APPROVAL" }).where(eq(users.id, user.id!));
+                    console.log(`⏳ Approval gate: ${user.email} set to PENDING_APPROVAL`);
                 }
             }
 
@@ -161,10 +165,16 @@ export const {
         async jwt({ token, user, account, trigger, session }) {
             // 1. Initial Sign In
             if (account && user) {
-                // Save DB fields
+                // Fetch fresh data from DB (status may have been updated in signIn callback)
+                const freshUser = await db.query.users.findFirst({
+                    where: eq(users.id, user.id as string),
+                    columns: { role: true, currentAreaId: true, status: true }
+                });
+
                 token.id = user.id;
-                token.role = user.role;
-                token.currentAreaId = user.currentAreaId;
+                token.role = freshUser?.role ?? user.role;
+                token.status = freshUser?.status ?? "ACTIVE";
+                token.currentAreaId = freshUser?.currentAreaId ?? user.currentAreaId;
 
                 // Save Provider tokens
                 token.accessToken = account.access_token;
@@ -188,23 +198,32 @@ export const {
             // 2. Client side update (e.g. update())
             if (trigger === "update" && session) {
                 token = { ...token, ...session };
+                // Force a DB refresh on explicit update
+                token._lastDbRefresh = 0;
             }
 
-            // 2.5 Force Refresh from DB (Real-time Role/Area/CustomPerms updates)
-            if (token.id) {
+            // 2.5 Periodic Refresh from DB (every 5 minutes instead of every request)
+            // This reduces DB load from 2 queries/request to 2 queries/5min per user
+            const DB_REFRESH_INTERVAL = 5 * 60 * 1000; // 5 minutes
+            const lastRefresh = (token._lastDbRefresh as number) || 0;
+            const shouldRefreshDb = Date.now() - lastRefresh > DB_REFRESH_INTERVAL;
+
+            if (token.id && shouldRefreshDb) {
                 try {
                     const freshUser = await db.query.users.findFirst({
                         where: eq(users.id, token.id as string),
-                        columns: { role: true, currentAreaId: true }
+                        columns: { role: true, currentAreaId: true, status: true }
                     });
 
                     if (freshUser) {
                         token.role = freshUser.role;
                         token.currentAreaId = freshUser.currentAreaId;
+                        token.status = freshUser.status;
                     }
 
                     // Refresh custom permissions
                     token.customPermissions = await getCustomPermissionsForUser(token.id as string);
+                    token._lastDbRefresh = Date.now();
                 } catch (error) {
                     console.error("Error refreshing user data in JWT:", error);
                 }
@@ -223,6 +242,7 @@ export const {
             if (session.user && token) {
                 session.user.id = token.id as string;
                 session.user.role = token.role as string | null;
+                session.user.status = token.status as string | null;
                 session.user.currentAreaId = token.currentAreaId as string | null;
                 session.user.customPermissions = token.customPermissions as string[] | undefined;
 

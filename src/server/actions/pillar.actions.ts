@@ -230,10 +230,9 @@ export async function clonePillarsAction(sourceSemesterId: string, targetSemeste
             }
 
             // Safe to delete target pillars (no grades)
-            await db.delete(gradeDefinitions).where(eq(gradeDefinitions.semesterId, targetSemesterId));
         }
 
-        // 4. Insert Clones
+        // 4. Clone atomically: delete old + insert new in one transaction
         const clones = sourcePillars.map(p => ({
             semesterId: targetSemesterId,
             name: p.name,
@@ -243,7 +242,12 @@ export async function clonePillarsAction(sourceSemesterId: string, targetSemeste
             isDirectorOnly: p.isDirectorOnly
         }));
 
-        await db.insert(gradeDefinitions).values(clones);
+        await db.transaction(async (tx) => {
+            if (targetPillars.length > 0) {
+                await tx.delete(gradeDefinitions).where(eq(gradeDefinitions.semesterId, targetSemesterId));
+            }
+            await tx.insert(gradeDefinitions).values(clones);
+        });
 
         revalidatePath(`/admin/cycles/${targetSemesterId}`);
         revalidatePath(`/admin/cycles/${targetSemesterId}/pillars`);

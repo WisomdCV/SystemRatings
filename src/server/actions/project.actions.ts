@@ -139,29 +139,34 @@ export async function createProjectAction(input: CreateProjectDTO) {
         });
         if (!activeSemester) return { success: false as const, error: "No hay ciclo activo." };
 
-        const [newProject] = await db.insert(projects).values({
-            semesterId: activeSemester.id,
-            name: validated.data.name,
-            description: validated.data.description || null,
-            priority: validated.data.priority,
-            startDate: validated.data.startDate || null,
-            deadline: validated.data.deadline || null,
-            createdById: session.user.id,
-        }).returning();
-
-        // Auto-add creator as Coordinador (hierarchy: 100) or find the highest available
         const { projectRoles } = await import("@/db/schema");
-        const coordinatorRole = await db.query.projectRoles.findFirst({
-            orderBy: [desc(projectRoles.hierarchyLevel)],
-        });
 
-        if (coordinatorRole) {
-            await db.insert(projectMembers).values({
-                projectId: newProject.id,
-                userId: session.user.id,
-                projectRoleId: coordinatorRole.id,
+        const newProject = await db.transaction(async (tx) => {
+            const [created] = await tx.insert(projects).values({
+                semesterId: activeSemester.id,
+                name: validated.data.name,
+                description: validated.data.description || null,
+                priority: validated.data.priority,
+                startDate: validated.data.startDate || null,
+                deadline: validated.data.deadline || null,
+                createdById: session.user.id,
+            }).returning();
+
+            // Auto-add creator as Coordinador (hierarchy: 100) or find the highest available
+            const coordinatorRole = await tx.query.projectRoles.findFirst({
+                orderBy: [desc(projectRoles.hierarchyLevel)],
             });
-        }
+
+            if (coordinatorRole) {
+                await tx.insert(projectMembers).values({
+                    projectId: created.id,
+                    userId: session.user.id,
+                    projectRoleId: coordinatorRole.id,
+                });
+            }
+
+            return created;
+        });
 
         revalidateProjects();
         return { success: true as const, data: newProject, message: "Proyecto creado exitosamente." };

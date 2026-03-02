@@ -96,14 +96,7 @@ export default function AttendanceHeatmap({ history }: AttendanceHeatmapProps) {
 
         const dataMap = new Map<string, number>();
 
-        // Debug: Log first item to understand the data structure
-        if (history.length > 0) {
-            console.log('[Heatmap] Sample history item:', {
-                rawDate: history[0]?.event?.date,
-                parsedDate: parseDateToString(history[0]?.event?.date),
-                status: history[0]?.status
-            });
-        }
+
 
         history.forEach(item => {
             const dateStr = parseDateToString(item?.event?.date);
@@ -127,8 +120,6 @@ export default function AttendanceHeatmap({ history }: AttendanceHeatmapProps) {
                 dataMap.set(dateStr, level);
             }
         });
-
-        console.log('[Heatmap] Events with attendance:', Array.from(dataMap.entries()));
 
         // Generate complete date range for the last year using UTC
         const now = new Date();

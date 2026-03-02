@@ -18,6 +18,9 @@ async function isAdminUser() {
 
 export async function getProjectAreasAction() {
     try {
+        const session = await auth();
+        if (!session?.user) return { success: false as const, error: "No autorizado" };
+
         const areas = await db.query.projectAreas.findMany({
             orderBy: [asc(projectAreas.position)],
         });
@@ -117,6 +120,9 @@ export async function reorderProjectAreasAction(orderedIds: string[]) {
 
 export async function getProjectRolesAction() {
     try {
+        const session = await auth();
+        if (!session?.user) return { success: false as const, error: "No autorizado" };
+
         // We order by hierarchy level descending by default so highest role is first
         const roles = await db.query.projectRoles.findMany({
             orderBy: [desc(projectRoles.hierarchyLevel)],
