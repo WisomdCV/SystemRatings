@@ -30,7 +30,7 @@
     "date-fns-tz": "^3.2.0",
     "drizzle-orm": "^0.44.5",
     "lucide-react": "^0.561.0",
-    "next": "15.5.3",
+    "next": "15.5.9",
     "next-auth": "^5.0.0-beta.29",
     "react": "19.1.0",
     "react-activity-calendar": "^3.0.5",
