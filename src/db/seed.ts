@@ -155,12 +155,12 @@ async function main() {
     const existingRoles = await db.query.projectRoles.findMany();
     if (existingRoles.length === 0) {
         await db.insert(projectRoles).values([
-            { name: "Coordinador / Project Management", hierarchyLevel: 100, isSystem: true, canCreateEvents: true, canViewAllAreaEvents: true },
-            { name: "Director de proyecto", hierarchyLevel: 90, isSystem: true, canCreateEvents: true, canViewAllAreaEvents: true },
-            { name: "Subdirector de proyecto", hierarchyLevel: 80, isSystem: true, canCreateEvents: true, canViewAllAreaEvents: true },
-            { name: "Tesorero de proyecto", hierarchyLevel: 70, isSystem: true, canCreateEvents: false, canViewAllAreaEvents: false },
-            { name: "Director de Área", hierarchyLevel: 60, isSystem: true, canCreateEvents: true, canViewAllAreaEvents: false },
-            { name: "Miembro de Área", hierarchyLevel: 50, isSystem: true, canCreateEvents: false, canViewAllAreaEvents: false },
+            { name: "Coordinador / Project Management", hierarchyLevel: 100, isSystem: true, canCreateEvents: true, canCreateTasks: true, canViewAllAreaEvents: true },
+            { name: "Director de proyecto", hierarchyLevel: 90, isSystem: true, canCreateEvents: true, canCreateTasks: true, canViewAllAreaEvents: true },
+            { name: "Subdirector de proyecto", hierarchyLevel: 80, isSystem: true, canCreateEvents: true, canCreateTasks: true, canViewAllAreaEvents: true },
+            { name: "Tesorero de proyecto", hierarchyLevel: 70, isSystem: true, canCreateEvents: false, canCreateTasks: true, canViewAllAreaEvents: false },
+            { name: "Director de Área", hierarchyLevel: 60, isSystem: true, canCreateEvents: true, canCreateTasks: true, canViewAllAreaEvents: false },
+            { name: "Miembro de Área", hierarchyLevel: 50, isSystem: true, canCreateEvents: false, canCreateTasks: false, canViewAllAreaEvents: false },
         ]);
         console.log("   ✅ Roles insertados.");
     } else {

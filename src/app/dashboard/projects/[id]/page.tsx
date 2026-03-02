@@ -156,6 +156,7 @@ export default async function ProjectDetailPage(props: { params: Promise<{ id: s
                         userRole={session.user.role || ""}
                         userAreaId={session.user.currentAreaId}
                         userAreaName={null}
+                        userProjectAreaName={currentUserMembership?.projectArea?.name || null}
                     />
                 </div>
             </div>

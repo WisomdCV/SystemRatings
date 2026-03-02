@@ -47,6 +47,7 @@ interface CreateEventFormProps {
     users?: { id: string; name: string | null; image: string | null }[];
     projectMembersMap?: Record<string, { id: string; name: string | null; image: string | null }[]>;
     defaultProjectId?: string;
+    userProjectAreaName?: string | null;
 }
 
 export default function CreateEventForm({
@@ -65,6 +66,7 @@ export default function CreateEventForm({
     users = [],
     projectMembersMap = {},
     defaultProjectId,
+    userProjectAreaName,
 }: CreateEventFormProps) {
     const router = useRouter();
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -198,19 +200,29 @@ export default function CreateEventForm({
     };
 
     // Build capability description for the indicator header
+    const isProjectOnlyContext = availableScopes.length === 1 && availableScopes[0] === "PROJECT";
     const capabilityChips: { label: string; color: string }[] = [];
     if (availableTypes.includes("GENERAL")) {
         capabilityChips.push({ label: "General", color: "bg-blue-100 text-blue-700 border-blue-200" });
     }
     if (availableTypes.includes("AREA")) {
         if (canSelectArea) {
-            capabilityChips.push({ label: "Todas las áreas", color: "bg-emerald-100 text-emerald-700 border-emerald-200" });
+            capabilityChips.push({
+                label: isProjectOnlyContext ? "Todas las áreas del proyecto" : "Todas las áreas",
+                color: "bg-emerald-100 text-emerald-700 border-emerald-200"
+            });
         } else {
-            capabilityChips.push({ label: userAreaName || "Mi Área", color: "bg-indigo-100 text-indigo-700 border-indigo-200" });
+            const areaLabel = isProjectOnlyContext
+                ? (userProjectAreaName ? `Área: ${userProjectAreaName}` : "Área de tu proyecto")
+                : (userAreaName || "Mi Área");
+            capabilityChips.push({ label: areaLabel, color: "bg-indigo-100 text-indigo-700 border-indigo-200" });
         }
     }
     if (availableTypes.includes("INDIVIDUAL_GROUP")) {
-        capabilityChips.push({ label: "Individual/Grupal", color: "bg-teal-100 text-teal-700 border-teal-200" });
+        capabilityChips.push({
+            label: isProjectOnlyContext ? "Reunión con miembros" : "Individual/Grupal",
+            color: "bg-teal-100 text-teal-700 border-teal-200"
+        });
     }
     const hasProjectScope = availableScopes.includes("PROJECT");
     const isOvernightHint = (() => {

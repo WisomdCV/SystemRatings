@@ -12,7 +12,7 @@ import { PROJECT_STATUSES, PROJECT_PRIORITIES, TASK_STATUSES, TASK_PRIORITIES } 
 import {
     Users, ListChecks, Plus, Loader2, Trash2, Crown, UserPlus,
     CheckCircle2, XCircle, Circle, Clock, AlertTriangle, Search,
-    ChevronDown, Zap, Flame, Minus, Pause, X, Eye, UserMinus
+    ChevronDown, Zap, Flame, Minus, Pause, X, Eye, UserMinus, Shield
 } from "lucide-react";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -38,12 +38,12 @@ interface Task {
 
 interface Member {
     id: string;
-    projectRole: { id: string; name: string; hierarchyLevel: number; color: string | null; isSystem: boolean | null };
+    projectRole: { id: string; name: string; hierarchyLevel: number; color: string | null; isSystem: boolean | null; canCreateTasks?: boolean | null };
     projectArea: { id: string; name: string; color: string | null } | null;
     user: { id: string; name: string | null; image: string | null; email: string; role: string | null };
 }
 
-interface ProjectRole { id: string; name: string; hierarchyLevel: number; color: string | null; }
+interface ProjectRole { id: string; name: string; hierarchyLevel: number; color: string | null; canCreateTasks?: boolean | null; }
 interface ProjectArea { id: string; name: string; color: string | null; }
 
 interface Project {
@@ -131,8 +131,14 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
     const [statusFilter, setStatusFilter] = useState<string>("ALL");
     const [areaFilter, setAreaFilter] = useState<string>("ALL");
 
-    const userProjectRole = project.members.find(m => m.user.id === currentUserId)?.projectRole;
+    const userMembership = project.members.find(m => m.user.id === currentUserId);
+    const userProjectRole = userMembership?.projectRole;
     const canManage = isSystemAdmin || (userProjectRole?.hierarchyLevel ?? 0) >= 80;
+    const userCanCreateTasks = canManage || (userProjectRole?.canCreateTasks ?? false);
+    const userProjectAreaId = userMembership?.projectArea?.id || null;
+    const userProjectAreaName = userMembership?.projectArea?.name || null;
+    // Area-level roles (like Director de Área) can only create tasks for their own area or general
+    const isAreaRestricted = !canManage && userCanCreateTasks && (userProjectRole?.hierarchyLevel ?? 0) < 70;
 
     const showFeedback = (type: "success" | "error", message: string) => {
         setFeedback({ type, message });
@@ -166,8 +172,26 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
     };
 
     const handleChangeRole = (memberId: string, newRoleId: string) => {
+        const member = project.members.find(m => m.id === memberId);
         startTransition(async () => {
-            const res = await updateProjectMemberRoleAction({ memberId, projectRoleId: newRoleId });
+            const res = await updateProjectMemberRoleAction({
+                memberId,
+                projectRoleId: newRoleId,
+                projectAreaId: member?.projectArea?.id || null,
+            });
+            if (res.success) { showFeedback("success", res.message!); router.refresh(); }
+            else showFeedback("error", res.error!);
+        });
+    };
+
+    const handleChangeArea = (memberId: string, newAreaId: string) => {
+        const member = project.members.find(m => m.id === memberId);
+        startTransition(async () => {
+            const res = await updateProjectMemberRoleAction({
+                memberId,
+                projectRoleId: member?.projectRole.id || "",
+                projectAreaId: newAreaId === "none" ? null : newAreaId,
+            });
             if (res.success) { showFeedback("success", res.message!); router.refresh(); }
             else showFeedback("error", res.error!);
         });
@@ -295,7 +319,7 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
                             <ListChecks className="w-5 h-5 text-violet-500" />
                             Tareas
                         </h3>
-                        {canManage && (
+                        {userCanCreateTasks && (
                             <button onClick={() => setShowCreateTask(!showCreateTask)} disabled={isPending}
                                 className="flex items-center gap-1.5 px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white font-bold rounded-xl text-sm shadow-lg transition-all disabled:opacity-50">
                                 <Plus className="w-4 h-4" /> Nueva Tarea
@@ -306,6 +330,40 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
                     {/* Create Task Form */}
                     {showCreateTask && (
                         <div className="bg-white border border-violet-200 rounded-2xl p-4 space-y-3">
+                            {/* Task Capability Banner */}
+                            <div className="p-3 bg-gradient-to-r from-violet-50 to-indigo-50 border border-violet-200/60 rounded-xl">
+                                <div className="flex items-center gap-2 mb-2">
+                                    <Shield className="w-3.5 h-3.5 text-violet-500" />
+                                    <span className="text-[11px] font-black text-violet-600 uppercase tracking-wider">
+                                        Tus capacidades
+                                    </span>
+                                </div>
+                                <div className="flex flex-wrap gap-1.5">
+                                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-violet-100 text-violet-700 border-violet-200">
+                                        Crear tareas
+                                    </span>
+                                    {isAreaRestricted ? (
+                                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-indigo-100 text-indigo-700 border-indigo-200">
+                                            {userProjectAreaName ? `Solo: ${userProjectAreaName}` : "Tu área + General"}
+                                        </span>
+                                    ) : (
+                                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-emerald-100 text-emerald-700 border-emerald-200">
+                                            Cualquier área
+                                        </span>
+                                    )}
+                                    {canManage && (
+                                        <>
+                                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-blue-100 text-blue-700 border-blue-200">
+                                                Asignar miembros
+                                            </span>
+                                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-amber-100 text-amber-700 border-amber-200">
+                                                Eliminar tareas
+                                            </span>
+                                        </>
+                                    )}
+                                </div>
+                            </div>
+
                             <input type="text" value={taskTitle} onChange={e => setTaskTitle(e.target.value)}
                                 placeholder="Título de la tarea *"
                                 className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:border-violet-500 outline-none bg-white font-medium text-meteorite-950" />
@@ -319,8 +377,19 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
                                 </select>
                                 <select value={taskAreaId} onChange={e => setTaskAreaId(e.target.value)}
                                     className="px-3 py-2 rounded-xl border border-gray-200 outline-none bg-white text-meteorite-950 text-sm">
-                                    <option value="none">Área General</option>
-                                    {allProjectAreas.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                                    {isAreaRestricted ? (
+                                        <>
+                                            <option value="none">Área General</option>
+                                            {userProjectAreaId && allProjectAreas.filter(a => a.id === userProjectAreaId).map(a => (
+                                                <option key={a.id} value={a.id}>{a.name}</option>
+                                            ))}
+                                        </>
+                                    ) : (
+                                        <>
+                                            <option value="none">Área General</option>
+                                            {allProjectAreas.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                                        </>
+                                    )}
                                 </select>
                                 <input type="date" value={taskDue} onChange={e => setTaskDue(e.target.value)}
                                     className="px-3 py-2 rounded-xl border border-gray-200 outline-none bg-white text-meteorite-950 text-sm" />
@@ -595,15 +664,15 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
                             {(() => {
                                 const sortedMembers = [...project.members].sort((a, b) => b.projectRole.hierarchyLevel - a.projectRole.hierarchyLevel);
                                 const grouped = sortedMembers.reduce((acc, current) => {
-                                    const areaName = current.projectArea?.name || "Dirección Administrativa";
+                                    const areaName = current.projectArea?.name || "Gestión de Proyecto";
                                     if (!acc[areaName]) acc[areaName] = { members: [], color: current.projectArea?.color || "#94a3b8" };
                                     acc[areaName].members.push(current);
                                     return acc;
                                 }, {} as Record<string, { members: typeof project.members, color: string }>);
 
                                 const sortedAreaNames = Object.keys(grouped).sort((a, b) => {
-                                    if (a === "Dirección Administrativa") return -1;
-                                    if (b === "Dirección Administrativa") return 1;
+                                    if (a === "Gestión de Proyecto") return -1;
+                                    if (b === "Gestión de Proyecto") return 1;
                                     return a.localeCompare(b);
                                 });
 
@@ -640,20 +709,40 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
                                                         </div>
                                                         <div className="flex flex-col items-end gap-1">
                                                             {canManage ? (
-                                                                <select
-                                                                    value={m.projectRole.id}
-                                                                    onChange={e => handleChangeRole(m.id, e.target.value)}
-                                                                    disabled={isPending}
-                                                                    className="text-[10px] font-bold rounded-lg px-2 py-1 border outline-none cursor-pointer bg-white text-gray-700 border-gray-200 shadow-sm focus:border-violet-500 hover:border-gray-300 transition-colors"
-                                                                >
-                                                                    {allProjectRoles.map(r => (
-                                                                        <option key={r.id} value={r.id}>{r.name}</option>
-                                                                    ))}
-                                                                </select>
+                                                                <>
+                                                                    <select
+                                                                        value={m.projectRole.id}
+                                                                        onChange={e => handleChangeRole(m.id, e.target.value)}
+                                                                        disabled={isPending}
+                                                                        className="text-[10px] font-bold rounded-lg px-2 py-1 border outline-none cursor-pointer bg-white text-gray-700 border-gray-200 shadow-sm focus:border-violet-500 hover:border-gray-300 transition-colors"
+                                                                    >
+                                                                        {allProjectRoles.map(r => (
+                                                                            <option key={r.id} value={r.id}>{r.name}</option>
+                                                                        ))}
+                                                                    </select>
+                                                                    <select
+                                                                        value={m.projectArea?.id || "none"}
+                                                                        onChange={e => handleChangeArea(m.id, e.target.value)}
+                                                                        disabled={isPending}
+                                                                        className="text-[10px] font-bold rounded-lg px-2 py-1 border outline-none cursor-pointer bg-white text-gray-500 border-gray-200 shadow-sm focus:border-violet-500 hover:border-gray-300 transition-colors"
+                                                                    >
+                                                                        <option value="none">Sin Área</option>
+                                                                        {allProjectAreas.map(a => (
+                                                                            <option key={a.id} value={a.id}>{a.name}</option>
+                                                                        ))}
+                                                                    </select>
+                                                                </>
                                                             ) : (
-                                                                <span className="text-[10px] font-bold px-2 py-1 rounded-lg border shadow-sm" style={{ backgroundColor: `${m.projectRole.color || "#e2e8f0"}15`, color: m.projectRole.color || "#64748b", borderColor: `${m.projectRole.color || "#e2e8f0"}40` }}>
-                                                                    {m.projectRole.name}
-                                                                </span>
+                                                                <>
+                                                                    <span className="text-[10px] font-bold px-2 py-1 rounded-lg border shadow-sm" style={{ backgroundColor: `${m.projectRole.color || "#e2e8f0"}15`, color: m.projectRole.color || "#64748b", borderColor: `${m.projectRole.color || "#e2e8f0"}40` }}>
+                                                                        {m.projectRole.name}
+                                                                    </span>
+                                                                    {m.projectArea && (
+                                                                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded border" style={{ backgroundColor: `${m.projectArea.color || "#e2e8f0"}10`, color: m.projectArea.color || "#64748b", borderColor: `${m.projectArea.color || "#e2e8f0"}30` }}>
+                                                                            {m.projectArea.name}
+                                                                        </span>
+                                                                    )}
+                                                                </>
                                                             )}
                                                             {canManage && m.user.id !== currentUserId && (
                                                                 <button onClick={() => handleRemoveMember(m.id)} disabled={isPending}

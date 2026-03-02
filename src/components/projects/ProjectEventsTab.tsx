@@ -37,6 +37,7 @@ interface ProjectEventsTabProps {
     userRole: string;
     userAreaId: string | null;
     userAreaName: string | null;
+    userProjectAreaName?: string | null;
 }
 
 export default function ProjectEventsTab({
@@ -50,6 +51,7 @@ export default function ProjectEventsTab({
     userRole,
     userAreaId,
     userAreaName,
+    userProjectAreaName,
 }: ProjectEventsTabProps) {
     const router = useRouter();
     const [isPending, startTransition] = useTransition();
@@ -128,6 +130,7 @@ export default function ProjectEventsTab({
                                 projectAreas={projectAreas}
                                 users={users}
                                 defaultProjectId={projectId}
+                                userProjectAreaName={userProjectAreaName}
                             />
                         </div>
                     )}

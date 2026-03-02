@@ -291,6 +291,9 @@ export const projectRoles = sqliteTable("project_role", {
   // Event capability: roles with this flag can create project events (configurable, replaces hardcoded hierarchy check)
   canCreateEvents: integer("can_create_events", { mode: "boolean" }).default(false),
 
+  // Task capability: roles with this flag can create tasks within the project
+  canCreateTasks: integer("can_create_tasks", { mode: "boolean" }).default(false),
+
   // Visibility capability: roles with this flag see ALL project area events (not just their own area)
   canViewAllAreaEvents: integer("can_view_all_area_events", { mode: "boolean" }).default(false),
 });

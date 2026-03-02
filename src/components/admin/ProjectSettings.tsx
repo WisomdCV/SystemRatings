@@ -9,9 +9,9 @@ import {
 import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
 import {
     Plus, Loader2, GripVertical, Trash2, Edit2,
-    Save, X, ShieldAlert, CheckCircle2, AlertCircle, LayoutGrid, Users
+    Save, X, ShieldAlert, CheckCircle2, AlertCircle, LayoutGrid, Users, ListChecks,
+    CalendarCheck, Eye, EyeOff, Shield, UserCog, FolderKanban, Info
 } from "lucide-react";
-import { CalendarCheck } from "lucide-react";
 
 interface Area {
     id: string;
@@ -31,6 +31,7 @@ interface Role {
     color: string | null;
     isSystem: boolean | null;
     canCreateEvents: boolean | null;
+    canCreateTasks: boolean | null;
 }
 
 interface Props {
@@ -169,6 +170,7 @@ export default function ProjectSettings({ initialAreas, initialRoles }: Props) {
                 description: editingRole.description || undefined,
                 color: editingRole.color || "#6366f1",
                 canCreateEvents: editingRole.canCreateEvents ?? false,
+                canCreateTasks: editingRole.canCreateTasks ?? false,
             };
             const res = await updateProjectRoleAction(editingRole.id, payload);
             if (res.success) { showFeedback("success", res.message!); setEditingRole(null); router.refresh(); }
@@ -285,6 +287,14 @@ export default function ProjectSettings({ initialAreas, initialRoles }: Props) {
                                                                     <CalendarCheck className="w-3.5 h-3.5" /> Puede crear eventos
                                                                 </span>
                                                             </label>
+                                                            <label className="flex items-center gap-2 cursor-pointer">
+                                                                <input type="checkbox" checked={editingRole.canCreateTasks ?? false}
+                                                                    onChange={e => setEditingRole({ ...editingRole, canCreateTasks: e.target.checked })}
+                                                                    className="w-4 h-4 rounded border-gray-300 text-violet-600 focus:ring-violet-500" />
+                                                                <span className="text-xs font-bold text-meteorite-600 flex items-center gap-1">
+                                                                    <ListChecks className="w-3.5 h-3.5" /> Puede crear tareas
+                                                                </span>
+                                                            </label>
                                                         </div>
                                                     ) : (
                                                         <div className="flex-1 min-w-0">
@@ -296,17 +306,75 @@ export default function ProjectSettings({ initialAreas, initialRoles }: Props) {
                                                                         <ShieldAlert className="w-3 h-3" /> Sistema
                                                                     </span>
                                                                 )}
-                                                            </div>
-                                                            <div className="flex items-center gap-2 mt-0.5 text-xs text-meteorite-400 font-medium flex-wrap">
-                                                                <span className="bg-gray-100 text-gray-600 font-bold px-1.5 py-0.5 rounded">
+                                                                <span className="bg-gray-100 text-gray-600 font-bold text-[10px] px-1.5 py-0.5 rounded">
                                                                     LVL: {role.hierarchyLevel}
                                                                 </span>
-                                                                {role.canCreateEvents && (
-                                                                    <span className="bg-emerald-50 text-emerald-600 font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5">
-                                                                        <CalendarCheck className="w-3 h-3" /> Eventos
-                                                                    </span>
-                                                                )}
-                                                                <span className="truncate">{role.description || "Sin descripción"}</span>
+                                                            </div>
+                                                            {role.description && (
+                                                                <p className="text-[11px] text-meteorite-400 font-medium mt-0.5 truncate">{role.description}</p>
+                                                            )}
+                                                            {/* ── Capability Indicators ── */}
+                                                            <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                                                                {/* Events column */}
+                                                                <div className={`rounded-lg border p-2 ${role.canCreateEvents ? "bg-emerald-50/70 border-emerald-200" : "bg-gray-50 border-gray-100"}`}>
+                                                                    <div className="flex items-center gap-1.5 mb-1">
+                                                                        <CalendarCheck className={`w-3 h-3 ${role.canCreateEvents ? "text-emerald-600" : "text-gray-400"}`} />
+                                                                        <span className={`text-[10px] font-black uppercase tracking-wider ${role.canCreateEvents ? "text-emerald-700" : "text-gray-400"}`}>Eventos</span>
+                                                                    </div>
+                                                                    <div className="space-y-0.5">
+                                                                        <div className="flex items-center gap-1">
+                                                                            {role.canCreateEvents
+                                                                                ? <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
+                                                                                : <X className="w-3 h-3 text-gray-300 shrink-0" />}
+                                                                            <span className={`text-[10px] font-bold ${role.canCreateEvents ? "text-emerald-700" : "text-gray-400"}`}>Crear eventos</span>
+                                                                        </div>
+                                                                        <div className="flex items-center gap-1">
+                                                                            {role.hierarchyLevel >= 80
+                                                                                ? <Eye className="w-3 h-3 text-blue-500 shrink-0" />
+                                                                                : <EyeOff className="w-3 h-3 text-gray-300 shrink-0" />}
+                                                                            <span className={`text-[10px] font-bold ${role.hierarchyLevel >= 80 ? "text-blue-600" : "text-gray-400"}`}>
+                                                                                {role.hierarchyLevel >= 80 ? "Ve todos los eventos" : "Solo eventos de su área"}
+                                                                            </span>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                                {/* Tasks column */}
+                                                                <div className={`rounded-lg border p-2 ${role.canCreateTasks ? "bg-violet-50/70 border-violet-200" : "bg-gray-50 border-gray-100"}`}>
+                                                                    <div className="flex items-center gap-1.5 mb-1">
+                                                                        <ListChecks className={`w-3 h-3 ${role.canCreateTasks ? "text-violet-600" : "text-gray-400"}`} />
+                                                                        <span className={`text-[10px] font-black uppercase tracking-wider ${role.canCreateTasks ? "text-violet-700" : "text-gray-400"}`}>Tareas</span>
+                                                                    </div>
+                                                                    <div className="space-y-0.5">
+                                                                        <div className="flex items-center gap-1">
+                                                                            {role.canCreateTasks
+                                                                                ? <CheckCircle2 className="w-3 h-3 text-violet-500 shrink-0" />
+                                                                                : <X className="w-3 h-3 text-gray-300 shrink-0" />}
+                                                                            <span className={`text-[10px] font-bold ${role.canCreateTasks ? "text-violet-700" : "text-gray-400"}`}>Crear tareas</span>
+                                                                        </div>
+                                                                        <div className="flex items-center gap-1">
+                                                                            {role.canCreateTasks
+                                                                                ? (role.hierarchyLevel >= 70
+                                                                                    ? <FolderKanban className="w-3 h-3 text-indigo-500 shrink-0" />
+                                                                                    : <Shield className="w-3 h-3 text-amber-500 shrink-0" />)
+                                                                                : <X className="w-3 h-3 text-gray-300 shrink-0" />}
+                                                                            <span className={`text-[10px] font-bold ${role.canCreateTasks ? (role.hierarchyLevel >= 70 ? "text-indigo-600" : "text-amber-600") : "text-gray-400"}`}>
+                                                                                {!role.canCreateTasks
+                                                                                    ? "Sin permisos"
+                                                                                    : role.hierarchyLevel >= 70
+                                                                                        ? "Cualquier área"
+                                                                                        : "Solo su área + General"}
+                                                                            </span>
+                                                                        </div>
+                                                                        <div className="flex items-center gap-1">
+                                                                            {role.hierarchyLevel >= 80
+                                                                                ? <UserCog className="w-3 h-3 text-blue-500 shrink-0" />
+                                                                                : <X className="w-3 h-3 text-gray-300 shrink-0" />}
+                                                                            <span className={`text-[10px] font-bold ${role.hierarchyLevel >= 80 ? "text-blue-600" : "text-gray-400"}`}>
+                                                                                {role.hierarchyLevel >= 80 ? "Gestionar + asignar + eliminar" : "Solo crear"}
+                                                                            </span>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
                                                             </div>
                                                         </div>
                                                     )}

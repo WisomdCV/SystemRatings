@@ -327,11 +327,25 @@ export async function createTaskAction(input: CreateTaskDTO) {
         const validated = CreateTaskSchema.safeParse(input);
         if (!validated.success) return { success: false as const, error: validated.error.issues[0].message };
 
-        // Must be a member of the project (any role can create tasks, DIRECTOR/COORDINATOR for management)
+        // Must be a member of the project with task creation permission
         const membership = await getUserProjectMembership(session.user.id, validated.data.projectId);
         const isSystemAdmin = isAdmin(session.user.role);
         if (!membership && !isSystemAdmin) {
             return { success: false as const, error: "Debes ser miembro del proyecto para crear tareas." };
+        }
+
+        // Check canCreateTasks permission (hierarchy >= 80 always can, or explicit flag)
+        const roleLevel = membership?.projectRole?.hierarchyLevel ?? 0;
+        const canCreateTasks = isSystemAdmin || roleLevel >= 80 || (membership?.projectRole as any)?.canCreateTasks;
+        if (!canCreateTasks) {
+            return { success: false as const, error: "Tu rol no permite crear tareas." };
+        }
+
+        // Area-restricted roles (< 70) can only create tasks for their own area or general
+        if (!isSystemAdmin && roleLevel < 70 && validated.data.projectAreaId) {
+            if (membership?.projectAreaId !== validated.data.projectAreaId) {
+                return { success: false as const, error: "Solo puedes crear tareas para tu propia área o tareas generales." };
+            }
         }
 
         // Get max position for ordering

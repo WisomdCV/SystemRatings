@@ -153,7 +153,7 @@ export async function createProjectRoleAction(data: { name: string; description?
     }
 }
 
-export async function updateProjectRoleAction(id: string, data: { name: string; description?: string; color: string; canCreateEvents?: boolean }) {
+export async function updateProjectRoleAction(id: string, data: { name: string; description?: string; color: string; canCreateEvents?: boolean; canCreateTasks?: boolean }) {
     try {
         if (!(await isAdminUser())) return { success: false as const, error: "No autorizado." };
         if (!data.name.trim()) return { success: false as const, error: "El nombre es obligatorio." };
@@ -166,6 +166,7 @@ export async function updateProjectRoleAction(id: string, data: { name: string; 
             description: data.description?.trim() || null,
             color: data.color,
             canCreateEvents: data.canCreateEvents ?? false,
+            canCreateTasks: data.canCreateTasks ?? false,
         }).where(eq(projectRoles.id, id));
 
         revalidatePath("/admin/project-settings");
