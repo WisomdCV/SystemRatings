@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Image from "next/image";
 import { MoreVertical, Edit, ChevronLeft, ChevronRight, Copy, ArrowUpDown, ArrowUp, ArrowDown, Search } from "lucide-react";
+import { UserAvatar } from "@/components/ui/user-avatar";
 import UserEditDrawer from "./UserEditDrawer";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 
@@ -206,7 +207,7 @@ export default function UsersTable({ users, areas, customRoles, pagination }: Us
                                     <div className="relative">
                                         <div className={`w-11 h-11 rounded-full overflow-hidden bg-meteorite-100 flex items-center justify-center text-meteorite-600 font-bold border-2 shadow-sm ${user.status === 'SUSPENDED' ? 'border-red-200' : 'border-white group-hover:border-meteorite-200'} transition-all`}>
                                             {user.image ? (
-                                                <img className="w-full h-full object-cover" src={user.image} alt={user.name || "User"} />
+                                                <UserAvatar src={user.image} name={user.name || user.email} alt={user.name || "User"} className="w-full h-full" />
                                             ) : (
                                                 <span>{(user.name || user.email || "?").charAt(0).toUpperCase()}</span>
                                             )}
@@ -362,7 +363,7 @@ export default function UsersTable({ users, areas, customRoles, pagination }: Us
                                 <div className="relative">
                                     <div className="w-12 h-12 rounded-full overflow-hidden bg-meteorite-100 flex items-center justify-center text-meteorite-600 font-bold border-2 border-white shadow-sm">
                                         {user.image ? (
-                                            <img className="w-full h-full object-cover" src={user.image} alt={user.name || "User"} />
+                                            <UserAvatar src={user.image} name={user.name || user.email} alt={user.name || "User"} className="w-full h-full" />
                                         ) : (
                                             <span>{(user.name || user.email || "?").charAt(0).toUpperCase()}</span>
                                         )}

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { UserAvatar } from "@/components/ui/user-avatar";
 import { CreateEventSchema, CreateEventDTO } from "@/lib/validators/event";
 import { createEventAction, updateEventAction } from "@/server/actions/event.actions";
 import {
@@ -379,11 +380,9 @@ export default function CreateEventForm({
                                         className="w-4 h-4 rounded border-gray-300 text-meteorite-600 focus:ring-meteorite-500"
                                     />
                                     {user.image ? (
-                                        <img src={user.image} alt="" className="w-6 h-6 rounded-full" />
+                                        <UserAvatar src={user.image} name={user.name} className="w-6 h-6 rounded-full" />
                                     ) : (
-                                        <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-[10px] font-bold text-gray-500">
-                                            {user.name?.charAt(0) || "?"}
-                                        </div>
+                                        <UserAvatar src={null} name={user.name} className="w-6 h-6 rounded-full text-[10px]" fallbackClassName="bg-gray-200 text-gray-500" />
                                     )}
                                     <span className="text-sm font-medium text-gray-700">{user.name || "Sin nombre"}</span>
                                 </label>

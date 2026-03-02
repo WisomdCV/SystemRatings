@@ -3,6 +3,7 @@
 import ReviewJustificationModal from "./ReviewJustificationModal";
 import { AlertTriangle, Loader2, Check, X, Clock, Save, User as UserIcon, FileText } from "lucide-react";
 import { AttendanceSheetItem, AttendanceStatus } from "@/server/data-access/attendance";
+import { UserAvatar } from "@/components/ui/user-avatar";
 import { saveAttendanceAction } from "@/server/actions/attendance.actions";
 import { useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
@@ -128,11 +129,14 @@ export default function AttendanceTracker({ eventId, initialSheet }: AttendanceT
                                         <td className="p-4">
                                             <div className="flex items-center gap-3">
                                                 <div className="w-10 h-10 rounded-full bg-meteorite-100 flex items-center justify-center overflow-hidden shrink-0">
-                                                    {item.user.image ? (
-                                                        <img src={item.user.image} alt={item.user.name || "User"} className="w-full h-full object-cover" />
-                                                    ) : (
-                                                        <UserIcon className="w-5 h-5 text-meteorite-500" />
-                                                    )}
+                                                    <UserAvatar
+                                                        src={item.user.image}
+                                                        name={item.user.name}
+                                                        alt={item.user.name || "User"}
+                                                        className="w-full h-full"
+                                                        fallbackClassName="bg-transparent"
+                                                        fallbackIcon={<UserIcon className="w-5 h-5 text-meteorite-500" />}
+                                                    />
                                                 </div>
                                                 <div>
                                                     <p className="font-bold text-gray-900">{item.user.name || "Sin nombre"}</p>

@@ -13,6 +13,7 @@ import {
     Hash
 } from "lucide-react";
 import { format } from "date-fns";
+import { UserAvatar } from "@/components/ui/user-avatar";
 import { es } from "date-fns/locale";
 
 interface UserProfileProps {
@@ -47,17 +48,14 @@ export default function UserProfileView({ userProfile }: UserProfileProps) {
                         {/* Avatar */}
                         <div className="relative -mt-16 md:-mt-24 mb-4 flex justify-between items-end">
                             <div className="relative">
-                                {userProfile.image ? (
-                                    <img
-                                        src={userProfile.image}
-                                        alt={userProfile.name}
-                                        className="w-32 h-32 md:w-40 md:h-40 rounded-full border-4 border-white shadow-xl bg-white object-cover"
-                                    />
-                                ) : (
-                                    <div className="w-32 h-32 md:w-40 md:h-40 rounded-full border-4 border-white shadow-xl bg-meteorite-100 flex items-center justify-center">
-                                        <UserIcon className="w-16 h-16 text-meteorite-400" />
-                                    </div>
-                                )}
+                                <UserAvatar
+                                    src={userProfile.image}
+                                    name={userProfile.name}
+                                    alt={userProfile.name}
+                                    className="w-32 h-32 md:w-40 md:h-40 rounded-full border-4 border-white shadow-xl bg-white"
+                                    fallbackClassName="bg-meteorite-100"
+                                    fallbackIcon={<UserIcon className="w-16 h-16 text-meteorite-400" />}
+                                />
                             </div>
 
                             {/* Main Role Badge */}

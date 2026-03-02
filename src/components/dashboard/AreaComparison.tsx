@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect } from "react";
 import { BarChart3, TrendingUp, Medal, ChevronLeft, ChevronRight, Users, Target, Zap, Activity, ArrowUpRight, Award, User as UserIcon } from "lucide-react";
+import { UserAvatar } from "@/components/ui/user-avatar";
 import {
     Chart as ChartJS,
     CategoryScale,
@@ -484,7 +485,7 @@ export default function AreaComparison({ data }: AreaComparisonProps) {
                                             {getRankingIcon(index + 1)}
                                         </div>
                                         {member.user.image ? (
-                                            <img src={member.user.image} alt="" className="w-10 h-10 rounded-full border border-gray-200 object-cover flex-shrink-0" />
+                                            <UserAvatar src={member.user.image} name={member.user.name} className="w-10 h-10 rounded-full border border-gray-200 flex-shrink-0" />
                                         ) : (
                                             <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-meteorite-100 to-meteorite-200 flex items-center justify-center flex-shrink-0">
                                                 <UserIcon className="w-5 h-5 text-meteorite-600" />
@@ -524,7 +525,7 @@ export default function AreaComparison({ data }: AreaComparisonProps) {
 
                             <div className="flex items-center gap-4 mb-6 pb-6 border-b border-gray-100">
                                 {hoveredMember.user.image ? (
-                                    <img src={hoveredMember.user.image} className="w-14 h-14 rounded-full border-2 border-meteorite-200" />
+                                    <UserAvatar src={hoveredMember.user.image} name={hoveredMember.user.name} className="w-14 h-14 rounded-full border-2 border-meteorite-200" />
                                 ) : (
                                     <div className="w-14 h-14 rounded-full bg-meteorite-100 flex items-center justify-center border-2 border-meteorite-200">
                                         <UserIcon className="w-6 h-6 text-meteorite-500" />

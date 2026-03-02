@@ -2,7 +2,7 @@ import { auth } from "@/server/auth";
 import { redirect } from "next/navigation";
 import { hasPermission } from "@/lib/permissions";
 import Link from "next/link";
-import { ArrowLeft, Users, MapPin, Shield, RefreshCcw, Settings } from "lucide-react";
+import { ArrowLeft, Users, MapPin, Shield, RefreshCcw, Settings, ShieldCheck } from "lucide-react";
 
 export default async function AdminHubPage() {
     const session = await auth();
@@ -60,6 +60,15 @@ export default async function AdminHubPage() {
             icon: <Settings className="w-8 h-8 text-white" />,
             colorClass: "from-indigo-500 to-indigo-700",
             shadowClass: "shadow-indigo-500/30",
+            hasAccess: role === "DEV" || role === "PRESIDENT"
+        },
+        {
+            title: "Auditoría de Permisos",
+            description: "Visualiza la matriz completa de accesos, permisos efectivos por usuario y el historial de cambios de rol.",
+            href: "/admin/audit",
+            icon: <ShieldCheck className="w-8 h-8 text-white" />,
+            colorClass: "from-rose-500 to-rose-700",
+            shadowClass: "shadow-rose-500/30",
             hasAccess: role === "DEV" || role === "PRESIDENT"
         }
     ];

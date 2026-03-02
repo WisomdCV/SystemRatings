@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react";
 import { Input } from "@/components/ui/input";
 import { upsertGradeAction } from "@/server/actions/grading.actions";
+import { UserAvatar } from "@/components/ui/user-avatar";
 import { toast } from "sonner";
 import { Loader2, CheckCircle2, AlertCircle, Info, ArrowLeft, Search, Filter } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -261,13 +262,13 @@ export default function GradingGrid({ initialData, currentUserRole }: GradingGri
                                     {/* User Info */}
                                     <td className="px-6 py-4 font-bold text-gray-900 md:sticky md:left-0 bg-white group-hover:bg-gray-50/50 z-0 md:z-10 border-r border-transparent md:border-gray-50 group-hover:border-gray-100 transition-colors md:shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">
                                         <div className="flex items-center gap-3 min-w-max">
-                                            {user.image ? (
-                                                <img src={user.image} alt={user.name} className="w-9 h-9 rounded-full border border-gray-100 shadow-sm flex-shrink-0" />
-                                            ) : (
-                                                <div className="w-9 h-9 rounded-full bg-gradient-to-br from-meteorite-100 to-meteorite-200 text-meteorite-700 flex items-center justify-center font-bold text-xs ring-2 ring-white shadow-sm flex-shrink-0">
-                                                    {user.name?.charAt(0)}
-                                                </div>
-                                            )}
+                                            <UserAvatar
+                                                src={user.image}
+                                                name={user.name}
+                                                alt={user.name}
+                                                className="w-9 h-9 rounded-full border border-gray-100 shadow-sm flex-shrink-0"
+                                                fallbackClassName="bg-gradient-to-br from-meteorite-100 to-meteorite-200 text-meteorite-700 text-xs ring-2 ring-white"
+                                            />
                                             <div className="flex flex-col">
                                                 <span className="text-gray-900 group-hover:text-meteorite-800 transition-colors whitespace-nowrap">{user.name}</span>
                                                 <span className="text-[10px] text-gray-400 font-normal truncate max-w-[150px]">{user.email}</span>

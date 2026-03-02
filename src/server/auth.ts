@@ -4,7 +4,7 @@ import { DrizzleAdapter } from "@auth/drizzle-adapter";
 import { db } from "@/db";
 import { authConfig } from "../../auth.config";
 import { accounts, sessions, users, verificationTokens } from "@/db/schema";
-import { eq, count } from "drizzle-orm";
+import { eq, and, count } from "drizzle-orm";
 import { getCustomPermissionsForUser } from "@/server/data-access/custom-roles";
 
 
@@ -51,47 +51,86 @@ export const {
     auth,
     signIn,
     signOut,
-} = NextAuth({
-    ...authConfig,
-    adapter: DrizzleAdapter(db, {
+} = NextAuth(() => {
+    // Build the adapter and override linkAccount to handle re-sign-in
+    const baseAdapter = DrizzleAdapter(db, {
         usersTable: users,
         accountsTable: accounts,
         sessionsTable: sessions,
         verificationTokensTable: verificationTokens,
-    }),
-    session: {
-        strategy: "jwt",
-        maxAge: 7 * 24 * 60 * 60, // 7 days
-    },
-    providers: [
-        Google({
-            clientId: process.env.GOOGLE_CLIENT_ID,
-            clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-            authorization: {
-                params: {
-                    scope: "openid email profile https://www.googleapis.com/auth/calendar.events",
-                    prompt: "consent",
-                    access_type: "offline",
-                    response_type: "code"
+    });
+
+    const adapter = {
+        ...baseAdapter,
+        // Override linkAccount: on re-sign-in the (provider, providerAccountId) row
+        // already exists → catch the UNIQUE constraint error and UPDATE instead.
+        async linkAccount(account: any) {
+            try {
+                return await baseAdapter.linkAccount!(account);
+            } catch (error: any) {
+                const msg = String(error?.message ?? "");
+                if (msg.includes("UNIQUE") || msg.includes("SQLITE_CONSTRAINT") || msg.includes("duplicate")) {
+                    // Update existing account tokens instead of failing
+                    await db
+                        .update(accounts)
+                        .set({
+                            access_token: account.access_token,
+                            refresh_token: account.refresh_token,
+                            expires_at: account.expires_at,
+                            token_type: account.token_type,
+                            scope: account.scope,
+                            id_token: account.id_token,
+                            session_state: account.session_state,
+                        })
+                        .where(
+                            and(
+                                eq(accounts.provider, account.provider),
+                                eq(accounts.providerAccountId, account.providerAccountId)
+                            )
+                        );
+                    return account;
                 }
-            },
-            profile(profile) {
-                return {
-                    id: profile.sub,
-                    name: profile.name,
-                    firstName: profile.given_name,
-                    lastName: profile.family_name,
-                    email: profile.email,
-                    image: profile.picture,
-                    emailVerified: profile.email_verified,
-                };
-            },
-            allowDangerousEmailAccountLinking: true,
-        }),
-    ],
-    callbacks: {
-        async signIn({ user }) {
-            if (!user.id) return false;
+                throw error;
+            }
+        },
+    };
+
+    return {
+        ...authConfig,
+        adapter,
+        session: {
+            strategy: "jwt" as const,
+            maxAge: 7 * 24 * 60 * 60, // 7 days
+        },
+        providers: [
+            Google({
+                clientId: process.env.GOOGLE_CLIENT_ID,
+                clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+                authorization: {
+                    params: {
+                        scope: "openid email profile https://www.googleapis.com/auth/calendar.events",
+                        prompt: "consent",
+                        access_type: "offline",
+                        response_type: "code"
+                    }
+                },
+                profile(profile) {
+                    return {
+                        id: profile.sub,
+                        name: profile.name,
+                        firstName: profile.given_name,
+                        lastName: profile.family_name,
+                        email: profile.email,
+                        image: profile.picture,
+                        emailVerified: profile.email_verified,
+                    };
+                },
+                allowDangerousEmailAccountLinking: true,
+            }),
+        ],
+        callbacks: {
+            async signIn({ user }) {
+                if (!user.id) return false;
 
             const dbUser = await db.query.users.findFirst({
                 where: eq(users.id, user.id),
@@ -193,4 +232,5 @@ export const {
             return session;
         },
     },
+    };
 });

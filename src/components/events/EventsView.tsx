@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { UserAvatar } from "@/components/ui/user-avatar";
 import {
     CalendarCheck,
     Filter,
@@ -566,13 +567,12 @@ function InviteeAvatars({ invitees }: { invitees?: EventItem["invitees"] }) {
                         className="w-6 h-6 rounded-full border-2 border-white overflow-hidden bg-meteorite-100 shadow-sm"
                         title={inv.user.name || "Invitado"}
                     >
-                        {inv.user.image ? (
-                            <img src={inv.user.image} alt={inv.user.name || ""} className="w-full h-full object-cover" />
-                        ) : (
-                            <div className="w-full h-full flex items-center justify-center text-[9px] font-bold text-meteorite-600">
-                                {inv.user.name?.charAt(0)?.toUpperCase() || "?"}
-                            </div>
-                        )}
+                        <UserAvatar
+                            src={inv.user.image}
+                            name={inv.user.name}
+                            className="w-full h-full"
+                            fallbackClassName="bg-transparent text-[9px] text-meteorite-600"
+                        />
                     </div>
                 ))}
                 {remaining > 0 && (

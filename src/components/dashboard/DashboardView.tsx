@@ -40,6 +40,7 @@ import { submitJustificationAction, acknowledgeRejectionAction } from "@/server/
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
+import { UserAvatar } from "@/components/ui/user-avatar";
 import {
     Chart as ChartJS,
     RadialLinearScale,
@@ -539,20 +540,16 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
                     </nav>
                 </div>
 
-                <div className="relative z-10 p-4 border-t border-meteorite-800/50 bg-meteorite-900/30">
+                <div className="relative z-10 p-4 border-t border-meteorite-800/50 bg-meteorite-900/30 rounded-b-[2rem]">
                     <div className={`flex items-center justify-between p-2 rounded-xl hover:bg-meteorite-800 transition-colors group ${!isSidebarExpanded && "flex-col gap-3"}`}>
                         <Link href="/dashboard/profile" title={!isSidebarExpanded ? "Ver Perfil" : ""} className="flex items-center cursor-pointer flex-1 min-w-0">
-                            {user.image ? (
-                                <img
-                                    src={user.image}
-                                    alt="User"
-                                    className="w-10 h-10 rounded-full border-2 border-meteorite-400 group-hover:border-meteorite-300 transition-colors flex-shrink-0"
-                                />
-                            ) : (
-                                <div className="w-10 h-10 rounded-full bg-meteorite-700 flex items-center justify-center border-2 border-meteorite-400 group-hover:border-meteorite-300 transition-colors flex-shrink-0">
-                                    <UserIcon className="text-white w-5 h-5" />
-                                </div>
-                            )}
+                            <UserAvatar
+                                src={user.image}
+                                name={user.name}
+                                className="w-10 h-10 rounded-full border-2 border-meteorite-400 group-hover:border-meteorite-300 transition-colors flex-shrink-0"
+                                fallbackClassName="bg-meteorite-700"
+                                fallbackIcon={<UserIcon className="text-white w-5 h-5" />}
+                            />
                             <div className={`overflow-hidden min-w-0 flex-1 transition-all duration-300 ${isSidebarExpanded ? "ml-3 opacity-100 w-auto" : "ml-0 opacity-0 w-0 h-0"}`}>
                                 <p className="text-sm font-semibold text-white whitespace-normal break-words leading-tight group-hover:text-meteorite-100 transition-colors">{user.name}</p>
                                 <p className="text-[11px] text-meteorite-300 truncate mt-0.5" title={`${getRoleLabel((user as any).role)} • ${(user as any).areaName || "Sin Área"}`}>
@@ -621,13 +618,13 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
                             )}
                         </button>
 
-                        {user.image && (
-                            <img
-                                src={user.image}
-                                className="lg:hidden w-9 h-9 rounded-full border border-meteorite-300"
-                                alt="Profile"
-                            />
-                        )}
+                        <UserAvatar
+                            src={user.image}
+                            name={user.name}
+                            alt="Profile"
+                            className="lg:hidden w-9 h-9 rounded-full border border-meteorite-300"
+                            fallbackClassName="bg-meteorite-700 text-white text-xs"
+                        />
 
                         <button
                             onClick={async () => await logoutAction()}

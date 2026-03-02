@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { UserAvatar } from "@/components/ui/user-avatar";
 import {
     updateProjectAction, addProjectMemberAction, removeProjectMemberAction,
     updateProjectMemberRoleAction, createTaskAction, updateTaskStatusAction,
@@ -421,7 +422,7 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
                                                             <span className="text-[10px] text-gray-400 flex items-center gap-1 font-medium">
                                                                 Por:
                                                                 {task.createdBy?.image ? (
-                                                                    <img src={task.createdBy.image} alt={task.createdBy.name || ""} className="w-3.5 h-3.5 rounded-full inline-block object-cover" referrerPolicy="no-referrer" />
+                                                                    <UserAvatar src={task.createdBy.image} name={task.createdBy.name} className="w-3.5 h-3.5 rounded-full inline-block" />
                                                                 ) : (
                                                                     <div className="w-3.5 h-3.5 rounded-full bg-gray-200 flex items-center justify-center text-[7px] font-bold text-gray-500 shrink-0">
                                                                         {task.createdBy?.name?.charAt(0) || "?"}
@@ -620,7 +621,7 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
                                                     <div key={m.id} className="flex items-center gap-2 p-2 rounded-xl hover:bg-gray-50 transition-colors border border-transparent hover:border-gray-100">
                                                         <div className="relative shrink-0">
                                                             {m.user.image ? (
-                                                                <img src={m.user.image} alt={m.user.name || ""} className="w-8 h-8 rounded-xl shadow-sm object-cover bg-gray-100" referrerPolicy="no-referrer" />
+                                                                <UserAvatar src={m.user.image} name={m.user.name} alt={m.user.name || ""} className="w-8 h-8 rounded-xl shadow-sm bg-gray-100" />
                                                             ) : (
                                                                 <div className="w-8 h-8 rounded-xl flex items-center justify-center text-[10px] font-black shadow-sm"
                                                                     style={{ backgroundColor: `${data.color}20`, color: data.color }}>
