@@ -202,9 +202,9 @@ export const {
                 token._lastDbRefresh = 0;
             }
 
-            // 2.5 Periodic Refresh from DB (every 5 minutes instead of every request)
-            // This reduces DB load from 2 queries/request to 2 queries/5min per user
-            const DB_REFRESH_INTERVAL = 5 * 60 * 1000; // 5 minutes
+            // 2.5 Periodic Refresh from DB (every 1 minute)
+            // Ensures role/status changes take effect quickly without requiring re-login
+            const DB_REFRESH_INTERVAL = 60 * 1000; // 1 minute
             const lastRefresh = (token._lastDbRefresh as number) || 0;
             const shouldRefreshDb = Date.now() - lastRefresh > DB_REFRESH_INTERVAL;
 
