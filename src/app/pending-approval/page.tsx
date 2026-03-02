@@ -16,8 +16,8 @@ export default async function PendingApprovalPage() {
         columns: { status: true, role: true, name: true, email: true, image: true }
     });
 
-    // If user is no longer pending, send them to dashboard
-    if (!dbUser || dbUser.status !== "PENDING_APPROVAL") {
+    // If user is approved (not pending AND not volunteer), send them to dashboard
+    if (!dbUser || (dbUser.status !== "PENDING_APPROVAL" && dbUser.role !== "VOLUNTEER")) {
         redirect("/dashboard");
     }
 

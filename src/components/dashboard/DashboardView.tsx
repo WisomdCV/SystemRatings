@@ -92,9 +92,10 @@ interface DashboardViewProps {
             semesterly: Array<{ semester: string; myKpi: number; areaAvg: number | null }>;
         };
     };
+    pendingApprovalUsers?: Array<{ id: string; name: string | null; email: string; image: string | null; createdAt: Date | null }>;
 }
 
-export default function DashboardView({ user, upcomingEvents = [], pendingJustifications = [], attendanceHistory = [], currentSemester, dashboardData }: DashboardViewProps) {
+export default function DashboardView({ user, upcomingEvents = [], pendingJustifications = [], attendanceHistory = [], currentSemester, dashboardData, pendingApprovalUsers = [] }: DashboardViewProps) {
     const [chartView, setChartView] = useState<"monthly" | "semester">("monthly");
     const [isSidebarExpanded, setIsSidebarExpanded] = useState(true);
 
@@ -613,7 +614,7 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
                             onClick={() => setIsDrawerOpen(!isDrawerOpen)}
                         >
                             <Bell className="w-5 h-5" />
-                            {pendingJustifications.length > 0 && (
+                            {(pendingJustifications.length + pendingApprovalUsers.length) > 0 && (
                                 <span className="absolute top-2 right-2.5 w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
                             )}
                         </button>
@@ -1024,14 +1025,52 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
                             <div className="p-4 border-b border-meteorite-100 bg-meteorite-50/50 flex justify-between items-center">
                                 <h3 className="font-bold text-meteorite-900">Avisos Importantes</h3>
                                 <span className="bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
-                                    {pendingJustifications.length}
+                                    {pendingJustifications.length + pendingApprovalUsers.length}
                                 </span>
                             </div>
 
 
 
                             <div className="max-h-96 overflow-y-auto p-2">
-                                {pendingJustifications.length === 0 ? (
+                                {/* Pending Approval Notifications (Admin only) */}
+                                {pendingApprovalUsers.length > 0 && (
+                                    <>
+                                        {pendingApprovalUsers.map((pendingUser) => (
+                                            <Link
+                                                key={pendingUser.id}
+                                                href="/admin/approvals"
+                                                className="block p-3 mb-2 rounded-xl border transition-colors bg-orange-50 border-orange-200 hover:bg-orange-100"
+                                            >
+                                                <div className="flex items-center gap-3">
+                                                    {pendingUser.image ? (
+                                                        <img
+                                                            src={pendingUser.image}
+                                                            alt={pendingUser.name || "User"}
+                                                            className="w-8 h-8 rounded-full border border-orange-200 flex-shrink-0"
+                                                        />
+                                                    ) : (
+                                                        <div className="w-8 h-8 rounded-full bg-orange-200 flex items-center justify-center text-orange-700 font-bold text-xs flex-shrink-0">
+                                                            {(pendingUser.name || pendingUser.email)[0].toUpperCase()}
+                                                        </div>
+                                                    )}
+                                                    <div className="flex-1 min-w-0">
+                                                        <h4 className="font-bold text-xs text-orange-800 truncate">
+                                                            {pendingUser.name || pendingUser.email}
+                                                        </h4>
+                                                        <p className="text-[11px] text-orange-600">
+                                                            Solicita acceso al sistema
+                                                        </p>
+                                                    </div>
+                                                    <span className="text-[10px] font-bold bg-orange-200 text-orange-700 px-2 py-0.5 rounded-full flex-shrink-0">
+                                                        Pendiente
+                                                    </span>
+                                                </div>
+                                            </Link>
+                                        ))}
+                                    </>
+                                )}
+
+                                {pendingJustifications.length === 0 && pendingApprovalUsers.length === 0 ? (
                                     <div className="p-8 text-center text-gray-400 text-sm">
                                         ¡Estás al día! No tienes faltas pendientes.
                                     </div>

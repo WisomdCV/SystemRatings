@@ -5,7 +5,8 @@ export default async function Home() {
     const session = await auth();
 
     if (session?.user) {
-        if (session.user.status === "PENDING_APPROVAL") {
+        // Gate: PENDING_APPROVAL or VOLUNTEER without promotion → waiting page
+        if (session.user.status === "PENDING_APPROVAL" || session.user.role === "VOLUNTEER") {
             redirect("/pending-approval");
         }
         redirect("/dashboard");

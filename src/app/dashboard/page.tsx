@@ -2,8 +2,8 @@ import { auth } from "@/server/auth";
 import { redirect } from "next/navigation";
 import DashboardView from "@/components/dashboard/DashboardView";
 import { db } from "@/db";
-import { events, semesters, areas } from "@/db/schema";
-import { asc, eq, and, or, isNull, gte } from "drizzle-orm";
+import { events, semesters, areas, users } from "@/db/schema";
+import { asc, eq, and, or, isNull, gte, sql } from "drizzle-orm";
 import { getPendingJustificationsAction, getMyAttendanceHistoryAction } from "@/server/actions/attendance.actions";
 import { getMyDashboardDataAction } from "@/server/actions/dashboard.actions";
 import { hasPermission } from "@/lib/permissions";
@@ -92,6 +92,19 @@ export default async function DashboardPage() {
     // 3. Fetch Dashboard KPI & Grades Data
     const { data: dashboardData } = await getMyDashboardDataAction();
 
+    // 4. Fetch pending approval users for admins
+    let pendingApprovalUsers: { id: string; name: string | null; email: string; image: string | null; createdAt: Date | null }[] = [];
+    if (role && hasPermission(role, "user:manage", session.user.customPermissions)) {
+        pendingApprovalUsers = await db.query.users.findMany({
+            where: or(
+                eq(users.status, "PENDING_APPROVAL"),
+                and(eq(users.role, "VOLUNTEER"), eq(users.status, "ACTIVE"))
+            ),
+            columns: { id: true, name: true, email: true, image: true, createdAt: true },
+            orderBy: [asc(users.createdAt)],
+        });
+    }
+
     // Attach area name to user object so we don't change too many props
     const userWithArea = {
         ...session.user,
@@ -105,6 +118,7 @@ export default async function DashboardPage() {
         attendanceHistory={attendanceHistory || []}
         currentSemester={activeSemester ? { id: activeSemester.id, name: activeSemester.name } : null}
         dashboardData={dashboardData}
+        pendingApprovalUsers={pendingApprovalUsers}
     />;
 }
 
