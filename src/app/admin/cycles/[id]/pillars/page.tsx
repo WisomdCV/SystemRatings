@@ -1,5 +1,5 @@
 
-import { auth } from "@/server/auth";
+import { authFresh } from "@/server/auth-fresh";
 import { db } from "@/db";
 import { gradeDefinitions, semesters } from "@/db/schema";
 import { eq, ne, desc } from "drizzle-orm";
@@ -11,7 +11,7 @@ import { ArrowLeft } from "lucide-react";
 
 export default async function PillarsPage(props: { params: Promise<{ id: string }> }) {
     const params = await props.params;
-    const session = await auth();
+    const session = await authFresh();
     if (!session?.user || !["DEV", "PRESIDENT"].includes(session.user.role || "")) {
         return <div className="p-8 text-center text-red-600">No autorizado</div>;
     }

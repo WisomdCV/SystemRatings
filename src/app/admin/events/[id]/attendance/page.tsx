@@ -1,5 +1,5 @@
 
-import { auth } from "@/server/auth";
+import { authFresh } from "@/server/auth-fresh";
 import { redirect } from "next/navigation";
 import { getAttendanceSheetAction } from "@/server/actions/attendance.actions";
 import AttendanceTracker from "@/components/attendance/AttendanceTracker";
@@ -16,7 +16,7 @@ interface AttendancePageProps {
 }
 
 export default async function AttendancePage({ params }: AttendancePageProps) {
-    const session = await auth();
+    const session = await authFresh();
     if (!session?.user) redirect("/login");
 
     const { id: eventId } = await params;

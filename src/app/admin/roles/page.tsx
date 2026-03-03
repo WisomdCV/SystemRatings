@@ -1,4 +1,4 @@
-import { auth } from "@/server/auth";
+import { authFresh } from "@/server/auth-fresh";
 import { redirect } from "next/navigation";
 import { hasPermission } from "@/lib/permissions";
 import { getCustomRolesAction } from "@/server/actions/custom-role.actions";
@@ -8,7 +8,7 @@ import { ArrowLeft, Shield } from "lucide-react";
 import { PERMISSIONS } from "@/lib/permissions";
 
 export default async function RolesPage() {
-    const session = await auth();
+    const session = await authFresh();
     if (!session?.user) redirect("/login");
 
     const role = session.user.role || "";

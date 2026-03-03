@@ -1,4 +1,4 @@
-import { auth } from "@/server/auth";
+import { authFresh } from "@/server/auth-fresh";
 import { redirect } from "next/navigation";
 import { getAuditDataAction } from "@/server/actions/audit.actions";
 import AuditView from "@/components/admin/audit/AuditView";
@@ -6,7 +6,7 @@ import Link from "next/link";
 import { ArrowLeft, ShieldCheck } from "lucide-react";
 
 export default async function AuditPage() {
-    const session = await auth();
+    const session = await authFresh();
     if (!session?.user) redirect("/login");
 
     const role = session.user.role;

@@ -1,4 +1,4 @@
-import { auth } from "@/server/auth";
+import { authFresh } from "@/server/auth-fresh";
 import { redirect } from "next/navigation";
 import { getGradingSheetAction } from "@/server/actions/grading-view.actions";
 import GradingGrid from "@/components/grading/GradingGrid";
@@ -8,7 +8,7 @@ import Link from "next/link";
 import { hasPermission } from "@/lib/permissions";
 
 export default async function GradingPage() {
-    const session = await auth();
+    const session = await authFresh();
     if (!session?.user) redirect("/login");
 
     const role = session.user.role || "";

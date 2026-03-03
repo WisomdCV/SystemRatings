@@ -1,4 +1,4 @@
-import { auth } from "@/server/auth";
+import { authFresh } from "@/server/auth-fresh";
 import { redirect } from "next/navigation";
 import DashboardView from "@/components/dashboard/DashboardView";
 import { db } from "@/db";
@@ -9,7 +9,7 @@ import { getMyDashboardDataAction } from "@/server/actions/dashboard.actions";
 import { hasPermission } from "@/lib/permissions";
 
 export default async function DashboardPage() {
-    const session = await auth();
+    const session = await authFresh();
 
     if (!session?.user) {
         redirect("/login");

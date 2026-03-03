@@ -1,4 +1,4 @@
-import { auth } from "@/server/auth";
+import { authFresh } from "@/server/auth-fresh";
 import { redirect } from "next/navigation";
 import { hasPermission } from "@/lib/permissions";
 import { getPendingUsersAction } from "@/server/actions/approval.actions";
@@ -7,7 +7,7 @@ import Link from "next/link";
 import { ArrowLeft, UserCheck } from "lucide-react";
 
 export default async function AdminApprovalsPage() {
-    const session = await auth();
+    const session = await authFresh();
     if (!session?.user) redirect("/login");
 
     const role = session.user.role || "";

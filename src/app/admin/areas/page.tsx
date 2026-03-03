@@ -1,4 +1,4 @@
-import { auth } from "@/server/auth";
+import { authFresh } from "@/server/auth-fresh";
 import { redirect } from "next/navigation";
 import { getAllAreasAction, getAreasWithSemesterStatusAction, getAreasWithLeadersAction, getMembersForAssignmentAction } from "@/server/actions/area.actions";
 import { getAllSemestersAction } from "@/server/actions/semester.actions";
@@ -9,7 +9,7 @@ import Link from "next/link";
 import { ArrowLeft, MapPin } from "lucide-react";
 
 export default async function AreasPage() {
-    const session = await auth();
+    const session = await authFresh();
     if (!session?.user) redirect("/login");
 
     const role = session.user.role || "";

@@ -1,4 +1,4 @@
-import { auth } from "@/server/auth";
+import { authFresh } from "@/server/auth-fresh";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
 import { semesters } from "@/db/schema";
@@ -8,7 +8,7 @@ import { isAdmin } from "@/lib/permissions";
 export default async function DashboardLayout({
     children
 }: { children: React.ReactNode }) {
-    const session = await auth();
+    const session = await authFresh();
     if (!session?.user) redirect("/login");
 
     // Gate: PENDING_APPROVAL or VOLUNTEER users cannot access the dashboard

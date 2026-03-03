@@ -1,8 +1,8 @@
 import { redirect } from "next/navigation";
-import { auth } from "@/server/auth";
+import { authFresh } from "@/server/auth-fresh";
 
 export default async function Home() {
-    const session = await auth();
+    const session = await authFresh();
 
     if (session?.user) {
         // Gate: PENDING_APPROVAL or VOLUNTEER without promotion → waiting page

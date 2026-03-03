@@ -1,4 +1,4 @@
-import { auth } from "@/server/auth";
+import { authFresh } from "@/server/auth-fresh";
 import { redirect } from "next/navigation";
 import { getProjectAreasAction, getProjectRolesAction } from "@/server/actions/project-settings.actions";
 import ProjectSettings from "@/components/admin/ProjectSettings";
@@ -6,7 +6,7 @@ import { Settings, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 
 export default async function ProjectSettingsPage() {
-    const session = await auth();
+    const session = await authFresh();
     if (session?.user?.role !== "DEV" && session?.user?.role !== "PRESIDENT") {
         redirect("/dashboard");
     }

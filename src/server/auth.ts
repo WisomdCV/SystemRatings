@@ -202,9 +202,9 @@ export const {
                 token._lastDbRefresh = 0;
             }
 
-            // 2.5 Periodic Refresh from DB (every 1 minute)
-            // Ensures role/status changes take effect quickly without requiring re-login
-            const DB_REFRESH_INTERVAL = 60 * 1000; // 1 minute
+            // 2.5 Periodic Refresh from DB (every 10 seconds)
+            // Ensures role/permission changes take effect almost instantly
+            const DB_REFRESH_INTERVAL = 10 * 1000; // 10 seconds
             const lastRefresh = (token._lastDbRefresh as number) || 0;
             const shouldRefreshDb = Date.now() - lastRefresh > DB_REFRESH_INTERVAL;
 

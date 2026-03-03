@@ -1,4 +1,4 @@
-import { auth } from "@/server/auth";
+import { authFresh } from "@/server/auth-fresh";
 import { redirect } from "next/navigation";
 import { getProjectByIdAction } from "@/server/actions/project.actions";
 import { hasPermission } from "@/lib/permissions";
@@ -14,7 +14,7 @@ import { filterVisibleEvents, type VisibilityContext } from "@/server/services/e
 
 export default async function ProjectDetailPage(props: { params: Promise<{ id: string }> }) {
     const params = await props.params;
-    const session = await auth();
+    const session = await authFresh();
     if (!session?.user) redirect("/login");
 
     const projectResult = await getProjectByIdAction(params.id);

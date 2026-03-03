@@ -1,4 +1,4 @@
-import { auth } from "@/server/auth";
+import { authFresh } from "@/server/auth-fresh";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
 import { events, semesters, areas, users, projectMembers, projectAreas, projects } from "@/db/schema";
@@ -8,7 +8,7 @@ import { getCreatableIISEEventTypes } from "@/server/services/event-permissions.
 import { prepareEventsForClient, type VisibilityContext, type ProjectMembershipContext } from "@/server/services/event-visibility.service";
 
 export default async function AgendaPage() {
-    const session = await auth();
+    const session = await authFresh();
     if (!session?.user) redirect("/login");
 
     const role = session.user.role || "";

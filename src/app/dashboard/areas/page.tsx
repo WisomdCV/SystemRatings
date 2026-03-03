@@ -1,4 +1,4 @@
-import { auth } from "@/server/auth";
+import { authFresh } from "@/server/auth-fresh";
 import { redirect } from "next/navigation";
 import { getAreaComparisonAction } from "@/server/actions/area-comparison.actions";
 import AreaComparison from "@/components/dashboard/AreaComparison";
@@ -7,7 +7,7 @@ import { ArrowLeft, BarChart3 } from "lucide-react";
 import { hasPermission } from "@/lib/permissions";
 
 export default async function AreasPage() {
-    const session = await auth();
+    const session = await authFresh();
 
     if (!session?.user) {
         redirect("/login");
