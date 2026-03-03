@@ -50,6 +50,7 @@ interface UserEditDrawerProps {
     customRoles?: any[]; // The generic list of all custom roles available in the system
     isOpen: boolean;
     onClose: () => void;
+    onShowFeedback?: (type: "success" | "error", message: string) => void;
 }
 
 export default function UserEditDrawer({
@@ -58,6 +59,7 @@ export default function UserEditDrawer({
     customRoles = [],
     isOpen,
     onClose,
+    onShowFeedback,
 }: UserEditDrawerProps) {
     const [activeTab, setActiveTab] = useState<"profile" | "role" | "moderation">("profile");
     const [isPending, startTransition] = useTransition();
@@ -83,6 +85,11 @@ export default function UserEditDrawer({
 
     if (!isOpen || !user) return null;
 
+    const notify = (type: "success" | "error", msg: string) => {
+        if (onShowFeedback) onShowFeedback(type, msg);
+        else alert(msg);
+    };
+
     const handleSaveProfile = () => {
         startTransition(async () => {
             const result = await updateUserDataAction({
@@ -92,10 +99,10 @@ export default function UserEditDrawer({
                 category: formData.category ?? user.category ?? "TRAINEE",
             });
             if (result.success) {
-                alert("Perfil actualizado correctamente");
+                notify("success", "Perfil actualizado correctamente");
                 onClose();
             } else {
-                alert("Error: " + result.error);
+                notify("error", "Error: " + result.error);
             }
         });
     };
@@ -111,7 +118,7 @@ export default function UserEditDrawer({
             });
 
             if (!roleResult.success) {
-                alert("Error base: " + roleResult.error);
+                notify("error", "Error base: " + roleResult.error);
                 return;
             }
 
@@ -130,7 +137,7 @@ export default function UserEditDrawer({
                 await removeCustomRoleAction({ userId: user.id, customRoleId: roleId });
             }
 
-            alert("Jerarquía y roles adicionales actualizados correctamete");
+            notify("success", "Jerarquía y roles adicionales actualizados correctamente");
             onClose();
         });
     };
@@ -145,10 +152,10 @@ export default function UserEditDrawer({
             });
 
             if (result.success) {
-                alert("Estado de moderación actualizado");
+                notify("success", "Estado de moderación actualizado");
                 onClose();
             } else {
-                alert("Error: " + result.error);
+                notify("error", "Error: " + result.error);
             }
         });
     };

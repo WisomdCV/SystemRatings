@@ -119,6 +119,7 @@ export default async function DashboardPage() {
         currentSemester={activeSemester ? { id: activeSemester.id, name: activeSemester.name } : null}
         dashboardData={dashboardData}
         pendingApprovalUsers={pendingApprovalUsers}
+        roleChanged={session.user.roleChanged === true}
     />;
 }
 

@@ -35,10 +35,13 @@ export const CreateEventSchema = z.object({
     inviteeUserIds: z.array(z.string().uuid()).optional().default([]),
 }).superRefine((data, ctx) => {
     // --- Time validations ---
-    const now = new Date();
+    // Use Peru time (UTC-5) consistently — Vercel runs in UTC so we
+    // must explicitly anchor both "now" and the event time to the same TZ.
+    const PERU_OFFSET = "-05:00";
     const dateStr = data.date.toISOString().split('T')[0];
-    const eventDateTime = new Date(`${dateStr}T${data.startTime}:00`);
-    const minTime = new Date(now.getTime() + 3 * 60 * 1000);
+    const eventDateTime = new Date(`${dateStr}T${data.startTime}:00${PERU_OFFSET}`);
+    const nowUtc = Date.now();
+    const minTime = new Date(nowUtc + 3 * 60 * 1000);
 
     if (isNaN(eventDateTime.getTime())) {
         ctx.addIssue({
@@ -101,10 +104,11 @@ export const UpdateEventSchema = CreateEventSchema.partial().superRefine((data, 
             return;
         }
 
-        const now = new Date();
+        const PERU_OFFSET = "-05:00";
         const dateStr = data.date.toISOString().split('T')[0];
-        const eventDateTime = new Date(`${dateStr}T${data.startTime}:00`);
-        const minTime = new Date(now.getTime() + 3 * 60 * 1000);
+        const eventDateTime = new Date(`${dateStr}T${data.startTime}:00${PERU_OFFSET}`);
+        const nowUtc = Date.now();
+        const minTime = new Date(nowUtc + 3 * 60 * 1000);
 
         if (isNaN(eventDateTime.getTime())) {
             ctx.addIssue({

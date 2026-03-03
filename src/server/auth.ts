@@ -173,6 +173,7 @@ export const {
 
                 token.id = user.id;
                 token.role = freshUser?.role ?? user.role;
+                token.loginRole = freshUser?.role ?? user.role;
                 token.status = freshUser?.status ?? "ACTIVE";
                 token.currentAreaId = freshUser?.currentAreaId ?? user.currentAreaId;
 
@@ -242,6 +243,7 @@ export const {
             if (session.user && token) {
                 session.user.id = token.id as string;
                 session.user.role = token.role as string | null;
+                session.user.loginRole = token.loginRole as string | null;
                 session.user.status = token.status as string | null;
                 session.user.currentAreaId = token.currentAreaId as string | null;
                 session.user.customPermissions = token.customPermissions as string[] | undefined;

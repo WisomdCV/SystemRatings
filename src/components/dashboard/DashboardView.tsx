@@ -93,9 +93,10 @@ interface DashboardViewProps {
         };
     };
     pendingApprovalUsers?: Array<{ id: string; name: string | null; email: string; image: string | null; createdAt: Date | null }>;
+    roleChanged?: boolean;
 }
 
-export default function DashboardView({ user, upcomingEvents = [], pendingJustifications = [], attendanceHistory = [], currentSemester, dashboardData, pendingApprovalUsers = [] }: DashboardViewProps) {
+export default function DashboardView({ user, upcomingEvents = [], pendingJustifications = [], attendanceHistory = [], currentSemester, dashboardData, pendingApprovalUsers = [], roleChanged = false }: DashboardViewProps) {
     const [chartView, setChartView] = useState<"monthly" | "semester">("monthly");
     const [isSidebarExpanded, setIsSidebarExpanded] = useState(true);
 
@@ -235,6 +236,7 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
     const [justificationReason, setJustificationReason] = useState("");
     const [justificationLink, setJustificationLink] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [roleNotifDismissed, setRoleNotifDismissed] = useState(false);
     const router = useRouter();
 
     const handleOpenJustify = (record: any) => {
@@ -614,7 +616,7 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
                             onClick={() => setIsDrawerOpen(!isDrawerOpen)}
                         >
                             <Bell className="w-5 h-5" />
-                            {(pendingJustifications.length + pendingApprovalUsers.length) > 0 && (
+                            {(pendingJustifications.length + pendingApprovalUsers.length + (roleChanged && !roleNotifDismissed ? 1 : 0)) > 0 && (
                                 <span className="absolute top-2 right-2.5 w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
                             )}
                         </button>
@@ -1025,13 +1027,46 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
                             <div className="p-4 border-b border-meteorite-100 bg-meteorite-50/50 flex justify-between items-center">
                                 <h3 className="font-bold text-meteorite-900">Avisos Importantes</h3>
                                 <span className="bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
-                                    {pendingJustifications.length + pendingApprovalUsers.length}
+                                    {pendingJustifications.length + pendingApprovalUsers.length + (roleChanged && !roleNotifDismissed ? 1 : 0)}
                                 </span>
                             </div>
 
 
 
                             <div className="max-h-96 overflow-y-auto p-2">
+                                {/* Role Changed Notification */}
+                                {roleChanged && !roleNotifDismissed && (
+                                    <div className="p-3 mb-2 rounded-xl border bg-blue-50 border-blue-200">
+                                        <div className="flex items-start gap-3">
+                                            <div className="w-8 h-8 rounded-full bg-blue-200 flex items-center justify-center text-blue-700 flex-shrink-0 mt-0.5">
+                                                <Shield className="w-4 h-4" />
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <h4 className="font-bold text-xs text-blue-800">
+                                                    Tu rol ha sido actualizado
+                                                </h4>
+                                                <p className="text-[11px] text-blue-600 mt-0.5">
+                                                    Un administrador cambió tu rol. Cierra sesión y vuelve a ingresar para que los cambios se apliquen completamente.
+                                                </p>
+                                                <div className="flex gap-2 mt-2">
+                                                    <button
+                                                        onClick={async () => await logoutAction()}
+                                                        className="text-[10px] font-bold bg-blue-600 text-white px-3 py-1 rounded-lg hover:bg-blue-700 transition-colors"
+                                                    >
+                                                        Cerrar sesión
+                                                    </button>
+                                                    <button
+                                                        onClick={() => setRoleNotifDismissed(true)}
+                                                        className="text-[10px] font-bold bg-blue-100 text-blue-700 px-3 py-1 rounded-lg hover:bg-blue-200 transition-colors"
+                                                    >
+                                                        Ahora no
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
                                 {/* Pending Approval Notifications (Admin only) */}
                                 {pendingApprovalUsers.length > 0 && (
                                     <>
@@ -1070,9 +1105,9 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
                                     </>
                                 )}
 
-                                {pendingJustifications.length === 0 && pendingApprovalUsers.length === 0 ? (
+                                {pendingJustifications.length === 0 && pendingApprovalUsers.length === 0 && !(roleChanged && !roleNotifDismissed) ? (
                                     <div className="p-8 text-center text-gray-400 text-sm">
-                                        ¡Estás al día! No tienes faltas pendientes.
+                                        ¡Estás al día! No tienes avisos pendientes.
                                     </div>
                                 ) : (
                                     pendingJustifications.map((item) => {

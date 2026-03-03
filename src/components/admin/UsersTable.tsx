@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import Image from "next/image";
-import { MoreVertical, Edit, ChevronLeft, ChevronRight, Copy, ArrowUpDown, ArrowUp, ArrowDown, Search } from "lucide-react";
+import { MoreVertical, Edit, ChevronLeft, ChevronRight, Copy, ArrowUpDown, ArrowUp, ArrowDown, Search, CheckCircle2, XCircle } from "lucide-react";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import UserEditDrawer from "./UserEditDrawer";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
@@ -111,6 +111,14 @@ export default function UsersTable({ users, areas, customRoles, pagination }: Us
     const [selectedUser, setSelectedUser] = useState<User | null>(null);
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
     const [activeMenu, setActiveMenu] = useState<string | null>(null);
+    const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
+    const feedbackTimeout = useRef<NodeJS.Timeout | null>(null);
+
+    const showFeedback = (type: "success" | "error", message: string) => {
+        setFeedback({ type, message });
+        if (feedbackTimeout.current) clearTimeout(feedbackTimeout.current);
+        feedbackTimeout.current = setTimeout(() => setFeedback(null), 4000);
+    };
 
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -147,8 +155,7 @@ export default function UsersTable({ users, areas, customRoles, pagination }: Us
     const handleCopy = (text: string, label: string) => {
         navigator.clipboard.writeText(text);
         setActiveMenu(null);
-        // Simple visual feedback instead of heavy toast library for now
-        alert(`${label} copiado al portapapeles.`);
+        showFeedback("success", `${label} copiado al portapapeles.`);
     };
 
     const handleCloseDrawer = () => {
@@ -175,7 +182,16 @@ export default function UsersTable({ users, areas, customRoles, pagination }: Us
     }
 
     return (
-        <div className="bg-white/90 backdrop-blur-md rounded-3xl shadow-sm border border-meteorite-100 overflow-visible flex flex-col">
+        <div className="bg-white/90 backdrop-blur-md rounded-3xl shadow-sm border border-meteorite-100 overflow-visible flex flex-col relative">
+
+            {/* Feedback Snackbar */}
+            {feedback && (
+                <div className={`fixed top-4 right-4 z-[200] px-6 py-3 rounded-2xl shadow-2xl font-bold text-sm flex items-center gap-2 animate-fade-in ${feedback.type === "success" ? "bg-emerald-500 text-white" : "bg-red-500 text-white"
+                    }`}>
+                    {feedback.type === "success" ? <CheckCircle2 className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
+                    {feedback.message}
+                </div>
+            )}
 
             {/* Desktop Table View */}
             <div className="hidden md:block overflow-x-auto min-h-[400px]">
@@ -470,6 +486,7 @@ export default function UsersTable({ users, areas, customRoles, pagination }: Us
                 customRoles={customRoles}
                 isOpen={isDrawerOpen}
                 onClose={handleCloseDrawer}
+                onShowFeedback={showFeedback}
             />
         </div>
     );

@@ -29,6 +29,10 @@ export async function authFresh() {
     });
 
     if (freshUser) {
+        // Detect if role changed since login (loginRole is set once at sign-in)
+        const loginRole = session.user.loginRole;
+        session.user.roleChanged = loginRole != null && loginRole !== freshUser.role;
+
         session.user.role = freshUser.role;
         session.user.currentAreaId = freshUser.currentAreaId;
         session.user.status = freshUser.status;

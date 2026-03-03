@@ -14,6 +14,8 @@ declare module 'next-auth' {
       status: string | null;
       currentAreaId: string | null;
       customPermissions?: string[];
+      loginRole?: string | null;
+      roleChanged?: boolean;
     } & DefaultSession['user'];
   }
 
@@ -36,6 +38,7 @@ declare module 'next-auth/jwt' {
     status?: string | null;
     currentAreaId?: string | null;
     customPermissions?: string[];
+    loginRole?: string | null;
     accessToken?: string;
     refreshToken?: string;
   }
