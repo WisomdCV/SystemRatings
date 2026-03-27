@@ -41,6 +41,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
 import { UserAvatar } from "@/components/ui/user-avatar";
+import { hasPermission } from "@/lib/permissions";
 import {
     Chart as ChartJS,
     RadialLinearScale,
@@ -72,7 +73,9 @@ interface DashboardViewProps {
         name: string | null;
         image: string | null;
         email: string;
-        role?: string;
+        role?: string | null;
+        customPermissions?: string[];
+        areaName?: string | null;
     };
     upcomingEvents?: any[];
     pendingJustifications?: any[];
@@ -142,8 +145,15 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
 
 
     // --- Logic for Dynamic UI ---
-    const isManagementRole = ["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER", "DIRECTOR", "SUBDIRECTOR"].includes((user as any).role || "");
-    const eventsLink = isManagementRole ? "/admin/events" : "/dashboard/agenda";
+    const userRole = user.role || "";
+    const userCustomPermissions = user.customPermissions;
+    const canAccessAdmin = hasPermission(userRole, "admin:access", userCustomPermissions);
+    const canViewGrades =
+        hasPermission(userRole, "grade:view_all", userCustomPermissions) ||
+        hasPermission(userRole, "grade:view_own_area", userCustomPermissions);
+    const canViewAreaComparison = hasPermission(userRole, "dashboard:area_comparison", userCustomPermissions);
+
+    const eventsLink = canAccessAdmin ? "/admin/events" : "/dashboard/agenda";
 
     const getGreeting = () => {
         const hour = new Date().getHours();
@@ -154,14 +164,26 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
 
     const greeting = getGreeting();
 
-    const quickActions = isManagementRole ? [
-        { label: "Organizar Eventos", icon: CalendarPlus, href: "/admin/events", color: "bg-indigo-100/50 text-indigo-700 border-indigo-200" },
-        { label: "Evaluar Equipos", icon: FileText, href: "/dashboard/management/grades", color: "bg-emerald-100/50 text-emerald-700 border-emerald-200" },
-        { label: "Configuración", icon: Settings, href: "/admin", color: "bg-gray-100/50 text-gray-700 border-gray-200" }
-    ] : [
-        { label: "Buscar Eventos", icon: Search, href: "/dashboard/agenda", color: "bg-blue-100/50 text-blue-700 border-blue-200" },
-        { label: "Mis Proyectos", icon: FolderKanban, href: "/dashboard/projects", color: "bg-violet-100/50 text-violet-700 border-violet-200" },
-        { label: "Mi Perfil", icon: UserIcon, href: "/dashboard/profile", color: "bg-orange-100/50 text-orange-700 border-orange-200" }
+    const quickActions = [
+        {
+            label: canAccessAdmin ? "Organizar Eventos" : "Buscar Eventos",
+            icon: canAccessAdmin ? CalendarPlus : Search,
+            href: eventsLink,
+            color: canAccessAdmin
+                ? "bg-indigo-100/50 text-indigo-700 border-indigo-200"
+                : "bg-blue-100/50 text-blue-700 border-blue-200"
+        },
+        ...(canViewGrades
+            ? [{ label: "Evaluar Equipos", icon: FileText, href: "/dashboard/management/grades", color: "bg-emerald-100/50 text-emerald-700 border-emerald-200" }]
+            : [{ label: "Mis Proyectos", icon: FolderKanban, href: "/dashboard/projects", color: "bg-violet-100/50 text-violet-700 border-violet-200" }]),
+        {
+            label: canAccessAdmin ? "Configuración" : "Mi Perfil",
+            icon: canAccessAdmin ? Settings : UserIcon,
+            href: canAccessAdmin ? "/admin" : "/dashboard/profile",
+            color: canAccessAdmin
+                ? "bg-gray-100/50 text-gray-700 border-gray-200"
+                : "bg-orange-100/50 text-orange-700 border-orange-200"
+        }
     ];
 
     // Only truly pending justifications (action required by the user).
@@ -486,7 +508,7 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
                         </a>
 
                         {/* 2. Administración Central */}
-                        {["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER", "DIRECTOR", "SUBDIRECTOR"].includes((user as any).role) && (
+                        {canAccessAdmin && (
                             <a
                                 href="/admin"
                                 title={!isSidebarExpanded ? "Administración" : ""}
@@ -499,7 +521,7 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
                         )}
 
                         {/* 5. Calificaciones */}
-                        {["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER", "DIRECTOR"].includes((user as any).role) && (
+                        {canViewGrades && (
                             <a
                                 href="/dashboard/management/grades"
                                 title={!isSidebarExpanded ? "Calificaciones" : ""}
@@ -512,7 +534,7 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
                         )}
 
                         {/* 6. Comparación de Áreas - Leadership Only */}
-                        {["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER", "DIRECTOR", "SUBDIRECTOR"].includes((user as any).role) && (
+                        {canViewAreaComparison && (
                             <a
                                 href="/dashboard/areas"
                                 title={!isSidebarExpanded ? "Áreas KPI" : ""}
@@ -525,7 +547,7 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
                         )}
 
                         {/* 3. Meetings */}
-                        {["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER", "DIRECTOR", "SUBDIRECTOR"].includes((user as any).role) ? (
+                        {canAccessAdmin ? (
                             <a
                                 href="/admin/events"
                                 title={!isSidebarExpanded ? "Meetings" : ""}
@@ -1276,7 +1298,7 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
                         </div>
                         <span className="text-[10px] font-medium opacity-100">Inicio</span>
                     </a>
-                    {["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER", "DIRECTOR", "SUBDIRECTOR"].includes((user as any).role) ? (
+                    {canAccessAdmin ? (
                         <a
                             href="/admin/events"
                             className="flex flex-col items-center justify-center w-full h-full text-meteorite-400 hover:text-white transition-colors"
@@ -1293,7 +1315,7 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
                             <span className="text-[10px] font-medium">Agenda</span>
                         </a>
                     )}
-                    {["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER", "DIRECTOR"].includes((user as any).role) && (
+                    {canViewGrades && (
                         <a
                             href="/dashboard/management/grades"
                             className="flex flex-col items-center justify-center w-full h-full text-meteorite-400 hover:text-white transition-colors"

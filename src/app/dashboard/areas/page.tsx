@@ -14,7 +14,7 @@ export default async function AreasPage() {
     }
 
     const role = session.user.role || "";
-    const canViewComparison = hasPermission(role, "dashboard:area_comparison");
+    const canViewComparison = hasPermission(role, "dashboard:area_comparison", session.user.customPermissions);
 
     if (!canViewComparison) {
         redirect("/dashboard");
