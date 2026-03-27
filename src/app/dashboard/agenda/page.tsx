@@ -82,6 +82,23 @@ export default async function AgendaPage() {
         } else {
             const visibilityConditions = [eq(events.createdById, userId)];
 
+            // Baseline visibility for all authenticated users in Agenda:
+            // - IISE general events
+            // - IISE events targeting user's own area
+            const generalIISEClause = and(
+                eq(events.eventScope, "IISE"),
+                isNull(events.targetAreaId)
+            );
+            if (generalIISEClause) visibilityConditions.push(generalIISEClause);
+
+            if (currentAreaId) {
+                const ownAreaClause = and(
+                    eq(events.eventScope, "IISE"),
+                    eq(events.targetAreaId, currentAreaId)
+                );
+                if (ownAreaClause) visibilityConditions.push(ownAreaClause);
+            }
+
             if (canCreateGeneral) {
                 const clause = and(
                     eq(events.eventScope, "IISE"),
