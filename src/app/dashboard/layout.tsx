@@ -11,8 +11,16 @@ export default async function DashboardLayout({
     const session = await authFresh();
     if (!session?.user) redirect("/login");
 
-    // Gate: PENDING_APPROVAL or VOLUNTEER users cannot access the dashboard
-    if (session.user.status === "PENDING_APPROVAL" || session.user.role === "VOLUNTEER") {
+    if (session.user.status === "BANNED") {
+        redirect("/auth/error?error=RequestRejected");
+    }
+
+    if (session.user.status === "SUSPENDED") {
+        redirect("/auth/error?error=AccessDenied");
+    }
+
+    // Gate: users still awaiting admission.
+    if (session.user.status === "PENDING_APPROVAL" || (session.user.role === "VOLUNTEER" && session.user.status === "ACTIVE")) {
         redirect("/pending-approval");
     }
 

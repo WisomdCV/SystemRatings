@@ -15,6 +15,9 @@ function ErrorContent() {
     if (error === "AccessDenied") {
         title = "Acceso Denegado";
         message = "Tu cuenta ha sido suspendida o no tienes permisos para acceder a esta área. Si crees que es un error, contacta a la administración.";
+    } else if (error === "RequestRejected") {
+        title = "Solicitud No Admitida";
+        message = "Tu solicitud de acceso fue rechazada por la administración. Si consideras que se trata de un error, comunícate con el equipo administrador de IISE.";
     } else if (error === "Verification") {
         title = "Enlace Inválido";
         message = "El enlace de verificación ha expirado o ya ha sido utilizado.";

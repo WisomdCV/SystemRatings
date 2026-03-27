@@ -152,7 +152,7 @@ export const {
 
             if (!dbUser) return true;
 
-            if (dbUser.status === "BANNED") return false;
+            if (dbUser.status === "BANNED") return "/auth/error?error=RequestRejected";
 
             if (dbUser.status === "SUSPENDED") {
                 if (dbUser.suspendedUntil && new Date() < dbUser.suspendedUntil) {

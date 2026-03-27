@@ -16,8 +16,24 @@ export default async function PendingApprovalPage() {
         columns: { status: true, role: true, name: true, email: true, image: true }
     });
 
-    // If user is approved (not pending AND not volunteer), send them to dashboard
-    if (!dbUser || (dbUser.status !== "PENDING_APPROVAL" && dbUser.role !== "VOLUNTEER")) {
+    if (!dbUser) {
+        redirect("/login");
+    }
+
+    // Rejected users must never remain on pending screen.
+    if (dbUser.status === "BANNED") {
+        redirect("/auth/error?error=RequestRejected");
+    }
+
+    if (dbUser.status === "SUSPENDED") {
+        redirect("/auth/error?error=AccessDenied");
+    }
+
+    // Pending flow supports both explicit pending and volunteer-active requests.
+    const isPendingRequest = dbUser.status === "PENDING_APPROVAL"
+        || (dbUser.role === "VOLUNTEER" && dbUser.status === "ACTIVE");
+
+    if (!isPendingRequest) {
         redirect("/dashboard");
     }
 
