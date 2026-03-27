@@ -9,7 +9,6 @@
  * The client NEVER recalculates permissions — it reads pre-computed booleans.
  */
 
-import { hasPermission } from "@/lib/permissions";
 import { canManageEvent as serverCanManage } from "./event-permissions.service";
 
 // =============================================================================
@@ -39,7 +38,7 @@ export interface VisibilityContext {
     customPermissions?: string[];
     /** Pre-fetched project memberships for the active semester */
     projectMemberships: ProjectMembershipContext[];
-    /** If true, user bypasses ALL visibility filters (event:manage admins) */
+    /** If true, user bypasses all visibility filters (event:manage_all) */
     hasGlobalManage?: boolean;
 }
 
@@ -64,7 +63,7 @@ export function filterVisibleEvents<T extends {
     targetProjectArea?: { id: string } | null;
     invitees?: { userId: string }[];
 }>(events: T[], ctx: VisibilityContext): T[] {
-    // Admin bypass: users with event:manage see everything
+    // Global manage bypass: users with event:manage_all see everything
     if (ctx.hasGlobalManage) return events;
 
     return events.filter(event => {

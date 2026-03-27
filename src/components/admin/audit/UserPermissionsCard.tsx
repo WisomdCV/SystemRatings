@@ -5,6 +5,10 @@ import { RoleBadge } from "./AuditView";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { Shield, ShieldCheck, ShieldX, KeyRound, MapPin, Tag } from "lucide-react";
 
+function getPermissionDomain(permission: string): string {
+    return permission.split(/[:.]/)[0] || permission;
+}
+
 // Permission category labels in Spanish
 const PERMISSION_CATEGORIES: Record<string, { label: string; color: string }> = {
     event: { label: "Eventos", color: "blue" },
@@ -21,18 +25,22 @@ const PERMISSION_CATEGORIES: Record<string, { label: string; color: string }> = 
 
 // Human-readable permission labels
 const PERMISSION_LABELS: Record<string, string> = {
-    "event:create": "Crear eventos",
-    "event:manage": "Gestionar (editar/eliminar) eventos",
     "event:create_general": "Crear eventos IISE generales",
-    "event:create_area": "Crear eventos de área",
-    "event:create_individual": "Crear reuniones individuales/grupo",
-    "attendance:take": "Tomar asistencia",
-    "attendance:review": "Revisar justificaciones",
-    "grade:assign": "Asignar calificaciones",
-    "grade:view_sheet": "Ver hoja de calificaciones",
+    "event:create_area_own": "Crear eventos de mi área",
+    "event:create_area_any": "Crear eventos para cualquier área",
+    "event:create_meeting": "Crear reuniones individuales o grupales",
+    "event:manage_own": "Gestionar eventos permitidos",
+    "event:manage_all": "Gestionar todos los eventos",
+    "attendance:take_own_area": "Tomar asistencia de mi área",
+    "attendance:take_all": "Tomar asistencia global",
+    "attendance:review_own_area": "Revisar justificaciones de mi área",
+    "attendance:review_all": "Revisar justificaciones globales",
+    "grade:assign_own_area": "Asignar calificaciones en mi área",
+    "grade:assign_all": "Asignar calificaciones globalmente",
+    "grade:view_own_area": "Ver hoja de calificaciones de mi área",
+    "grade:view_all": "Ver hoja de calificaciones global",
     "pillar:manage": "Gestionar pilares",
-    "semester:manage": "Gestionar semestres/ciclos",
-    "semester:create_first": "Crear primer semestre",
+    "semester:manage": "Gestionar semestres o ciclos",
     "user:manage": "Gestionar usuarios",
     "area:manage": "Gestionar áreas",
     "project:create": "Crear proyectos",
@@ -55,7 +63,7 @@ export default function UserPermissionsCard({ user, allPermissions }: UserPermis
     // Group permissions by category
     const grouped = new Map<string, typeof user.effectivePermissions>();
     for (const ep of user.effectivePermissions) {
-        const cat = ep.permission.split(":")[0];
+        const cat = getPermissionDomain(ep.permission);
         if (!grouped.has(cat)) grouped.set(cat, []);
         grouped.get(cat)!.push(ep);
     }

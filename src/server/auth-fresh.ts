@@ -2,17 +2,17 @@ import { auth } from "@/server/auth";
 import { db } from "@/db";
 import { users } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { getCustomPermissionsForUser } from "@/server/data-access/custom-roles";
+import { getAllExtraPermissionsForUser } from "@/server/data-access/custom-roles";
 
 /**
  * Like `auth()` but ALWAYS reads the user's current role, status, area and
- * custom permissions fresh from the database — no JWT cache.
+ * extra permissions fresh from the database — no JWT cache.
  *
  * Use this in any server page/layout that gates access based on permissions
  * so that role changes made by an admin take effect instantly, without
  * requiring the target user to log out and back in.
  *
- * Cost: 2 small DB queries per call (user row + custom role permissions).
+ * Cost: 3 small DB queries per call (user row + custom role permissions + area permissions).
  * For a team of <200 users this is negligible on Turso.
  */
 export async function authFresh() {
@@ -38,9 +38,9 @@ export async function authFresh() {
         session.user.status = freshUser.status;
     }
 
-    // Always load fresh custom permissions
+    // Always load fresh extra permissions (custom roles + area)
     try {
-        session.user.customPermissions = await getCustomPermissionsForUser(session.user.id);
+        session.user.customPermissions = await getAllExtraPermissionsForUser(session.user.id);
     } catch {
         session.user.customPermissions = [];
     }

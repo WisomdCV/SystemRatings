@@ -12,7 +12,11 @@ export default async function GradingPage() {
     if (!session?.user) redirect("/login");
 
     const role = session.user.role || "";
-    if (!hasPermission(role, "grade:view_sheet")) {
+    const canViewGrading =
+        hasPermission(role, "grade:view_all", session.user.customPermissions) ||
+        hasPermission(role, "grade:view_own_area", session.user.customPermissions);
+
+    if (!canViewGrading) {
         redirect("/dashboard");
     }
 

@@ -5,43 +5,94 @@ import { getAttendanceSheetDAO, batchUpsertAttendanceDAO, AttendanceStatus } fro
 import { getEventByIdDAO } from "@/server/data-access/events";
 import { revalidatePath } from "next/cache";
 import { hasPermission } from "@/lib/permissions";
+import { canManageEvent } from "@/server/services/event-permissions.service";
 import { getUserAttendanceHistoryDAO, updateAttendanceRecordDAO, getAttendanceRecordByIdDAO } from "@/server/data-access/attendance";
 
 // =============================================================================
 // Helpers — attendance permission check (shared by get & save)
 // =============================================================================
 
-function canTakeAttendanceForEvent(
+async function canTakeAttendanceForEvent(
     role: string | null,
+    userId: string,
     userAreaId: string | null,
     customPermissions: string[] | undefined,
-    eventTargetAreaId: string | null,
-): boolean {
+    event: {
+        createdById: string | null;
+        eventScope: string;
+        eventType: string;
+        targetAreaId: string | null;
+        projectId: string | null;
+        targetProjectAreaId: string | null;
+    },
+): Promise<boolean> {
     // take_all → can take attendance on any event
     if (hasPermission(role, "attendance:take_all", customPermissions)) return true;
 
-    // take_own_area → only events targeting user's area (or general events with no target)
+    // take_own_area → only events targeting user's area and that the user can manage
     if (hasPermission(role, "attendance:take_own_area", customPermissions)) {
-        if (!eventTargetAreaId) return true; // General event — anyone with take_own_area can contribute
-        if (eventTargetAreaId === userAreaId) return true; // Same area
+        if (!event.targetAreaId) return false;
+        if (event.targetAreaId !== userAreaId) return false;
+
+        return canManageEvent(
+            {
+                userRole: role,
+                userId,
+                userAreaId,
+                customPermissions,
+            },
+            {
+                createdById: event.createdById,
+                eventScope: event.eventScope,
+                eventType: event.eventType,
+                targetAreaId: event.targetAreaId,
+                projectId: event.projectId,
+                targetProjectAreaId: event.targetProjectAreaId,
+            }
+        );
     }
 
     return false;
 }
 
-function canReviewJustificationForEvent(
+async function canReviewJustificationForEvent(
     role: string | null,
+    userId: string,
     userAreaId: string | null,
     customPermissions: string[] | undefined,
-    eventTargetAreaId: string | null,
-): boolean {
+    event: {
+        createdById: string | null;
+        eventScope: string;
+        eventType: string;
+        targetAreaId: string | null;
+        projectId: string | null;
+        targetProjectAreaId: string | null;
+    },
+): Promise<boolean> {
     // review_all → can review justifications for any event
     if (hasPermission(role, "attendance:review_all", customPermissions)) return true;
 
-    // review_own_area → only events targeting user's area
+    // review_own_area → only events targeting user's area and that the user can manage
     if (hasPermission(role, "attendance:review_own_area", customPermissions)) {
-        if (!eventTargetAreaId) return true;
-        if (eventTargetAreaId === userAreaId) return true;
+        if (!event.targetAreaId) return false;
+        if (event.targetAreaId !== userAreaId) return false;
+
+        return canManageEvent(
+            {
+                userRole: role,
+                userId,
+                userAreaId,
+                customPermissions,
+            },
+            {
+                createdById: event.createdById,
+                eventScope: event.eventScope,
+                eventType: event.eventType,
+                targetAreaId: event.targetAreaId,
+                projectId: event.projectId,
+                targetProjectAreaId: event.targetProjectAreaId,
+            }
+        );
     }
 
     return false;
@@ -63,11 +114,19 @@ export async function getAttendanceSheetAction(eventId: string) {
             return { success: false, error: "Este evento no tiene seguimiento de asistencia." };
         }
 
-        const canTake = canTakeAttendanceForEvent(
+        const canTake = await canTakeAttendanceForEvent(
             session.user.role,
+            session.user.id,
             session.user.currentAreaId,
             session.user.customPermissions,
-            event.targetAreaId,
+            {
+                createdById: event.createdById,
+                eventScope: event.eventScope,
+                eventType: event.eventType,
+                targetAreaId: event.targetAreaId,
+                projectId: event.projectId,
+                targetProjectAreaId: event.targetProjectAreaId,
+            },
         );
 
         if (!canTake) {
@@ -95,11 +154,19 @@ export async function saveAttendanceAction(eventId: string, records: { userId: s
             return { success: false, error: "Este evento no tiene seguimiento de asistencia." };
         }
 
-        const canTake = canTakeAttendanceForEvent(
+        const canTake = await canTakeAttendanceForEvent(
             session.user.role,
+            session.user.id,
             session.user.currentAreaId,
             session.user.customPermissions,
-            event.targetAreaId,
+            {
+                createdById: event.createdById,
+                eventScope: event.eventScope,
+                eventType: event.eventType,
+                targetAreaId: event.targetAreaId,
+                projectId: event.projectId,
+                targetProjectAreaId: event.targetProjectAreaId,
+            },
         );
 
         if (!canTake) {
@@ -180,13 +247,19 @@ export async function reviewJustificationAction(
         const record = await getAttendanceRecordByIdDAO(recordId);
         if (!record) return { success: false, error: "Registro no encontrado" };
 
-        const eventTargetAreaId = record.event?.targetAreaId ?? null;
-
-        const canReview = canReviewJustificationForEvent(
+        const canReview = await canReviewJustificationForEvent(
             session.user.role,
+            session.user.id,
             session.user.currentAreaId,
             session.user.customPermissions,
-            eventTargetAreaId,
+            {
+                createdById: record.event?.createdById ?? null,
+                eventScope: record.event?.eventScope ?? "IISE",
+                eventType: record.event?.eventType ?? "GENERAL",
+                targetAreaId: record.event?.targetAreaId ?? null,
+                projectId: record.event?.projectId ?? null,
+                targetProjectAreaId: record.event?.targetProjectAreaId ?? null,
+            },
         );
 
         if (!canReview) {

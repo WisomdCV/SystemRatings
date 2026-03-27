@@ -49,12 +49,12 @@ async function main() {
     });
 
     // Seed area permissions for TH (Talento Humano) and MD (Mesa Directiva)
-    // These areas get full event + attendance capabilities for their members
+    // These areas get full event + attendance + grading capabilities for their members
     console.log("🔑 Sincronizando permisos de área...");
     const thArea = await db.query.areas.findFirst({ where: eq(areas.code, "TH") });
     const mdArea = await db.query.areas.findFirst({ where: eq(areas.code, "MD") });
 
-    const fullEventPerms = [
+    const fullAreaPerms = [
         "event:create_general",
         "event:create_area_own",
         "event:create_area_any",
@@ -65,6 +65,8 @@ async function main() {
         "attendance:take_all",
         "attendance:review_own_area",
         "attendance:review_all",
+        "grade:assign_all",
+        "grade:view_all",
     ];
 
     for (const area of [thArea, mdArea]) {
@@ -72,7 +74,7 @@ async function main() {
         // Delete existing area permissions first (idempotent)
         await db.delete(areaPermissions).where(eq(areaPermissions.areaId, area.id));
         await db.insert(areaPermissions).values(
-            fullEventPerms.map(p => ({ areaId: area.id, permission: p }))
+            fullAreaPerms.map(p => ({ areaId: area.id, permission: p }))
         );
     }
 

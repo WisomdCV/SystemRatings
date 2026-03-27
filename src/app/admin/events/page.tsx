@@ -2,7 +2,7 @@ import { authFresh } from "@/server/auth-fresh";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
 import { events, areas, semesters, attendanceRecords, projects, users, projectMembers, projectAreas } from "@/db/schema";
-import { desc, eq, and, or, isNull, inArray, ne, asc } from "drizzle-orm";
+import { desc, eq, and, or, isNull, isNotNull, inArray, ne, asc } from "drizzle-orm";
 import EventsView from "@/components/events/EventsView";
 import { hasPermission } from "@/lib/permissions";
 import { getCreatableIISEEventTypes } from "@/server/services/event-permissions.service";
@@ -30,7 +30,7 @@ export default async function EventsPage() {
     let eventsData: any[] = [];
     let areasList: any[] = [];
     let userAreaName: string | null = null;
-    let directorProjectMemberships: ProjectMembershipContext[] = [];
+    let userProjectMemberships: ProjectMembershipContext[] = [];
 
     // Common `with` for all event queries (includes invitees for avatar display)
     const eventWith = {
@@ -45,26 +45,44 @@ export default async function EventsPage() {
         }
     } as const;
 
-    const hasGlobalManage = hasPermission(role, "event:manage");
+    const canManageAll = hasPermission(role, "event:manage_all", session.user.customPermissions);
+    const canManageOwn = hasPermission(role, "event:manage_own", session.user.customPermissions);
+    const canCreateGeneral = hasPermission(role, "event:create_general", session.user.customPermissions);
+    const canCreateAreaOwn = hasPermission(role, "event:create_area_own", session.user.customPermissions);
+    const canCreateAreaAny = hasPermission(role, "event:create_area_any", session.user.customPermissions);
 
     if (activeSemester) {
-        const mdArea = await db.query.areas.findFirst({
-            where: eq(areas.isLeadershipArea, true),
-            columns: { id: true }
-        });
+        areasList = await db.select({ id: areas.id, name: areas.name }).from(areas);
 
-        // A. Full-access admins (event:manage): see ALL events, ALL areas
-        if (hasGlobalManage) {
+        // Build project memberships for scoped project visibility
+        if (userId) {
+            const memberships = await db.query.projectMembers.findMany({
+                where: eq(projectMembers.userId, userId),
+                with: {
+                    project: { columns: { id: true, semesterId: true } },
+                    projectRole: { columns: { canViewAllAreaEvents: true, canCreateEvents: true } },
+                }
+            });
+            const activeMemberships = memberships.filter(m => m.project?.semesterId === activeSemester.id);
+            userProjectMemberships = activeMemberships.map(m => ({
+                projectId: m.project!.id,
+                projectAreaId: m.projectAreaId,
+                canViewAllAreaEvents: m.projectRole?.canViewAllAreaEvents ?? false,
+                canCreateEvents: m.projectRole?.canCreateEvents ?? false,
+            }));
+        }
+
+        const projectIds = userProjectMemberships.map(m => m.projectId);
+
+        // A. Global managers can see all events in active semester
+        if (canManageAll) {
             eventsData = await db.query.events.findMany({
                 where: eq(events.semesterId, activeSemester.id),
                 orderBy: [desc(events.date)],
                 with: eventWith
             });
-            areasList = await db.select({ id: areas.id, name: areas.name }).from(areas);
-        }
-
-        // B. Director/Subdirector: scoped view — General + own area + MD + their PROJECT events
-        else if (role === "DIRECTOR" || role === "SUBDIRECTOR") {
+        } else {
+            // B. Scoped visibility for non-global managers (permission-based, no role hardcode)
             if (currentAreaId) {
                 const areaObj = await db.query.areas.findFirst({
                     where: eq(areas.id, currentAreaId),
@@ -73,46 +91,50 @@ export default async function EventsPage() {
                 if (areaObj) userAreaName = areaObj.name;
             }
 
-            // Fetch director's project memberships (with role flags)
-            if (userId) {
-                const memberships = await db.query.projectMembers.findMany({
-                    where: eq(projectMembers.userId, userId),
-                    with: {
-                        project: { columns: { id: true, semesterId: true } },
-                        projectRole: { columns: { canViewAllAreaEvents: true, canCreateEvents: true } },
-                    }
+            const visibilityConditions = [eq(events.createdById, userId)];
+
+            // IISE general events
+            if (canCreateGeneral) {
+                visibilityConditions.push(and(
+                    eq(events.eventScope, "IISE"),
+                    isNull(events.targetAreaId)
+                ));
+            }
+
+            // IISE own-area events
+            if (currentAreaId && (canManageOwn || canCreateAreaOwn)) {
+                visibilityConditions.push(and(
+                    eq(events.eventScope, "IISE"),
+                    eq(events.targetAreaId, currentAreaId)
+                ));
+            }
+
+            // IISE any-area visibility
+            if (canCreateAreaAny) {
+                visibilityConditions.push(and(
+                    eq(events.eventScope, "IISE"),
+                    isNotNull(events.targetAreaId)
+                ));
+            }
+
+            // Project events in projects where user is member
+            if (projectIds.length > 0) {
+                visibilityConditions.push(and(
+                    eq(events.eventScope, "PROJECT"),
+                    inArray(events.projectId, projectIds)
+                ));
+            }
+
+            if (visibilityConditions.length > 0) {
+                eventsData = await db.query.events.findMany({
+                    where: and(
+                        eq(events.semesterId, activeSemester.id),
+                        or(...visibilityConditions)
+                    ),
+                    orderBy: [desc(events.date)],
+                    with: eventWith
                 });
-                const activeMemberships = memberships.filter(m => m.project?.semesterId === activeSemester.id);
-                // IISE Directors/Subdirectors see ALL project area events (admin context)
-                directorProjectMemberships = activeMemberships.map(m => ({
-                    projectId: m.project!.id,
-                    projectAreaId: m.projectAreaId,
-                    canViewAllAreaEvents: true,
-                    canCreateEvents: m.projectRole?.canCreateEvents ?? false,
-                }));
             }
-
-            const directorProjectIds = directorProjectMemberships.map(m => m.projectId);
-
-            const visibilityConditions = [
-                isNull(events.targetAreaId),
-                eq(events.targetAreaId, currentAreaId || "impossible_id")
-            ];
-            if (mdArea) {
-                visibilityConditions.push(eq(events.targetAreaId, mdArea.id));
-            }
-            for (const pid of directorProjectIds) {
-                visibilityConditions.push(eq(events.projectId, pid));
-            }
-
-            eventsData = await db.query.events.findMany({
-                where: and(
-                    eq(events.semesterId, activeSemester.id),
-                    or(...visibilityConditions)
-                ),
-                orderBy: [desc(events.date)],
-                with: eventWith
-            });
         }
     }
 
@@ -122,8 +144,8 @@ export default async function EventsPage() {
         userRole: role,
         userAreaId: currentAreaId,
         customPermissions: session.user.customPermissions,
-        projectMemberships: directorProjectMemberships,
-        hasGlobalManage,
+        projectMemberships: userProjectMemberships,
+        hasGlobalManage: canManageAll,
     };
     eventsData = await prepareEventsForClient(eventsData, visibilityCtx);
 

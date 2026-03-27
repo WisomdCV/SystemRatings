@@ -7,20 +7,32 @@ import { ROLES } from "@/lib/permissions";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { Search, Filter, Check, X, Minus } from "lucide-react";
 
+function getPermissionDomain(permission: string): string {
+    return permission.split(/[:.]/)[0] || permission;
+}
+
+function getPermissionAction(permission: string): string {
+    return permission.split(/[:.]/)[1] || permission;
+}
+
 // Human-readable short labels for permissions
 const SHORT_LABELS: Record<string, string> = {
-    "event:create": "Crear",
-    "event:manage": "Gestionar",
     "event:create_general": "General",
-    "event:create_area": "Área",
-    "event:create_individual": "Individual",
-    "attendance:take": "Tomar",
-    "attendance:review": "Revisar",
-    "grade:assign": "Asignar",
-    "grade:view_sheet": "Ver hoja",
+    "event:create_area_own": "Área propia",
+    "event:create_area_any": "Cualquier área",
+    "event:create_meeting": "Reunión",
+    "event:manage_own": "Gestionar propio",
+    "event:manage_all": "Gestionar todo",
+    "attendance:take_own_area": "Tomar propia",
+    "attendance:take_all": "Tomar todo",
+    "attendance:review_own_area": "Revisar propia",
+    "attendance:review_all": "Revisar todo",
+    "grade:assign_own_area": "Asignar propia",
+    "grade:assign_all": "Asignar todo",
+    "grade:view_own_area": "Ver propia",
+    "grade:view_all": "Ver todo",
     "pillar:manage": "Gestionar",
     "semester:manage": "Gestionar",
-    "semester:create_first": "1er Ciclo",
     "user:manage": "Gestionar",
     "area:manage": "Gestionar",
     "project:create": "Crear",
@@ -45,7 +57,7 @@ export default function PermissionMatrix({ users, allPermissions }: PermissionMa
     const permsByCategory = useMemo(() => {
         const map = new Map<string, string[]>();
         for (const p of allPermissions) {
-            const cat = p.split(":")[0];
+            const cat = getPermissionDomain(p);
             if (!map.has(cat)) map.set(cat, []);
             map.get(cat)!.push(p);
         }
@@ -73,7 +85,7 @@ export default function PermissionMatrix({ users, allPermissions }: PermissionMa
 
     const filteredPermissions = useMemo(() => {
         if (permFilter === "ALL") return allPermissions;
-        return allPermissions.filter((p) => p.startsWith(permFilter + ":"));
+        return allPermissions.filter((p) => getPermissionDomain(p) === permFilter);
     }, [allPermissions, permFilter]);
 
     return (
@@ -156,10 +168,10 @@ export default function PermissionMatrix({ users, allPermissions }: PermissionMa
                                 >
                                     <div className="flex flex-col items-center gap-0.5">
                                         <span className="text-[9px] text-meteorite-400 uppercase">
-                                            {perm.split(":")[0]}
+                                            {getPermissionDomain(perm)}
                                         </span>
                                         <span className="truncate max-w-[64px]">
-                                            {SHORT_LABELS[perm] || perm.split(":")[1]}
+                                            {SHORT_LABELS[perm] || getPermissionAction(perm)}
                                         </span>
                                     </div>
                                 </th>

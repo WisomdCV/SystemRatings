@@ -32,7 +32,7 @@ export const PERMISSIONS = {
     "event:create_general":    ["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER"],
     "event:create_area_own":   ["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER", "DIRECTOR", "SUBDIRECTOR"],
     "event:create_area_any":   ["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER"],
-    "event:create_meeting":    ["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER", "DIRECTOR", "SUBDIRECTOR"],
+    "event:create_meeting":    ["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER"],
     "event:manage_own":        ["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER", "DIRECTOR", "SUBDIRECTOR"],
     "event:manage_all":        ["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER"],
 
@@ -43,8 +43,10 @@ export const PERMISSIONS = {
     "attendance:review_all":      ["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER"],
 
     // --- Calificaciones ---
-    "grade:assign":     ["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER", "DIRECTOR"],
-    "grade:view_sheet": ["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER", "DIRECTOR", "SUBDIRECTOR"],
+    "grade:assign_own_area": ["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER"],
+    "grade:assign_all":      ["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER"],
+    "grade:view_own_area":   ["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER"],
+    "grade:view_all":        ["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER"],
 
     // --- Pilares ---
     "pillar:manage": ["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER"],

@@ -2,20 +2,28 @@
 
 import { auth } from "@/server/auth";
 import { db } from "@/db";
-import { hasPermission, isAdmin, isDirectorLevel } from "@/lib/permissions";
-import { users, gradeDefinitions, grades, semesters, areas, kpiMonthlySummaries } from "@/db/schema";
-import { eq, and, ne, desc, asc, inArray } from "drizzle-orm";
+import { hasPermission } from "@/lib/permissions";
+import { users, gradeDefinitions, grades, semesters, kpiMonthlySummaries } from "@/db/schema";
+import { eq, and, ne, asc, inArray } from "drizzle-orm";
 
 export async function getGradingSheetAction() {
     try {
         const session = await auth();
         if (!session?.user) return { success: false, error: "No autorizado" };
 
-        const { role, currentAreaId, id: userId } = session.user;
-        const isDirector = isDirectorLevel(role);
-        const isPresidentOrDev = isAdmin(role);
+        const role = session.user.role || "";
+        const currentAreaId = session.user.currentAreaId;
+        const userId = session.user.id;
+        const canViewOwnArea = hasPermission(role, "grade:view_own_area", session.user.customPermissions);
+        const canViewAll = hasPermission(role, "grade:view_all", session.user.customPermissions);
+        const canAssignOwnArea = hasPermission(role, "grade:assign_own_area", session.user.customPermissions);
+        const canAssignAll = hasPermission(role, "grade:assign_all", session.user.customPermissions);
 
-        if (!currentAreaId && !isPresidentOrDev) {
+        if (!canViewOwnArea && !canViewAll) {
+            return { success: false, error: "No tienes permisos para ver calificaciones." };
+        }
+
+        if (!canViewAll && !currentAreaId) {
             return { success: false, error: "No tienes un área asignada para calificar." };
         }
 
@@ -36,16 +44,11 @@ export async function getGradingSheetAction() {
             where: eq(gradeDefinitions.semesterId, activeSemester.id),
         });
 
-        // 3. Get Members to Grade
-        // If Director/Sub: Members of my area (excluding myself if I'm in the list? usually Directors are not graded by themselves on Area, but maybe by President).
-        // Logic: Get users where currentAreaId = myArea AND role != 'DEV'.
+        // 3. Get members to grade
+        let targetUsers: Awaited<ReturnType<typeof db.query.users.findMany>>;
 
-        let targetUsersQuery;
-
-        if (isPresidentOrDev) {
-            // President sees EVERYONE (or we could add filters later)
-            // For V1 table, let's return all active members grouped by Area in Frontend
-            targetUsersQuery = db.query.users.findMany({
+        if (canViewAll) {
+            targetUsers = await db.query.users.findMany({
                 where: and(
                     ne(users.role, "DEV"),
                     eq(users.status, "ACTIVE")
@@ -54,8 +57,7 @@ export async function getGradingSheetAction() {
                 orderBy: [asc(users.currentAreaId), asc(users.name)]
             });
         } else {
-            // Director: Members of MY area
-            targetUsersQuery = db.query.users.findMany({
+            targetUsers = await db.query.users.findMany({
                 where: and(
                     eq(users.currentAreaId, currentAreaId!), // Validated above
                     ne(users.role, "DEV"),
@@ -68,39 +70,44 @@ export async function getGradingSheetAction() {
             });
         }
 
-        const targetUsers = await targetUsersQuery;
+        const visibleUserIds = targetUsers.map(u => u.id);
 
         // 4. Get Existing Grades for the visible users in this semester
         // We can optimize this by fetching only grades of these users
         // But for < 100 users, finding all grades in semester is fine.
-        const existingGrades = await db.query.grades.findMany({
-            with: {
-                definition: true
-            },
-            where: (grades, { exists, and, eq }) => and(
-                // Filter grades only for the active semester's pillars
-                exists(
-                    db.select()
-                        .from(gradeDefinitions)
-                        .where(and(
-                            eq(gradeDefinitions.id, grades.definitionId),
-                            eq(gradeDefinitions.semesterId, activeSemester.id)
-                        ))
+        const existingGrades = visibleUserIds.length === 0
+            ? []
+            : await db.query.grades.findMany({
+                with: {
+                    definition: true
+                },
+                where: (grades, { exists, and, eq, inArray }) => and(
+                    inArray(grades.userId, visibleUserIds),
+                    // Filter grades only for the active semester's pillars
+                    exists(
+                        db.select()
+                            .from(gradeDefinitions)
+                            .where(and(
+                                eq(gradeDefinitions.id, grades.definitionId),
+                                eq(gradeDefinitions.semesterId, activeSemester.id)
+                            ))
+                    )
                 )
-            )
-        });
+            });
 
         // 5. Get KPI Summaries
         // We want the LATEST summary for this semester (or current month? The requirement implies "The KPI").
         // Since we are creating one-per-month logic in service, let's just grab the one with highest ID or check logical grouping.
         // Actually, for "Semester Grading", we might want the accumulative. But for V1, we saved to `month: currentMonth`.
         // Let's fetch ALL summaries for this semester and these users, and maybe map them.
-        const kpis = await db.query.kpiMonthlySummaries.findMany({
-            where: and(
-                eq(kpiMonthlySummaries.semesterId, activeSemester.id),
-                inArray(kpiMonthlySummaries.userId, targetUsers.map(u => u.id))
-            )
-        });
+        const kpis = visibleUserIds.length === 0
+            ? []
+            : await db.query.kpiMonthlySummaries.findMany({
+                where: and(
+                    eq(kpiMonthlySummaries.semesterId, activeSemester.id),
+                    inArray(kpiMonthlySummaries.userId, visibleUserIds)
+                )
+            });
 
         const kpiMap: Record<string, number> = {};
         kpis.forEach(k => {
@@ -133,7 +140,13 @@ export async function getGradingSheetAction() {
                 users: targetUsers,
                 grades: gradesMap,
                 kpis: kpiMap,
-                currentUserRole: role
+                currentUserRole: role,
+                permissions: {
+                    canViewOwnArea,
+                    canViewAll,
+                    canAssignOwnArea,
+                    canAssignAll,
+                }
             }
         };
 

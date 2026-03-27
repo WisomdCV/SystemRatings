@@ -2,8 +2,9 @@ import { authFresh } from "@/server/auth-fresh";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
 import { events, semesters, areas, users, projectMembers, projectAreas, projects } from "@/db/schema";
-import { desc, eq, and, or, isNull, ne, asc } from "drizzle-orm";
+import { desc, eq, and, or, isNull, isNotNull, inArray, ne, asc } from "drizzle-orm";
 import EventsView from "@/components/events/EventsView";
+import { hasPermission } from "@/lib/permissions";
 import { getCreatableIISEEventTypes } from "@/server/services/event-permissions.service";
 import { prepareEventsForClient, type VisibilityContext, type ProjectMembershipContext } from "@/server/services/event-visibility.service";
 
@@ -24,6 +25,12 @@ export default async function AgendaPage() {
     let userAreaName: string | null = null;
     let availableAreas: any[] = [];
 
+    const canManageAll = hasPermission(role, "event:manage_all", session.user.customPermissions);
+    const canManageOwn = hasPermission(role, "event:manage_own", session.user.customPermissions);
+    const canCreateGeneral = hasPermission(role, "event:create_general", session.user.customPermissions);
+    const canCreateAreaOwn = hasPermission(role, "event:create_area_own", session.user.customPermissions);
+    const canCreateAreaAny = hasPermission(role, "event:create_area_any", session.user.customPermissions);
+
     if (activeSemester) {
         // Fetch Area Name if exists
         if (currentAreaId) {
@@ -34,15 +41,7 @@ export default async function AgendaPage() {
             if (areaObj) userAreaName = areaObj.name;
         }
 
-        // IISE events: General + user's area
-        const iiseConditions = [isNull(events.targetAreaId)];
-        if (currentAreaId) {
-            iiseConditions.push(eq(events.targetAreaId, currentAreaId));
-        }
-
-        // Also include PROJECT events for user's projects
         let projectIds: string[] = [];
-        // Build project memberships for visibility context
         let userProjectMemberships: ProjectMembershipContext[] = [];
         if (userId) {
             const memberships = await db.query.projectMembers.findMany({
@@ -62,33 +61,66 @@ export default async function AgendaPage() {
             }));
         }
 
-        // Build combined query conditions
-        const allConditions = [...iiseConditions];
-        // Add project events if user has projects
-        if (projectIds.length > 0) {
-            for (const pid of projectIds) {
-                allConditions.push(eq(events.projectId, pid));
-            }
-        }
-
-        eventsData = await db.query.events.findMany({
-            where: and(
-                eq(events.semesterId, activeSemester.id),
-                or(...allConditions)
-            ),
-            orderBy: [desc(events.date)],
-            with: {
-                targetArea: true,
-                project: { columns: { id: true, name: true } },
-                targetProjectArea: { columns: { id: true, name: true } },
-                createdBy: { columns: { name: true, role: true } },
-                invitees: {
-                    with: {
-                        user: { columns: { id: true, name: true, image: true } }
-                    }
+        const eventWith = {
+            targetArea: true,
+            project: { columns: { id: true, name: true } },
+            targetProjectArea: { columns: { id: true, name: true } },
+            createdBy: { columns: { name: true, role: true } },
+            invitees: {
+                with: {
+                    user: { columns: { id: true, name: true, image: true } }
                 }
             }
-        });
+        } as const;
+
+        if (canManageAll) {
+            eventsData = await db.query.events.findMany({
+                where: eq(events.semesterId, activeSemester.id),
+                orderBy: [desc(events.date)],
+                with: eventWith,
+            });
+        } else {
+            const visibilityConditions = [eq(events.createdById, userId)];
+
+            if (canCreateGeneral) {
+                visibilityConditions.push(and(
+                    eq(events.eventScope, "IISE"),
+                    isNull(events.targetAreaId)
+                ));
+            }
+
+            if (currentAreaId && (canManageOwn || canCreateAreaOwn)) {
+                visibilityConditions.push(and(
+                    eq(events.eventScope, "IISE"),
+                    eq(events.targetAreaId, currentAreaId)
+                ));
+            }
+
+            if (canCreateAreaAny) {
+                visibilityConditions.push(and(
+                    eq(events.eventScope, "IISE"),
+                    isNotNull(events.targetAreaId)
+                ));
+            }
+
+            if (projectIds.length > 0) {
+                visibilityConditions.push(and(
+                    eq(events.eventScope, "PROJECT"),
+                    inArray(events.projectId, projectIds)
+                ));
+            }
+
+            if (visibilityConditions.length > 0) {
+                eventsData = await db.query.events.findMany({
+                    where: and(
+                        eq(events.semesterId, activeSemester.id),
+                        or(...visibilityConditions)
+                    ),
+                    orderBy: [desc(events.date)],
+                    with: eventWith,
+                });
+            }
+        }
 
         // Centralized visibility + permission enrichment
         const visibilityCtx: VisibilityContext = {
@@ -97,6 +129,7 @@ export default async function AgendaPage() {
             userAreaId: currentAreaId,
             customPermissions: session.user.customPermissions,
             projectMemberships: userProjectMemberships,
+            hasGlobalManage: canManageAll,
         };
         eventsData = await prepareEventsForClient(eventsData, visibilityCtx);
     }
