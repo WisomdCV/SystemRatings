@@ -1,0 +1,15 @@
+# Normalizar finales de línea a LF para todos los archivos de texto
+* text=auto eol=lf
+
+# Excepciones para archivos binarios
+*.jpg binary
+*.jpeg binary
+*.png binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.svg text
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary
