@@ -164,6 +164,12 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
         { label: "Mi Perfil", icon: UserIcon, href: "/dashboard/profile", color: "bg-orange-100/50 text-orange-700 border-orange-200" }
     ];
 
+    // Only truly pending justifications (action required by the user).
+    const actionableJustificationsCount = pendingJustifications.filter((item: any) =>
+        (item.status === "ABSENT" || item.status === "LATE") &&
+        (item.justificationStatus === "NONE" || item.justificationStatus === "REJECTED")
+    ).length;
+
     const getEventStatusLabel = (event: any) => {
         if (!event) return { label: "", style: "" };
 
@@ -599,7 +605,7 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
                             {greeting}, {user.name?.split(" ")[0]} 👋
                         </h1>
                         <p className="text-sm text-meteorite-600 font-medium">
-                            Tienes {upcomingEvents.length} eventos y {pendingJustifications.length} justificaciones pendientes
+                            Tienes {upcomingEvents.length} eventos y {actionableJustificationsCount} justificaciones pendientes
                         </p>
                     </div>
 
