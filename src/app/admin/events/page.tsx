@@ -288,6 +288,7 @@ export default async function EventsPage() {
             projectAreas={allProjectAreas}
             projectMembersMap={projectMembersMap}
             canTargetAnyArea={canCreateAreaAny}
+            attendanceRouteMode="admin"
         />
     );
 }

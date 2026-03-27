@@ -245,6 +245,7 @@ export default async function AgendaPage() {
             projectAreas={allProjectAreas}
             projectMembersMap={projectMembersMap}
             canTargetAnyArea={canCreateAreaAny}
+            attendanceRouteMode="dashboard"
         />
     );
 }

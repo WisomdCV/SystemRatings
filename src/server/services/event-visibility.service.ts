@@ -10,6 +10,7 @@
  */
 
 import { canManageEvent as serverCanManage } from "./event-permissions.service";
+import { hasPermission } from "@/lib/permissions";
 
 // =============================================================================
 // Types
@@ -131,7 +132,17 @@ export async function enrichEventsWithPermissions<T extends {
             }
         );
 
-        const canTakeAtt = canManage && event.tracksAttendance !== false;
+        let canTakeAtt = false;
+        if (event.tracksAttendance !== false) {
+            if (hasPermission(ctx.userRole, "attendance:take_all", ctx.customPermissions)) {
+                canTakeAtt = true;
+            } else if (hasPermission(ctx.userRole, "attendance:take_own_area", ctx.customPermissions)) {
+                // Keep aligned with attendance.actions.ts own-area constraints.
+                if (event.targetAreaId && event.targetAreaId === ctx.userAreaId && canManage) {
+                    canTakeAtt = true;
+                }
+            }
+        }
 
         result.push({
             ...event,

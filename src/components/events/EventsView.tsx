@@ -93,6 +93,7 @@ interface EventsViewProps {
     users?: { id: string; name: string | null; image: string | null }[];
     projectMembersMap?: Record<string, { id: string; name: string | null; image: string | null }[]>;
     canTargetAnyArea?: boolean;
+    attendanceRouteMode?: "admin" | "dashboard";
 }
 
 export default function EventsView({
@@ -111,6 +112,7 @@ export default function EventsView({
     users,
     projectMembersMap,
     canTargetAnyArea = false,
+    attendanceRouteMode = "admin",
 }: EventsViewProps) {
     const router = useRouter();
     const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
@@ -265,6 +267,9 @@ export default function EventsView({
                                     const canEdit = !readOnly && (event._permissions?.canEdit ?? false);
                                     const canDelete = !readOnly && (event._permissions?.canDelete ?? false);
                                     const canAttendance = !readOnly && (event._permissions?.canTakeAttendance ?? false);
+                                    const attendanceHref = attendanceRouteMode === "dashboard"
+                                        ? `/dashboard/attendance/${event.id}`
+                                        : `/admin/events/${event.id}/attendance`;
 
                                     return (
                                         <EventCardGrid
@@ -276,6 +281,7 @@ export default function EventsView({
                                             canEdit={canEdit}
                                             canDelete={canDelete}
                                             canAttendance={canAttendance}
+                                            attendanceHref={attendanceHref}
                                         />
                                     );
                                 })}
@@ -289,6 +295,9 @@ export default function EventsView({
                                     const canEdit = !readOnly && (event._permissions?.canEdit ?? false);
                                     const canDelete = !readOnly && (event._permissions?.canDelete ?? false);
                                     const canAttendance = !readOnly && (event._permissions?.canTakeAttendance ?? false);
+                                    const attendanceHref = attendanceRouteMode === "dashboard"
+                                        ? `/dashboard/attendance/${event.id}`
+                                        : `/admin/events/${event.id}/attendance`;
 
                                     return (
                                         <EventCardList
@@ -300,6 +309,7 @@ export default function EventsView({
                                             canEdit={canEdit}
                                             canDelete={canDelete}
                                             canAttendance={canAttendance}
+                                            attendanceHref={attendanceHref}
                                         />
                                     );
                                 })}
@@ -361,9 +371,10 @@ interface EventCardProps {
     canEdit: boolean;
     canDelete: boolean;
     canAttendance: boolean;
+    attendanceHref: string;
 }
 
-function EventCardGrid({ event, isDeleting, onEdit, onDelete, canEdit, canDelete, canAttendance }: EventCardProps) {
+function EventCardGrid({ event, isDeleting, onEdit, onDelete, canEdit, canDelete, canAttendance, attendanceHref }: EventCardProps) {
     const isGeneral = !event.targetArea;
     const isBoard = event.targetArea?.isLeadershipArea === true;
     const dateObj = new Date(event.date);
@@ -450,7 +461,7 @@ function EventCardGrid({ event, isDeleting, onEdit, onDelete, canEdit, canDelete
                         </a>
                     )}
                     {canAttendance && (
-                        <Link href={`/admin/events/${event.id}/attendance`} className="flex items-center px-3 py-2 bg-white border border-meteorite-200 hover:border-meteorite-400 text-meteorite-700 text-xs font-bold rounded-xl transition-all">
+                        <Link href={attendanceHref} className="flex items-center px-3 py-2 bg-white border border-meteorite-200 hover:border-meteorite-400 text-meteorite-700 text-xs font-bold rounded-xl transition-all">
                             <Zap className="w-3.5 h-3.5 mr-1 text-meteorite-500" /> Asistencia
                         </Link>
                     )}
@@ -460,7 +471,7 @@ function EventCardGrid({ event, isDeleting, onEdit, onDelete, canEdit, canDelete
     );
 }
 
-function EventCardList({ event, isDeleting, onEdit, onDelete, canEdit, canDelete, canAttendance }: EventCardProps) {
+function EventCardList({ event, isDeleting, onEdit, onDelete, canEdit, canDelete, canAttendance, attendanceHref }: EventCardProps) {
     const isGeneral = !event.targetArea;
     const isBoard = event.targetArea?.isLeadershipArea === true;
     const dateObj = new Date(event.date);
@@ -545,7 +556,7 @@ function EventCardList({ event, isDeleting, onEdit, onDelete, canEdit, canDelete
                         </a>
                     )}
                     {canAttendance && (
-                        <Link href={`/admin/events/${event.id}/attendance`} className="flex items-center px-4 py-2 bg-white border border-meteorite-200 hover:border-meteorite-400 text-meteorite-700 text-xs font-bold rounded-xl transition-all">
+                        <Link href={attendanceHref} className="flex items-center px-4 py-2 bg-white border border-meteorite-200 hover:border-meteorite-400 text-meteorite-700 text-xs font-bold rounded-xl transition-all">
                             Asistencia
                         </Link>
                     )}

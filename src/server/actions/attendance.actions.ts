@@ -176,6 +176,7 @@ export async function saveAttendanceAction(eventId: string, records: { userId: s
         await batchUpsertAttendanceDAO(eventId, records);
 
         revalidatePath(`/admin/events/${eventId}/attendance`);
+        revalidatePath(`/dashboard/attendance/${eventId}`);
 
         return { success: true, message: "Asistencia guardada correctamente" };
 
