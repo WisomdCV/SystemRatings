@@ -287,6 +287,7 @@ export default async function EventsPage() {
             projects={userProjects}
             projectAreas={allProjectAreas}
             projectMembersMap={projectMembersMap}
+            canTargetAnyArea={canCreateAreaAny}
         />
     );
 }

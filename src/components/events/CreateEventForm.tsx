@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { UserAvatar } from "@/components/ui/user-avatar";
@@ -48,6 +48,7 @@ interface CreateEventFormProps {
     projectMembersMap?: Record<string, { id: string; name: string | null; image: string | null }[]>;
     defaultProjectId?: string;
     userProjectAreaName?: string | null;
+    canTargetAnyArea?: boolean;
 }
 
 export default function CreateEventForm({
@@ -67,6 +68,7 @@ export default function CreateEventForm({
     projectMembersMap = {},
     defaultProjectId,
     userProjectAreaName,
+    canTargetAnyArea = false,
 }: CreateEventFormProps) {
     const router = useRouter();
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -85,6 +87,9 @@ export default function CreateEventForm({
         form.setValue("inviteeUserIds", ids, { shouldValidate: false });
     };
 
+    const allowedTypes = availableTypes.length > 0 ? availableTypes : ["GENERAL"];
+    const fallbackEventType = allowedTypes.includes("GENERAL") ? "GENERAL" : allowedTypes[0];
+
     const defaultValues = isEditing && initialData ? {
         title: initialData.title,
         description: initialData.description || "",
@@ -102,8 +107,8 @@ export default function CreateEventForm({
         title: "",
         description: "",
         eventScope: defaultProjectId ? "PROJECT" : "IISE",
-        eventType: "GENERAL",
-        targetAreaId: userRole === "DIRECTOR" || userRole === "SUBDIRECTOR" ? (userAreaId || "") : "",
+        eventType: fallbackEventType,
+        targetAreaId: (!canTargetAnyArea && fallbackEventType === "AREA") ? (userAreaId || "") : "",
         projectId: defaultProjectId || "",
         targetProjectAreaId: "",
         date: undefined,
@@ -122,7 +127,28 @@ export default function CreateEventForm({
     const watchType = form.watch("eventType") || "GENERAL";
     const isVirtual = form.watch("isVirtual");
 
-    const canSelectArea = ["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER"].includes(userRole);
+    const canSelectArea = canTargetAnyArea;
+
+    // Keep selected type compatible with current allowed types.
+    useEffect(() => {
+        if (isEditing) return;
+        const currentType = form.getValues("eventType");
+        if (!allowedTypes.includes(currentType as string)) {
+            form.setValue("eventType", fallbackEventType as any, { shouldValidate: false });
+        }
+    }, [isEditing, allowedTypes, fallbackEventType, form]);
+
+    // For own-area creators, force area target when creating AREA events.
+    useEffect(() => {
+        if (isEditing) return;
+        if (watchScope === "IISE" && watchType === "AREA" && !canSelectArea) {
+            form.setValue("targetAreaId", userAreaId || "", { shouldValidate: false });
+        }
+        if (watchType === "INDIVIDUAL_GROUP") {
+            form.setValue("targetAreaId", "", { shouldValidate: false });
+            form.setValue("targetProjectAreaId", "", { shouldValidate: false });
+        }
+    }, [isEditing, watchScope, watchType, canSelectArea, userAreaId, form]);
 
     const onSubmit = async (data: CreateEventDTO) => {
         setIsSubmitting(true);
@@ -277,7 +303,7 @@ export default function CreateEventForm({
                                     onClick={() => {
                                         form.setValue("eventScope", scope as any);
                                         // Reset type when switching scope
-                                        form.setValue("eventType", "GENERAL" as any);
+                                        form.setValue("eventType", fallbackEventType as any);
                                     }}
                                     className={`p-3 rounded-xl border-2 transition-all text-left flex items-center gap-3 ${isActive
                                         ? `border-${cfg.color}-500 bg-${cfg.color}-50 shadow-md`

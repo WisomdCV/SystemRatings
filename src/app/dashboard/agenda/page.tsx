@@ -244,6 +244,7 @@ export default async function AgendaPage() {
             projects={userProjects}
             projectAreas={allProjectAreas}
             projectMembersMap={projectMembersMap}
+            canTargetAnyArea={canCreateAreaAny}
         />
     );
 }

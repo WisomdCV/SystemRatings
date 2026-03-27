@@ -92,6 +92,7 @@ interface EventsViewProps {
     projectAreas?: { id: string; name: string }[];
     users?: { id: string; name: string | null; image: string | null }[];
     projectMembersMap?: Record<string, { id: string; name: string | null; image: string | null }[]>;
+    canTargetAnyArea?: boolean;
 }
 
 export default function EventsView({
@@ -109,6 +110,7 @@ export default function EventsView({
     projectAreas,
     users,
     projectMembersMap,
+    canTargetAnyArea = false,
 }: EventsViewProps) {
     const router = useRouter();
     const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
@@ -211,6 +213,7 @@ export default function EventsView({
                                 projectAreas={projectAreas}
                                 users={users}
                                 projectMembersMap={projectMembersMap}
+                                canTargetAnyArea={canTargetAnyArea}
                             />
                         )}
                     </div>
@@ -336,6 +339,7 @@ export default function EventsView({
                                 projectAreas={projectAreas}
                                 users={users}
                                 projectMembersMap={projectMembersMap}
+                                canTargetAnyArea={canTargetAnyArea}
                             />
                         </div>
                     </div>

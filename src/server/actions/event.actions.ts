@@ -36,6 +36,13 @@ export async function createEventAction(input: CreateEventDTO) {
         const eventScope = data.eventScope as EventScope;
         const eventType = data.eventType as EventType;
 
+        // Individual/group meetings are invitee-driven, not area-target driven.
+        // Normalize hidden form leftovers so visibility is consistent for invitees.
+        if (eventType === "INDIVIDUAL_GROUP") {
+            data.targetAreaId = null;
+            data.targetProjectAreaId = null;
+        }
+
         if (eventScope === "IISE") {
             const canCreate = await canCreateIISEEvent(
                 {
@@ -208,6 +215,12 @@ export async function updateEventAction(eventId: string, input: UpdateEventDTO) 
             return { success: false, error: validated.error.issues[0].message };
         }
         const data = validated.data;
+
+        // Keep INDIVIDUAL_GROUP target fields normalized when editing.
+        if (data.eventType === "INDIVIDUAL_GROUP") {
+            data.targetAreaId = null;
+            data.targetProjectAreaId = null;
+        }
 
         // TIMEZONE FIX
         if (data.date) {

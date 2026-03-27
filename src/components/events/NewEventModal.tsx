@@ -16,6 +16,7 @@ interface NewEventModalProps {
     projectAreas?: { id: string; name: string }[];
     users?: { id: string; name: string | null; image: string | null }[];
     projectMembersMap?: Record<string, { id: string; name: string | null; image: string | null }[]>;
+    canTargetAnyArea?: boolean;
 }
 
 export default function NewEventModal({
@@ -29,6 +30,7 @@ export default function NewEventModal({
     projectAreas,
     users,
     projectMembersMap,
+    canTargetAnyArea = false,
 }: NewEventModalProps) {
     const [isOpen, setIsOpen] = useState(false);
 
@@ -75,6 +77,7 @@ export default function NewEventModal({
                                 projectAreas={projectAreas}
                                 users={users}
                                 projectMembersMap={projectMembersMap}
+                                canTargetAnyArea={canTargetAnyArea}
                             />
                         </div>
                     </div>
