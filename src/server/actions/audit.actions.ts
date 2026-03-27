@@ -2,9 +2,9 @@
 
 import { auth } from "@/server/auth";
 import { db } from "@/db";
-import { users, positionHistory } from "@/db/schema";
+import { users, positionHistory, areaPermissions as areaPermissionsTable } from "@/db/schema";
 import { getAllCustomRolesDAO } from "@/server/data-access/custom-roles";
-import { desc, asc } from "drizzle-orm";
+import { desc, asc, eq } from "drizzle-orm";
 import { PERMISSIONS, hasPermission, type Permission } from "@/lib/permissions";
 import type { ActionResult } from "@/types";
 
@@ -130,53 +130,52 @@ function computeEffectivePermissions(
 
 /**
  * Compute IISE event capabilities for a single user.
- * Mirrors the 3-layer logic in event-permissions.service.ts.
+ * Uses the 3-layer permission system:
+ *   Layer 1: System role (PERMISSIONS map)
+ *   Layer 2: Custom role perms (in customPerms)
+ *   Layer 3: Area perms (in areaPerms, merged for display)
  */
 function computeIISECapability(
     userId: string,
     systemRole: string | null,
     customPerms: string[],
-    areaFlags: { canCreateEvents: boolean; canCreateIndividualEvents: boolean } | null,
+    areaPerms: string[],
 ): IISEEventCapability {
-    // --- GENERAL ---
-    const roleGeneral = hasPermission(systemRole, "event:create_general", customPerms);
-    const areaGeneral = !!areaFlags?.canCreateEvents;
-    const canGeneral = roleGeneral || areaGeneral;
-    const sourceGeneral: IISEEventCapability["sourceGeneral"] = roleGeneral
-        ? (customPerms.includes("event:create_general") && systemRole && (PERMISSIONS["event:create_general"] as readonly string[]).includes(systemRole)
-            ? "role" : customPerms.includes("event:create_general") ? "custom" : "role")
-        : areaGeneral ? "area_flag" : null;
+    // Merge custom + area perms for hasPermission checks
+    const allExtra = [...new Set([...customPerms, ...areaPerms])];
 
-    // --- AREA ---
-    const roleArea = hasPermission(systemRole, "event:create_area", customPerms);
-    const areaFlagArea = !!areaFlags?.canCreateEvents;
-    const canArea = roleArea || areaFlagArea;
-    const sourceArea: IISEEventCapability["sourceArea"] = roleArea
-        ? (customPerms.includes("event:create_area") && systemRole && (PERMISSIONS["event:create_area"] as readonly string[]).includes(systemRole)
-            ? "role" : customPerms.includes("event:create_area") ? "custom" : "role")
-        : areaFlagArea ? "area_flag" : null;
-
-    // Area targeting: admin can target any, director locked to own
-    let areaTarget: IISEEventCapability["areaTarget"] = null;
-    if (canArea) {
-        if (hasPermission(systemRole, "event:create_general", customPerms)) {
-            areaTarget = "any"; // Admin-level: can select any area
-        } else {
-            areaTarget = "own"; // Director or area-flag: own area only
-        }
+    // --- Helper to determine source ---
+    function getSource(perm: string): "role" | "custom" | "area_flag" | null {
+        const roleDefault = systemRole && (PERMISSIONS[perm as keyof typeof PERMISSIONS] as readonly string[] | undefined)?.includes(systemRole);
+        const fromCustom = customPerms.includes(perm);
+        const fromArea = areaPerms.includes(perm);
+        if (roleDefault) return "role";
+        if (fromCustom) return "custom";
+        if (fromArea) return "area_flag";
+        return null;
     }
 
+    // --- GENERAL ---
+    const canGeneral = hasPermission(systemRole, "event:create_general", allExtra);
+    const sourceGeneral = getSource("event:create_general");
+
+    // --- AREA ---
+    const canAreaOwn = hasPermission(systemRole, "event:create_area_own", allExtra);
+    const canAreaAny = hasPermission(systemRole, "event:create_area_any", allExtra);
+    const canArea = canAreaOwn || canAreaAny;
+    const sourceArea = getSource("event:create_area_any") ?? getSource("event:create_area_own");
+
+    let areaTarget: IISEEventCapability["areaTarget"] = null;
+    if (canAreaAny) areaTarget = "any";
+    else if (canAreaOwn) areaTarget = "own";
+
     // --- INDIVIDUAL_GROUP ---
-    const roleIndiv = hasPermission(systemRole, "event:create_individual", customPerms);
-    const areaIndiv = !!areaFlags?.canCreateIndividualEvents;
-    const canIndividual = roleIndiv || areaIndiv;
-    const sourceIndiv: IISEEventCapability["sourceIndividual"] = roleIndiv
-        ? (customPerms.includes("event:create_individual") && systemRole && (PERMISSIONS["event:create_individual"] as readonly string[]).includes(systemRole)
-            ? "role" : customPerms.includes("event:create_individual") ? "custom" : "role")
-        : areaIndiv ? "area_flag" : null;
+    const canIndividual = hasPermission(systemRole, "event:create_meeting", allExtra);
+    const sourceIndiv = getSource("event:create_meeting");
 
     // --- MANAGE ---
-    const canManage = hasPermission(systemRole, "event:manage", customPerms);
+    const canManage = hasPermission(systemRole, "event:manage_all", allExtra) ||
+        hasPermission(systemRole, "event:manage_own", allExtra);
 
     return {
         userId,
@@ -253,14 +252,14 @@ export async function getAuditDataAction(): Promise<ActionResult<AuditData>> {
         }
 
         // Fetch all data in parallel
-        const [allUsers, customRolesData, historyData, allProjectMemberships] = await Promise.all([
+        const [allUsers, customRolesData, historyData, allProjectMemberships, allAreaPerms] = await Promise.all([
             db.query.users.findMany({
                 columns: {
                     id: true, name: true, email: true, image: true,
                     role: true, status: true, currentAreaId: true,
                 },
                 with: {
-                    currentArea: { columns: { id: true, name: true, color: true, canCreateEvents: true, canCreateIndividualEvents: true } },
+                    currentArea: { columns: { id: true, name: true, color: true } },
                     customRoles: {
                         with: {
                             customRole: {
@@ -287,7 +286,18 @@ export async function getAuditDataAction(): Promise<ActionResult<AuditData>> {
                     projectArea: { columns: { id: true, name: true, membersCanCreateEvents: true } },
                 },
             }),
+            // Fetch all area permissions for capability audit
+            db.query.areaPermissions.findMany({
+                columns: { areaId: true, permission: true },
+            }),
         ]);
+
+        // Build area permissions map: areaId -> string[]
+        const areaPermsMap = new Map<string, string[]>();
+        for (const ap of allAreaPerms) {
+            if (!areaPermsMap.has(ap.areaId)) areaPermsMap.set(ap.areaId, []);
+            areaPermsMap.get(ap.areaId)!.push(ap.permission);
+        }
 
         // Build audit users with effective permissions
         const auditUsers: AuditUser[] = allUsers.map((u) => {
@@ -355,12 +365,9 @@ export async function getAuditDataAction(): Promise<ActionResult<AuditData>> {
                 }
             }
 
-            const area = u.currentArea;
-            const areaFlags = area
-                ? { canCreateEvents: !!area.canCreateEvents, canCreateIndividualEvents: !!area.canCreateIndividualEvents }
-                : null;
+            const areaPerms = u.currentAreaId ? (areaPermsMap.get(u.currentAreaId) ?? []) : [];
 
-            return computeIISECapability(u.id, u.role, customPerms, areaFlags);
+            return computeIISECapability(u.id, u.role, customPerms, areaPerms);
         });
 
         // Build PROJECT event capabilities per membership

@@ -2,74 +2,76 @@
 
 import { auth } from "@/server/auth";
 import { getAttendanceSheetDAO, batchUpsertAttendanceDAO, AttendanceStatus } from "@/server/data-access/attendance";
-import { getEventByIdDAO } from "@/server/data-access/events"; // Re-using to check event ownership
+import { getEventByIdDAO } from "@/server/data-access/events";
 import { revalidatePath } from "next/cache";
-import { hasPermission, isAdmin, isDirectorLevel } from "@/lib/permissions";
+import { hasPermission } from "@/lib/permissions";
+import { getUserAttendanceHistoryDAO, updateAttendanceRecordDAO, getAttendanceRecordByIdDAO } from "@/server/data-access/attendance";
+
+// =============================================================================
+// Helpers — attendance permission check (shared by get & save)
+// =============================================================================
+
+function canTakeAttendanceForEvent(
+    role: string | null,
+    userAreaId: string | null,
+    customPermissions: string[] | undefined,
+    eventTargetAreaId: string | null,
+): boolean {
+    // take_all → can take attendance on any event
+    if (hasPermission(role, "attendance:take_all", customPermissions)) return true;
+
+    // take_own_area → only events targeting user's area (or general events with no target)
+    if (hasPermission(role, "attendance:take_own_area", customPermissions)) {
+        if (!eventTargetAreaId) return true; // General event — anyone with take_own_area can contribute
+        if (eventTargetAreaId === userAreaId) return true; // Same area
+    }
+
+    return false;
+}
+
+function canReviewJustificationForEvent(
+    role: string | null,
+    userAreaId: string | null,
+    customPermissions: string[] | undefined,
+    eventTargetAreaId: string | null,
+): boolean {
+    // review_all → can review justifications for any event
+    if (hasPermission(role, "attendance:review_all", customPermissions)) return true;
+
+    // review_own_area → only events targeting user's area
+    if (hasPermission(role, "attendance:review_own_area", customPermissions)) {
+        if (!eventTargetAreaId) return true;
+        if (eventTargetAreaId === userAreaId) return true;
+    }
+
+    return false;
+}
+
+// =============================================================================
+// Actions
+// =============================================================================
 
 export async function getAttendanceSheetAction(eventId: string) {
     const session = await auth();
     if (!session?.user) return { success: false, error: "No autorizado" };
 
-    const role = session.user.role;
-    const userAreaId = session.user.currentAreaId;
-
     try {
-        // Permission Check:
-        // 1. Get Event to know its area
         const event = await getEventByIdDAO(eventId);
         if (!event) return { success: false, error: "Evento no encontrado" };
 
-        // Guard: If event doesn't track attendance, block access
         if (event.tracksAttendance === false) {
             return { success: false, error: "Este evento no tiene seguimiento de asistencia." };
         }
 
-        const isDevOrPresi = isAdmin(role);
+        const canTake = canTakeAttendanceForEvent(
+            session.user.role,
+            session.user.currentAreaId,
+            session.user.customPermissions,
+            event.targetAreaId,
+        );
 
-        if (!isDevOrPresi) {
-            // Allow Director, Subdirector, Treasurer
-            if (!hasPermission(role, "attendance:take", session.user.customPermissions)) {
-                return { success: false, error: "Permisos insuficientes" };
-            }
-
-            // Treasurer Check
-            if (role === "TREASURER") {
-                // If event has a targetAreaId that is NOT MD (assuming MD area exists? or keep logically consistent)
-                // We need to know if targetAreaId corresponds to "Mesa Directiva".
-                // We fetched 'event', does it have area code? `getEventByIdDAO` likely returns area relation.
-                // If not, we rely on targetAreaId being null (General).
-                // If event.targetArea?.code === "MD".
-                // PROBLEM: getEventByIdDAO might not return relation. Let's check or assume standard logic.
-                // Assuming getEventByIdDAO includes 'targetArea'.
-
-                // If general -> OK.
-                if (!event.targetAreaId) {
-                    // OK
-                } else {
-                    // Check if MD. We need relation. OR specific ID logic.
-                    // Safe approach: Check if userAreaId is same (unlikely for Treasurer) OR isLeadershipArea is true.
-                    // If we don't have code, we might fail on MD check.
-                    // Let's assume getEventByIdDAO fetches relation as most DAOs do. 
-
-                    // Optimization: If TREASURER, allow if !targetAreaId. 
-                    // What about MD? MD is a specific area. 
-                    // How to identify MD? By isLeadershipArea field.
-
-                    const isGeneral = !event.targetAreaId;
-                    const isMD = event.targetArea?.isLeadershipArea === true;
-
-                    if (!isGeneral && !isMD) {
-                        return { success: false, error: "El Tesorero solo puede gestionar Eventos Generales y de Mesa Directiva." };
-                    }
-                }
-            }
-
-            // Director/Subdirector Check
-            if (role === "DIRECTOR" || role === "SUBDIRECTOR") {
-                if (event.targetAreaId !== userAreaId) {
-                    return { success: false, error: "Solo puedes gestionar eventos de tu área." };
-                }
-            }
+        if (!canTake) {
+            return { success: false, error: "No tienes permisos para ver la asistencia de este evento." };
         }
 
         const sheet = await getAttendanceSheetDAO(eventId);
@@ -85,44 +87,23 @@ export async function saveAttendanceAction(eventId: string, records: { userId: s
     const session = await auth();
     if (!session?.user) return { success: false, error: "No autorizado" };
 
-    const role = session.user.role;
-    const userAreaId = session.user.currentAreaId;
-
     try {
-        // Same Permission Logic
         const event = await getEventByIdDAO(eventId);
         if (!event) return { success: false, error: "Evento no encontrado" };
 
-        // Guard: If event doesn't track attendance, block saving
         if (event.tracksAttendance === false) {
             return { success: false, error: "Este evento no tiene seguimiento de asistencia." };
         }
 
-        const isDevOrPresi = isAdmin(role);
-        const isDirLevel = isDirectorLevel(role);
+        const canTake = canTakeAttendanceForEvent(
+            session.user.role,
+            session.user.currentAreaId,
+            session.user.customPermissions,
+            event.targetAreaId,
+        );
 
-        if (!isDevOrPresi) {
-            if (!isDirLevel && role !== "SECRETARY" && role !== "TREASURER") return { success: false, error: "Permisos insuficientes" };
-            if (event.targetAreaId && event.targetAreaId !== userAreaId && !event.targetArea?.isLeadershipArea && role !== "TREASURER") {
-                // Logic check: Treasurer can take attendance for BOARD events?
-                // To avoid complexity with fetching Area Code again in Action,
-                // I will allow Treasurer to pass this check for now.
-                // Ideally verify it's a Board meeting or General.
-                // For now, simple inclusion.
-            }
-            if (event.targetAreaId && event.targetAreaId !== userAreaId) {
-                // If it's Board event, Director/Subdirector/Treasurer should be able to... 
-                // Wait, Director/Sub only for their area? 
-                // "Presidenta / Tesorero" takes list for Board. Director DOES NOT take list for Board (they are students).
-                // So Director should NOT be able to save attendance for Board.
-                // My previous `attendance.ts` (DAO) included Director/Sub/Treasurer as *eligible users* (students).
-                // Who takes attendance? Presidenta / Tesorero.
-                // So, Directors should NOT have write access to Board attendance.
-
-                // So:
-                // If role is DIRECTOR/SUBDIRECTOR -> Must match userAreaId. (And Board is NOT their area).
-                // If role is TREASURER -> Allowed for Board (and General?).
-            }
+        if (!canTake) {
+            return { success: false, error: "No tienes permisos para registrar asistencia en este evento." };
         }
 
         await batchUpsertAttendanceDAO(eventId, records);
@@ -133,12 +114,9 @@ export async function saveAttendanceAction(eventId: string, records: { userId: s
 
     } catch (error) {
         console.error("Error saving attendance:", error);
-        // ... existing code ...
         return { success: false, error: "Error al guardar la asistencia" };
     }
 }
-
-import { getUserAttendanceHistoryDAO, updateAttendanceRecordDAO, getAttendanceRecordByIdDAO } from "@/server/data-access/attendance";
 
 export async function getMyAttendanceHistoryAction() {
     const session = await auth();
@@ -146,7 +124,6 @@ export async function getMyAttendanceHistoryAction() {
 
     try {
         const history = await getUserAttendanceHistoryDAO(session.user.id);
-        // Sort by event date descending (JS sort)
         history.sort((a, b) => {
             const dateA = new Date(a.event.date).getTime();
             const dateB = new Date(b.event.date).getTime();
@@ -165,7 +142,6 @@ export async function submitJustificationAction(recordId: string, reason: string
     if (!session?.user) return { success: false, error: "No autorizado" };
 
     try {
-        // Validation: Verify record belongs to user
         const record = await getAttendanceRecordByIdDAO(recordId);
         if (!record) return { success: false, error: "Registro no encontrado" };
 
@@ -199,28 +175,22 @@ export async function reviewJustificationAction(
 ) {
     const session = await auth();
     if (!session?.user) return { success: false, error: "No autorizado" };
-    const role = session.user.role;
 
     try {
-        const isDevOrPresi = isAdmin(role);
-        // Director can justify? Yes, for their area.
         const record = await getAttendanceRecordByIdDAO(recordId);
         if (!record) return { success: false, error: "Registro no encontrado" };
 
-        // PERMISSION CHECK
-        if (!isDevOrPresi) {
-            const userAreaId = session.user.currentAreaId;
-            const targetAreaId = record.event.targetAreaId; // We need to fetch event details fully or infer.
-            // getAttendanceRecordByIdDAO fetches (event: true) so we have event details.
+        const eventTargetAreaId = record.event?.targetAreaId ?? null;
 
-            if (role === "DIRECTOR" || role === "SUBDIRECTOR") {
-                // Allow if event target is their area
-                if (targetAreaId && targetAreaId !== userAreaId) {
-                    return { success: false, error: "No tienes permiso para revisar justificaciones de otras áreas" };
-                }
-            } else {
-                return { success: false, error: "Permisos insuficientes" };
-            }
+        const canReview = canReviewJustificationForEvent(
+            session.user.role,
+            session.user.currentAreaId,
+            session.user.customPermissions,
+            eventTargetAreaId,
+        );
+
+        if (!canReview) {
+            return { success: false, error: "No tienes permisos para revisar justificaciones de este evento." };
         }
 
         const updates: any = {
@@ -232,15 +202,13 @@ export async function reviewJustificationAction(
         if (verdict === "APPROVED") {
             updates.status = "EXCUSED";
         } else {
-            // If Rejected, we revert to ABSENT (as a safe default)
             updates.status = "ABSENT";
         }
 
         await updateAttendanceRecordDAO(recordId, updates);
 
-        revalidatePath("/admin/events"); // Revalidate admin side
-        // Also revalidate specific event page?
-        revalidatePath(`/admin/events/${record.eventId}/attendance`); // Accurate path
+        revalidatePath("/admin/events");
+        revalidatePath(`/admin/events/${record.eventId}/attendance`);
 
         return { success: true, message: `Justificación ${verdict === "APPROVED" ? "Aprobada" : "Rechazada"}` };
 
@@ -257,16 +225,12 @@ export async function getPendingJustificationsAction() {
     try {
         const history = await getUserAttendanceHistoryDAO(session.user.id);
 
-        // Filter for:
-        // 1. ABSENT/LATE with justificationStatus === "NONE" OR "REJECTED" (Pending Action)
-        // 2. EXCUSED with justificationStatus === "APPROVED" (Success Notification waiting for Acknowledge)
         const pending = history.filter(record =>
             ((record.status === "ABSENT" || record.status === "LATE") &&
                 (record.justificationStatus === "NONE" || record.justificationStatus === "REJECTED")) ||
             (record.status === "EXCUSED" && record.justificationStatus === "APPROVED")
         );
 
-        // Sort by date desc
         pending.sort((a, b) => new Date(b.event.date).getTime() - new Date(a.event.date).getTime());
 
         return { success: true, data: pending };

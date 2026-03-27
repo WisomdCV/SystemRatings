@@ -5,7 +5,7 @@ import { db } from "@/db";
 import { authConfig } from "../../auth.config";
 import { accounts, sessions, users, verificationTokens } from "@/db/schema";
 import { eq, and, count } from "drizzle-orm";
-import { getCustomPermissionsForUser } from "@/server/data-access/custom-roles";
+import { getAllExtraPermissionsForUser } from "@/server/data-access/custom-roles";
 
 
 // Helper to refresh Google Access Token
@@ -183,12 +183,12 @@ export const {
                 // Google "expires_at" is seconds, we need ms for comparison
                 token.expiresAt = (account.expires_at as number) * 1000;
 
-                // Load custom role permissions
+                // Load all extra permissions (custom roles + area permissions)
                 if (user.id) {
                     try {
-                        token.customPermissions = await getCustomPermissionsForUser(user.id);
+                        token.customPermissions = await getAllExtraPermissionsForUser(user.id);
                     } catch (e) {
-                        console.error("Error loading custom permissions on sign in:", e);
+                        console.error("Error loading extra permissions on sign in:", e);
                         token.customPermissions = [];
                     }
                 }
@@ -222,8 +222,8 @@ export const {
                         token.status = freshUser.status;
                     }
 
-                    // Refresh custom permissions
-                    token.customPermissions = await getCustomPermissionsForUser(token.id as string);
+                    // Refresh all extra permissions (custom roles + area)
+                    token.customPermissions = await getAllExtraPermissionsForUser(token.id as string);
                     token._lastDbRefresh = Date.now();
                 } catch (error) {
                     console.error("Error refreshing user data in JWT:", error);

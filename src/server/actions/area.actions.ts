@@ -2,10 +2,10 @@
 
 import { auth } from "@/server/auth";
 import { db } from "@/db";
-import { areas, semesterAreas, semesters, users, events, positionHistory, areaKpiSummaries } from "@/db/schema";
+import { areas, areaPermissions, semesterAreas, semesters, users, events, positionHistory, areaKpiSummaries } from "@/db/schema";
 import { eq, and, asc, inArray, ne } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { hasPermission } from "@/lib/permissions";
+import { hasPermission, ALL_PERMISSIONS, type Permission } from "@/lib/permissions";
 import { z } from "zod";
 
 // --- Validators ---
@@ -15,8 +15,7 @@ const CreateAreaSchema = z.object({
     description: z.string().max(500).optional().nullable(),
     color: z.string().regex(/^#[0-9a-fA-F]{6}$/, "Color hex inválido").optional().default("#6366f1"),
     isLeadershipArea: z.boolean().optional().default(false),
-    canCreateEvents: z.boolean().optional().default(false),
-    canCreateIndividualEvents: z.boolean().optional().default(false),
+    permissions: z.array(z.string()).optional().default([]),
 });
 
 const UpdateAreaSchema = z.object({
@@ -26,8 +25,7 @@ const UpdateAreaSchema = z.object({
     description: z.string().max(500).optional().nullable(),
     color: z.string().regex(/^#[0-9a-fA-F]{6}$/, "Color hex inválido").optional().default("#6366f1"),
     isLeadershipArea: z.boolean().optional().default(false),
-    canCreateEvents: z.boolean().optional().default(false),
-    canCreateIndividualEvents: z.boolean().optional().default(false),
+    permissions: z.array(z.string()).optional().default([]),
 });
 
 // --- Actions ---
@@ -40,6 +38,9 @@ export async function getAllAreasAction() {
 
         const allAreas = await db.query.areas.findMany({
             orderBy: [asc(areas.name)],
+            with: {
+                permissions: true,
+            },
         });
 
         return { success: true as const, data: allAreas };
@@ -55,17 +56,17 @@ export async function getAreasWithSemesterStatusAction(semesterId: string) {
         const session = await auth();
         if (!session?.user) return { success: false as const, error: "No autorizado" };
 
-        // Get all areas
         const allAreas = await db.query.areas.findMany({
             orderBy: [asc(areas.name)],
+            with: {
+                permissions: true,
+            },
         });
 
-        // Get semester_area records for this semester
         const semAreas = await db.query.semesterAreas.findMany({
             where: eq(semesterAreas.semesterId, semesterId),
         });
 
-        // Build map: areaId -> isActive
         const activationMap = new Map(semAreas.map(sa => [sa.areaId, sa.isActive]));
 
         const result = allAreas.map(area => ({
@@ -106,9 +107,17 @@ export async function createAreaAction(input: z.infer<typeof CreateAreaSchema>) 
                 description: validated.data.description || null,
                 color: validated.data.color,
                 isLeadershipArea: validated.data.isLeadershipArea,
-                canCreateEvents: validated.data.canCreateEvents,
-                canCreateIndividualEvents: validated.data.canCreateIndividualEvents,
             }).returning();
+
+            // Insert area permissions
+            if (validated.data.permissions.length > 0) {
+                await tx.insert(areaPermissions).values(
+                    validated.data.permissions.map(p => ({
+                        areaId: created.id,
+                        permission: p,
+                    }))
+                );
+            }
 
             return created;
         });
@@ -149,9 +158,20 @@ export async function updateAreaAction(input: z.infer<typeof UpdateAreaSchema>) 
                 description: validated.data.description || null,
                 color: validated.data.color,
                 isLeadershipArea: validated.data.isLeadershipArea,
-                canCreateEvents: validated.data.canCreateEvents,
-                canCreateIndividualEvents: validated.data.canCreateIndividualEvents,
             }).where(eq(areas.id, validated.data.id));
+
+            // Replace area permissions: delete all, then re-insert
+            await tx.delete(areaPermissions)
+                .where(eq(areaPermissions.areaId, validated.data.id));
+
+            if (validated.data.permissions.length > 0) {
+                await tx.insert(areaPermissions).values(
+                    validated.data.permissions.map(p => ({
+                        areaId: validated.data.id,
+                        permission: p,
+                    }))
+                );
+            }
         });
 
         revalidatePath("/admin/areas");
@@ -222,8 +242,9 @@ export async function deleteAreaAction(id: string) {
             };
         }
 
-        // 5-6. Delete junction + area in transaction for atomicity
+        // 5-6. Delete area_permissions + junction + area in transaction
         await db.transaction(async (tx) => {
+            await tx.delete(areaPermissions).where(eq(areaPermissions.areaId, id));
             await tx.delete(semesterAreas).where(eq(semesterAreas.areaId, id));
             await tx.delete(areas).where(eq(areas.id, id));
         });
@@ -244,7 +265,6 @@ export async function toggleAreaInSemesterAction(areaId: string, semesterId: str
             return { success: false as const, error: "No tienes permisos." };
         }
 
-        // Check if record exists
         const existing = await db.query.semesterAreas.findFirst({
             where: and(
                 eq(semesterAreas.semesterId, semesterId),
@@ -253,12 +273,10 @@ export async function toggleAreaInSemesterAction(areaId: string, semesterId: str
         });
 
         if (existing) {
-            // Update
             await db.update(semesterAreas)
                 .set({ isActive: activate })
                 .where(eq(semesterAreas.id, existing.id));
         } else {
-            // Insert
             await db.insert(semesterAreas).values({
                 semesterId,
                 areaId,
@@ -330,9 +348,11 @@ export async function getAreasWithLeadersAction() {
 
         const allAreas = await db.query.areas.findMany({
             orderBy: [asc(areas.name)],
+            with: {
+                permissions: true,
+            },
         });
 
-        // Get all users who are DIRECTOR or SUBDIRECTOR
         const leaders = await db.query.users.findMany({
             where: and(
                 inArray(users.role, ["DIRECTOR", "SUBDIRECTOR"]),
@@ -390,5 +410,56 @@ export async function getMembersForAssignmentAction() {
     } catch (error) {
         console.error("Error getting members:", error);
         return { success: false as const, error: "Error al cargar miembros." };
+    }
+}
+
+/** Get permissions assigned to a specific area */
+export async function getAreaPermissionsAction(areaId: string) {
+    try {
+        const session = await auth();
+        if (!session?.user) return { success: false as const, error: "No autorizado" };
+        if (!hasPermission(session.user.role, "area:manage", session.user.customPermissions)) {
+            return { success: false as const, error: "No tienes permisos." };
+        }
+
+        const perms = await db.query.areaPermissions.findMany({
+            where: eq(areaPermissions.areaId, areaId),
+            columns: { permission: true },
+        });
+
+        return { success: true as const, data: perms.map(p => p.permission) };
+    } catch (error) {
+        console.error("Error getting area permissions:", error);
+        return { success: false as const, error: "Error al cargar permisos del área." };
+    }
+}
+
+/** Update permissions for a specific area (replace all) */
+export async function updateAreaPermissionsAction(areaId: string, permissions: string[]) {
+    try {
+        const session = await auth();
+        if (!session?.user) return { success: false as const, error: "No autorizado" };
+        if (!hasPermission(session.user.role, "area:manage", session.user.customPermissions)) {
+            return { success: false as const, error: "No tienes permisos." };
+        }
+
+        await db.transaction(async (tx) => {
+            await tx.delete(areaPermissions).where(eq(areaPermissions.areaId, areaId));
+
+            if (permissions.length > 0) {
+                await tx.insert(areaPermissions).values(
+                    permissions.map(p => ({
+                        areaId,
+                        permission: p,
+                    }))
+                );
+            }
+        });
+
+        revalidatePath("/admin/areas");
+        return { success: true as const, message: "Permisos del área actualizados." };
+    } catch (error) {
+        console.error("Error updating area permissions:", error);
+        return { success: false as const, error: "Error al actualizar permisos del área." };
     }
 }

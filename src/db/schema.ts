@@ -95,10 +95,13 @@ export const areas = sqliteTable("area", {
   description: text("description"),
   color: text("color").default("#6366f1"), // Hex color for UI badges/charts
   isLeadershipArea: integer("is_leadership_area", { mode: "boolean" }).default(false),
+});
 
-  // Event capabilities (Configurable from /admin/areas)
-  canCreateEvents: integer("can_create_events", { mode: "boolean" }).default(false),
-  canCreateIndividualEvents: integer("can_create_individual_events", { mode: "boolean" }).default(false),
+// Area-level permissions: any member of this area inherits these permissions
+export const areaPermissions = sqliteTable("area_permission", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  areaId: text("area_id").references(() => areas.id, { onDelete: "cascade" }).notNull(),
+  permission: text("permission").notNull(), // e.g. "event:create_general", "attendance:take_all"
 });
 
 export const semesters = sqliteTable("semester", {
@@ -388,6 +391,11 @@ export const areasRelations = relations(areas, ({ many }) => ({
   events: many(events),
   kpiSummaries: many(areaKpiSummaries),
   semesterAreas: many(semesterAreas),
+  permissions: many(areaPermissions, { relationName: "areaPermissions" }),
+}));
+
+export const areaPermissionsRelations = relations(areaPermissions, ({ one }) => ({
+  area: one(areas, { fields: [areaPermissions.areaId], references: [areas.id], relationName: "areaPermissions" }),
 }));
 
 export const semestersRelations = relations(semesters, ({ many }) => ({

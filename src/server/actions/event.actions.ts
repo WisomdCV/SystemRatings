@@ -5,11 +5,11 @@ import { CreateEventDTO, CreateEventSchema } from "@/lib/validators/event";
 import { createGoogleMeeting } from "@/server/services/google-calendar.service";
 import { createEventDAO, getEventByIdDAO, updateEventDAO, deleteEventDAO } from "@/server/data-access/events";
 import { revalidatePath } from "next/cache";
-import { hasPermission, isDirectorLevel } from "@/lib/permissions";
 import {
     canCreateIISEEvent,
     canCreateProjectEvent,
     canManageEvent,
+    canTargetAnyArea,
     shouldTrackAttendance,
     type EventScope,
     type EventType,
@@ -50,9 +50,12 @@ export async function createEventAction(input: CreateEventDTO) {
                 return { success: false, error: "No tienes permisos para crear este tipo de evento." };
             }
 
-            // For AREA events: if user is DIRECTOR/SUBDIRECTOR without special area permissions,
-            // force their own area
-            if (eventType === "AREA" && isDirectorLevel(role) && !hasPermission(role, "event:create_general", session.user.customPermissions)) {
+            // For AREA events: if user cannot target any area, force their own area
+            if (eventType === "AREA" && !canTargetAnyArea({
+                userRole: role,
+                userAreaId: session.user.currentAreaId,
+                customPermissions: session.user.customPermissions,
+            })) {
                 data.targetAreaId = session.user.currentAreaId;
             }
         } else if (eventScope === "PROJECT") {

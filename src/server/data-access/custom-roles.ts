@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/db";
-import { customRoles, customRolePermissions, userCustomRoles } from "@/db/schema";
+import { customRoles, customRolePermissions, userCustomRoles, areaPermissions, users } from "@/db/schema";
 import { eq, and, asc } from "drizzle-orm";
 
 // =============================================================================
@@ -11,7 +11,6 @@ import { eq, and, asc } from "drizzle-orm";
 /**
  * Returns a flat, deduplicated array of permission strings
  * for all custom roles assigned to a user.
- * Used by auth.ts JWT callback to enrich the session.
  */
 export async function getCustomPermissionsForUser(userId: string): Promise<string[]> {
     const assignments = await db.query.userCustomRoles.findMany({
@@ -33,6 +32,44 @@ export async function getCustomPermissionsForUser(userId: string): Promise<strin
     }
 
     return Array.from(permsSet);
+}
+
+// =============================================================================
+// AREA PERMISSIONS RESOLVER (Layer 3)
+// =============================================================================
+
+/**
+ * Returns a flat array of permission strings granted by the user's area.
+ * If the user has no area, returns [].
+ */
+export async function getAreaPermissionsForUser(userId: string): Promise<string[]> {
+    // Get user's current area
+    const user = await db.query.users.findFirst({
+        where: eq(users.id, userId),
+        columns: { currentAreaId: true },
+    });
+
+    if (!user?.currentAreaId) return [];
+
+    const perms = await db.query.areaPermissions.findMany({
+        where: eq(areaPermissions.areaId, user.currentAreaId),
+        columns: { permission: true },
+    });
+
+    return perms.map(p => p.permission);
+}
+
+/**
+ * Returns ALL permissions for a user (custom roles + area), merged and deduplicated.
+ * Used by auth.ts JWT callback to enrich the session.
+ */
+export async function getAllExtraPermissionsForUser(userId: string): Promise<string[]> {
+    const [customPerms, areaPerms] = await Promise.all([
+        getCustomPermissionsForUser(userId),
+        getAreaPermissionsForUser(userId),
+    ]);
+
+    return Array.from(new Set([...customPerms, ...areaPerms]));
 }
 
 // =============================================================================

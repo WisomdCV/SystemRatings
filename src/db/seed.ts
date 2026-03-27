@@ -1,7 +1,7 @@
 // src/db/seed.ts
 import "dotenv/config";
 import { db } from "./index";
-import { areas, semesters, users, gradeDefinitions, customRoles, customRolePermissions, projectAreas, projectRoles } from "./schema";
+import { areas, areaPermissions, semesters, users, gradeDefinitions, customRoles, customRolePermissions, projectAreas, projectRoles } from "./schema";
 import { eq, sql } from "drizzle-orm";
 
 async function main() {
@@ -37,7 +37,7 @@ async function main() {
         { name: "Logística", code: "LO", color: "#3b82f6" },              // blue-500
         { name: "Marketing", code: "MK", color: "#ef4444" },              // red-500
         { name: "PMO", code: "PM", color: "#64748b" },                    // slate-500
-        { name: "Talento Humano", code: "TH", color: "#ec4899", canCreateEvents: true, canCreateIndividualEvents: true }, // pink-500
+        { name: "Talento Humano", code: "TH", color: "#ec4899" },         // pink-500
         { name: "Optimización de Procesos y Tecnología", code: "OPT", color: "#06b6d4" }, // cyan-500
         { name: "Relaciones Públicas", code: "RP", color: "#a855f7" },    // purple-500
         { name: "Innovación", code: "IN", color: "#f97316" },             // orange-500
@@ -47,6 +47,34 @@ async function main() {
     await db.insert(areas).values(areasData).onConflictDoNothing({
         target: areas.code
     });
+
+    // Seed area permissions for TH (Talento Humano) and MD (Mesa Directiva)
+    // These areas get full event + attendance capabilities for their members
+    console.log("🔑 Sincronizando permisos de área...");
+    const thArea = await db.query.areas.findFirst({ where: eq(areas.code, "TH") });
+    const mdArea = await db.query.areas.findFirst({ where: eq(areas.code, "MD") });
+
+    const fullEventPerms = [
+        "event:create_general",
+        "event:create_area_own",
+        "event:create_area_any",
+        "event:create_meeting",
+        "event:manage_own",
+        "event:manage_all",
+        "attendance:take_own_area",
+        "attendance:take_all",
+        "attendance:review_own_area",
+        "attendance:review_all",
+    ];
+
+    for (const area of [thArea, mdArea]) {
+        if (!area) continue;
+        // Delete existing area permissions first (idempotent)
+        await db.delete(areaPermissions).where(eq(areaPermissions.areaId, area.id));
+        await db.insert(areaPermissions).values(
+            fullEventPerms.map(p => ({ areaId: area.id, permission: p }))
+        );
+    }
 
     // 3. Sincronizar Rúbrica de Notas
     console.log("📝 Sincronizando Rúbrica de Notas...");

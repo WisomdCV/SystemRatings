@@ -10,9 +10,29 @@ import {
 } from "@/server/actions/area.actions";
 import {
     Plus, Edit2, Trash2, ToggleLeft, ToggleRight,
-    CheckCircle2, XCircle, Loader2, MapPin, Zap, Crown
+    CheckCircle2, XCircle, Loader2, MapPin, Zap, Crown, Shield
 } from "lucide-react";
 import { AREA_COLOR_PRESETS } from "@/lib/utils/area-colors";
+
+// Available permissions that can be granted to an area's members
+const AREA_ASSIGNABLE_PERMISSIONS = [
+    { key: "event:create_general", label: "Crear eventos generales", group: "Eventos" },
+    { key: "event:create_area_own", label: "Crear eventos de su área", group: "Eventos" },
+    { key: "event:create_area_any", label: "Crear eventos de cualquier área", group: "Eventos" },
+    { key: "event:create_meeting", label: "Crear reuniones individuales", group: "Eventos" },
+    { key: "event:manage_own", label: "Gestionar eventos propios/área", group: "Eventos" },
+    { key: "event:manage_all", label: "Gestionar cualquier evento", group: "Eventos" },
+    { key: "attendance:take_own_area", label: "Tomar asistencia de su área", group: "Asistencia" },
+    { key: "attendance:take_all", label: "Tomar asistencia general", group: "Asistencia" },
+    { key: "attendance:review_own_area", label: "Revisar justificaciones de su área", group: "Asistencia" },
+    { key: "attendance:review_all", label: "Revisar cualquier justificación", group: "Asistencia" },
+] as const;
+
+interface AreaPermission {
+    id: string;
+    areaId: string;
+    permission: string;
+}
 
 interface Area {
     id: string;
@@ -21,8 +41,7 @@ interface Area {
     description: string | null;
     color: string | null;
     isLeadershipArea: boolean | null;
-    canCreateEvents: boolean | null;
-    canCreateIndividualEvents: boolean | null;
+    permissions: AreaPermission[];
 }
 
 interface AreaWithStatus extends Area {
@@ -48,8 +67,7 @@ export default function AreasManager({ initialAreas, semesterStatus, activeSemes
     const [formDescription, setFormDescription] = useState("");
     const [formColor, setFormColor] = useState("#6366f1");
     const [formIsLeadershipArea, setFormIsLeadershipArea] = useState(false);
-    const [formCanCreateEvents, setFormCanCreateEvents] = useState(false);
-    const [formCanCreateIndividualEvents, setFormCanCreateIndividualEvents] = useState(false);
+    const [formPermissions, setFormPermissions] = useState<string[]>([]);
 
     // Merge areas with semester status
     const areasData: AreaWithStatus[] = initialAreas.map(area => {
@@ -72,10 +90,15 @@ export default function AreasManager({ initialAreas, semesterStatus, activeSemes
         setFormDescription("");
         setFormColor("#6366f1");
         setFormIsLeadershipArea(false);
-        setFormCanCreateEvents(false);
-        setFormCanCreateIndividualEvents(false);
+        setFormPermissions([]);
         setShowCreateForm(false);
         setEditingArea(null);
+    };
+
+    const togglePermission = (perm: string) => {
+        setFormPermissions(prev =>
+            prev.includes(perm) ? prev.filter(p => p !== perm) : [...prev, perm]
+        );
     };
 
     const handleCreate = () => {
@@ -86,8 +109,7 @@ export default function AreasManager({ initialAreas, semesterStatus, activeSemes
                 description: formDescription || null,
                 color: formColor,
                 isLeadershipArea: formIsLeadershipArea,
-                canCreateEvents: formCanCreateEvents,
-                canCreateIndividualEvents: formCanCreateIndividualEvents,
+                permissions: formPermissions,
             });
             if (result.success) {
                 showFeedback("success", result.message || "Área creada.");
@@ -108,8 +130,7 @@ export default function AreasManager({ initialAreas, semesterStatus, activeSemes
                 description: formDescription || null,
                 color: formColor,
                 isLeadershipArea: formIsLeadershipArea,
-                canCreateEvents: formCanCreateEvents,
-                canCreateIndividualEvents: formCanCreateIndividualEvents,
+                permissions: formPermissions,
             });
             if (result.success) {
                 showFeedback("success", result.message || "Área actualizada.");
@@ -163,8 +184,7 @@ export default function AreasManager({ initialAreas, semesterStatus, activeSemes
         setFormDescription(area.description || "");
         setFormColor(area.color || "#6366f1");
         setFormIsLeadershipArea(area.isLeadershipArea ?? false);
-        setFormCanCreateEvents(area.canCreateEvents ?? false);
-        setFormCanCreateIndividualEvents(area.canCreateIndividualEvents ?? false);
+        setFormPermissions(area.permissions.map(p => p.permission));
         setShowCreateForm(false);
     };
 
@@ -174,6 +194,13 @@ export default function AreasManager({ initialAreas, semesterStatus, activeSemes
     };
 
     const activeCount = areasData.filter(a => a.isActiveInSemester).length;
+
+    // Group permissions for display
+    const permissionGroups = AREA_ASSIGNABLE_PERMISSIONS.reduce((acc, p) => {
+        if (!acc[p.group]) acc[p.group] = [];
+        acc[p.group].push(p);
+        return acc;
+    }, {} as Record<string, typeof AREA_ASSIGNABLE_PERMISSIONS[number][]>);
 
     return (
         <div className="space-y-6">
@@ -304,41 +331,41 @@ export default function AreasManager({ initialAreas, semesterStatus, activeSemes
                         </div>
                     </div>
 
-                    {/* Event Capabilities */}
+                    {/* Area Permissions */}
                     <div className="mt-4 p-4 bg-violet-50/60 rounded-xl border border-violet-200/50">
-                        <h4 className="text-xs font-black text-violet-700 uppercase tracking-wider mb-3">📅 Permisos de Eventos</h4>
-                        <div className="flex flex-wrap gap-4">
-                            <label className="flex items-center gap-3 cursor-pointer group">
-                                <div className="relative flex items-center">
-                                    <input
-                                        type="checkbox"
-                                        className="sr-only"
-                                        checked={formCanCreateEvents}
-                                        onChange={(e) => setFormCanCreateEvents(e.target.checked)}
-                                    />
-                                    <div className={`w-11 h-6 rounded-full transition-colors ${formCanCreateEvents ? 'bg-violet-500' : 'bg-gray-200'}`}></div>
-                                    <div className={`absolute left-1 top-1 w-4 h-4 bg-white rounded-full transition-transform ${formCanCreateEvents ? 'translate-x-5' : 'translate-x-0'}`}></div>
+                        <h4 className="text-xs font-black text-violet-700 uppercase tracking-wider mb-3 flex items-center gap-2">
+                            <Shield className="w-3.5 h-3.5" /> Permisos de Área (heredados por miembros)
+                        </h4>
+                        <div className="space-y-3">
+                            {Object.entries(permissionGroups).map(([group, perms]) => (
+                                <div key={group}>
+                                    <div className="text-xs font-bold text-violet-600 mb-1.5">{group}</div>
+                                    <div className="flex flex-wrap gap-2">
+                                        {perms.map(p => {
+                                            const isActive = formPermissions.includes(p.key);
+                                            return (
+                                                <button
+                                                    key={p.key}
+                                                    type="button"
+                                                    onClick={() => togglePermission(p.key)}
+                                                    className={`px-3 py-1.5 text-xs font-bold rounded-lg border transition-all ${isActive
+                                                        ? "bg-violet-500 text-white border-violet-500 shadow-sm"
+                                                        : "bg-white text-meteorite-600 border-meteorite-200 hover:border-violet-300 hover:text-violet-700"
+                                                        }`}
+                                                >
+                                                    {p.label}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
                                 </div>
-                                <div className="text-sm font-bold text-meteorite-700 group-hover:text-meteorite-900 transition-colors">
-                                    Crear eventos generales / área
-                                </div>
-                            </label>
-                            <label className="flex items-center gap-3 cursor-pointer group">
-                                <div className="relative flex items-center">
-                                    <input
-                                        type="checkbox"
-                                        className="sr-only"
-                                        checked={formCanCreateIndividualEvents}
-                                        onChange={(e) => setFormCanCreateIndividualEvents(e.target.checked)}
-                                    />
-                                    <div className={`w-11 h-6 rounded-full transition-colors ${formCanCreateIndividualEvents ? 'bg-violet-500' : 'bg-gray-200'}`}></div>
-                                    <div className={`absolute left-1 top-1 w-4 h-4 bg-white rounded-full transition-transform ${formCanCreateIndividualEvents ? 'translate-x-5' : 'translate-x-0'}`}></div>
-                                </div>
-                                <div className="text-sm font-bold text-meteorite-700 group-hover:text-meteorite-900 transition-colors">
-                                    Crear reuniones individuales/grupales
-                                </div>
-                            </label>
+                            ))}
                         </div>
+                        {formPermissions.length > 0 && (
+                            <div className="mt-2 text-xs text-violet-600 font-medium">
+                                {formPermissions.length} permiso{formPermissions.length !== 1 ? "s" : ""} seleccionado{formPermissions.length !== 1 ? "s" : ""}
+                            </div>
+                        )}
                     </div>
 
                     <div className="flex gap-3 mt-4">
@@ -415,6 +442,14 @@ export default function AreasManager({ initialAreas, semesterStatus, activeSemes
 
                         {area.description && (
                             <p className="text-sm text-meteorite-500 mb-3 line-clamp-2">{area.description}</p>
+                        )}
+
+                        {/* Permissions count badge */}
+                        {area.permissions.length > 0 && (
+                            <div className="mb-3 flex items-center gap-1.5 text-xs font-bold text-violet-600">
+                                <Shield className="w-3 h-3" />
+                                {area.permissions.length} permiso{area.permissions.length !== 1 ? "s" : ""} de área
+                            </div>
                         )}
 
                         {/* Actions */}

@@ -13,7 +13,7 @@
 
 import "dotenv/config";
 import { db } from "./index";
-import { events, areas, projectAreas, projectRoles } from "./schema";
+import { events, areas, areaPermissions, projectAreas, projectRoles } from "./schema";
 import { eq, isNotNull, gte, sql } from "drizzle-orm";
 
 async function main() {
@@ -48,11 +48,18 @@ async function main() {
     });
 
     if (thArea) {
-        await db.update(areas).set({
-            canCreateEvents: true,
-            canCreateIndividualEvents: true,
-        }).where(eq(areas.id, thArea.id));
-        console.log(`   ✅ "${thArea.name}" (${thArea.code}) → canCreateEvents=true, canCreateIndividualEvents=true`);
+        // Clear existing permissions and set full event permissions via area_permissions table
+        await db.delete(areaPermissions).where(eq(areaPermissions.areaId, thArea.id));
+        const fullPerms = [
+            "event:create_general", "event:create_area_own", "event:create_area_any",
+            "event:create_meeting", "event:manage_own", "event:manage_all",
+            "attendance:take_own_area", "attendance:take_all",
+            "attendance:review_own_area", "attendance:review_all",
+        ];
+        await db.insert(areaPermissions).values(
+            fullPerms.map(p => ({ areaId: thArea.id, permission: p }))
+        );
+        console.log(`   ✅ "${thArea.name}" (${thArea.code}) → full event+attendance permissions via area_permissions`);
     } else {
         console.log(`   ⚠️  No area with code "TH" found. Configure manually from /admin/areas.`);
     }
