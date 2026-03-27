@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { X, Save, AlertTriangle, Shield, User as UserIcon } from "lucide-react";
 import {
     updateUserRoleAction,
@@ -48,6 +48,10 @@ interface UserEditDrawerProps {
     user: User | null;
     areas: Area[];
     customRoles?: any[]; // The generic list of all custom roles available in the system
+    canManageRole: boolean;
+    canManageData: boolean;
+    canModerate: boolean;
+    canManageCustomRoles: boolean;
     isOpen: boolean;
     onClose: () => void;
     onShowFeedback?: (type: "success" | "error", message: string) => void;
@@ -57,6 +61,10 @@ export default function UserEditDrawer({
     user,
     areas,
     customRoles = [],
+    canManageRole,
+    canManageData,
+    canModerate,
+    canManageCustomRoles,
     isOpen,
     onClose,
     onShowFeedback,
@@ -75,13 +83,29 @@ export default function UserEditDrawer({
 
     // Initialize custom role checkbox states from user's current roles
     const [selectedCustomRoles, setSelectedCustomRoles] = useState<string[]>([]);
-    const [prevUserId, setPrevUserId] = useState<string | null>(null);
 
-    if (user && user.id !== prevUserId) {
-        setPrevUserId(user.id);
+    useEffect(() => {
+        if (!user) return;
         const userRoleIds = user.customRoles?.map(ur => ur.customRole.id) || [];
         setSelectedCustomRoles(userRoleIds);
-    }
+        setFormData({});
+    }, [user]);
+
+    const availableTabs = useMemo(() => {
+        const tabs: Array<"profile" | "role" | "moderation"> = [];
+        if (canManageData) tabs.push("profile");
+        if (canManageRole) tabs.push("role");
+        if (canModerate) tabs.push("moderation");
+        return tabs;
+    }, [canManageData, canManageRole, canModerate]);
+
+    useEffect(() => {
+        if (!isOpen) return;
+        if (availableTabs.length === 0) return;
+        if (!availableTabs.includes(activeTab)) {
+            setActiveTab(availableTabs[0]);
+        }
+    }, [isOpen, activeTab, availableTabs]);
 
     if (!isOpen || !user) return null;
 
@@ -91,6 +115,10 @@ export default function UserEditDrawer({
     };
 
     const handleSaveProfile = () => {
+        if (!canManageData) {
+            notify("error", "No tienes permisos para editar datos de usuarios.");
+            return;
+        }
         startTransition(async () => {
             const result = await updateUserDataAction({
                 userId: user.id,
@@ -108,6 +136,11 @@ export default function UserEditDrawer({
     };
 
     const handleSaveRole = () => {
+        if (!canManageRole) {
+            notify("error", "No tienes permisos para cambiar rol o área.");
+            return;
+        }
+
         startTransition(async () => {
             // 1. Update Core Role & Area
             const roleResult = await updateUserRoleAction({
@@ -123,26 +156,43 @@ export default function UserEditDrawer({
             }
 
             // 2. Handle Custom Roles assignment differences
-            const originalUserRoleIds = user.customRoles?.map(ur => ur.customRole.id) || [];
+            if (canManageCustomRoles) {
+                const originalUserRoleIds = user.customRoles?.map(ur => ur.customRole.id) || [];
 
-            // Roles to Add
-            const rolesToAdd = selectedCustomRoles.filter(id => !originalUserRoleIds.includes(id));
-            for (const roleId of rolesToAdd) {
-                await assignCustomRoleAction({ userId: user.id, customRoleId: roleId });
+                // Roles to Add
+                const rolesToAdd = selectedCustomRoles.filter(id => !originalUserRoleIds.includes(id));
+                for (const roleId of rolesToAdd) {
+                    const assignResult = await assignCustomRoleAction({ userId: user.id, customRoleId: roleId });
+                    if (!assignResult.success) {
+                        notify("error", "Error asignando rol personalizado: " + assignResult.error);
+                        return;
+                    }
+                }
+
+                // Roles to Remove
+                const rolesToRemove = originalUserRoleIds.filter(id => !selectedCustomRoles.includes(id));
+                for (const roleId of rolesToRemove) {
+                    const removeResult = await removeCustomRoleAction({ userId: user.id, customRoleId: roleId });
+                    if (!removeResult.success) {
+                        notify("error", "Error removiendo rol personalizado: " + removeResult.error);
+                        return;
+                    }
+                }
+
+                notify("success", "Jerarquía y roles adicionales actualizados correctamente");
+            } else {
+                notify("success", "Jerarquía actualizada correctamente");
             }
-
-            // Roles to Remove
-            const rolesToRemove = originalUserRoleIds.filter(id => !selectedCustomRoles.includes(id));
-            for (const roleId of rolesToRemove) {
-                await removeCustomRoleAction({ userId: user.id, customRoleId: roleId });
-            }
-
-            notify("success", "Jerarquía y roles adicionales actualizados correctamente");
             onClose();
         });
     };
 
     const handleSaveModeration = () => {
+        if (!canModerate) {
+            notify("error", "No tienes permisos para moderar usuarios.");
+            return;
+        }
+
         startTransition(async () => {
             const result = await moderateUserAction({
                 userId: user.id,
@@ -189,27 +239,33 @@ export default function UserEditDrawer({
 
                 {/* Tabs */}
                 <div className="flex border-b border-meteorite-100">
-                    <button
-                        onClick={() => setActiveTab("profile")}
-                        className={`flex-1 py-3 text-sm font-bold border-b-2 transition-colors ${activeTab === 'profile' ? 'border-meteorite-500 text-meteorite-600 bg-meteorite-50/30' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
-                    >
-                        <UserIcon className="w-4 h-4 inline mr-2" />
-                        Perfil
-                    </button>
-                    <button
-                        onClick={() => setActiveTab("role")}
-                        className={`flex-1 py-3 text-sm font-bold border-b-2 transition-colors ${activeTab === 'role' ? 'border-meteorite-500 text-meteorite-600 bg-meteorite-50/30' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
-                    >
-                        <Shield className="w-4 h-4 inline mr-2" />
-                        Jerarquía
-                    </button>
-                    <button
-                        onClick={() => setActiveTab("moderation")}
-                        className={`flex-1 py-3 text-sm font-bold border-b-2 transition-colors ${activeTab === 'moderation' ? 'border-red-500 text-red-600 bg-red-50/30' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
-                    >
-                        <AlertTriangle className="w-4 h-4 inline mr-2" />
-                        Moderación
-                    </button>
+                    {canManageData && (
+                        <button
+                            onClick={() => setActiveTab("profile")}
+                            className={`flex-1 py-3 text-sm font-bold border-b-2 transition-colors ${activeTab === 'profile' ? 'border-meteorite-500 text-meteorite-600 bg-meteorite-50/30' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
+                        >
+                            <UserIcon className="w-4 h-4 inline mr-2" />
+                            Perfil
+                        </button>
+                    )}
+                    {canManageRole && (
+                        <button
+                            onClick={() => setActiveTab("role")}
+                            className={`flex-1 py-3 text-sm font-bold border-b-2 transition-colors ${activeTab === 'role' ? 'border-meteorite-500 text-meteorite-600 bg-meteorite-50/30' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
+                        >
+                            <Shield className="w-4 h-4 inline mr-2" />
+                            Jerarquía
+                        </button>
+                    )}
+                    {canModerate && (
+                        <button
+                            onClick={() => setActiveTab("moderation")}
+                            className={`flex-1 py-3 text-sm font-bold border-b-2 transition-colors ${activeTab === 'moderation' ? 'border-red-500 text-red-600 bg-red-50/30' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
+                        >
+                            <AlertTriangle className="w-4 h-4 inline mr-2" />
+                            Moderación
+                        </button>
+                    )}
                 </div>
 
                 {/* Content */}
@@ -317,6 +373,7 @@ export default function UserEditDrawer({
                                     </div>
                                 </div>
                             </div>
+                            {canManageCustomRoles && (
                             <div>
                                 <label className="block text-xs font-bold text-meteorite-700 uppercase tracking-wide mb-1.5">
                                     Roles Personalizables (Adicionales)
@@ -354,6 +411,7 @@ export default function UserEditDrawer({
                                     )}
                                 </div>
                             </div>
+                            )}
 
                             <div>
                                 <label className="block text-xs font-bold text-meteorite-700 uppercase tracking-wide mb-1.5 mt-4">

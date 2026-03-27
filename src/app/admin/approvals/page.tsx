@@ -11,7 +11,7 @@ export default async function AdminApprovalsPage() {
     if (!session?.user) redirect("/login");
 
     const role = session.user.role || "";
-    if (!hasPermission(role, "user:manage", session.user.customPermissions)) {
+    if (!hasPermission(role, "user:approve", session.user.customPermissions)) {
         return redirect("/admin?error=AccessDenied");
     }
 

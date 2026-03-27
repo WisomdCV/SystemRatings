@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { hasPermission } from "@/lib/permissions";
 import { db } from "@/db";
 import { users } from "@/db/schema";
-import { eq, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import Link from "next/link";
 import { ArrowLeft, Users, MapPin, Shield, RefreshCcw, Settings, ShieldCheck, UserCheck } from "lucide-react";
 
@@ -15,6 +15,11 @@ export default async function AdminHubPage() {
     const customPermissions = session.user.customPermissions;
     const canManageSemesters = hasPermission(role, "semester:manage", customPermissions);
     const canManagePillars = hasPermission(role, "pillar:manage", customPermissions);
+    const canApproveUsers = hasPermission(role, "user:approve", customPermissions);
+    const canManageUserRoles = hasPermission(role, "user:manage_role", customPermissions);
+    const canManageUserData = hasPermission(role, "user:manage_data", customPermissions);
+    const canModerateUsers = hasPermission(role, "user:moderate", customPermissions);
+    const canManageUsers = canManageUserRoles || canManageUserData || canModerateUsers;
 
     // El usuario debe tener al menos permiso básico de acceso al panel admin
     if (!hasPermission(role, "admin:access", session.user.customPermissions)) {
@@ -23,11 +28,11 @@ export default async function AdminHubPage() {
 
     // Fetch pending approval count for badge
     let pendingCount = 0;
-    if (hasPermission(role, "user:manage", session.user.customPermissions)) {
+    if (canApproveUsers) {
         const [result] = await db
             .select({ count: sql<number>`count(*)` })
             .from(users)
-            .where(eq(users.status, "PENDING_APPROVAL"));
+            .where(sql`${users.status} = 'PENDING_APPROVAL' OR (${users.role} = 'VOLUNTEER' AND ${users.status} = 'ACTIVE')`);
         pendingCount = result.count;
     }
 
@@ -40,7 +45,7 @@ export default async function AdminHubPage() {
             icon: <UserCheck className="w-8 h-8 text-white" />,
             colorClass: "from-orange-500 to-orange-700",
             shadowClass: "shadow-orange-500/30",
-            hasAccess: hasPermission(role, "user:manage", session.user.customPermissions),
+            hasAccess: canApproveUsers,
             badge: pendingCount > 0 ? pendingCount : undefined,
         },
         {
@@ -50,7 +55,7 @@ export default async function AdminHubPage() {
             icon: <Users className="w-8 h-8 text-white" />,
             colorClass: "from-blue-500 to-blue-700",
             shadowClass: "shadow-blue-500/30",
-            hasAccess: hasPermission(role, "user:manage", session.user.customPermissions)
+            hasAccess: canManageUsers
         },
         {
             title: "Estructura de Áreas",

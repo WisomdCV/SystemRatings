@@ -5,7 +5,7 @@ import { db } from "@/db";
 import { users } from "@/db/schema";
 import { eq, desc, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { hasPermission } from "@/lib/permissions";
+import { canManageUserByHierarchy, hasPermission } from "@/lib/permissions";
 
 function isAccessRequestUser(user: { status: string | null; role: string | null }) {
     // Keep the same business rule used in dashboard notifications.
@@ -18,7 +18,7 @@ export async function getPendingUsersAction() {
     try {
         const session = await auth();
         if (!session?.user) return { success: false as const, error: "No autorizado" };
-        if (!hasPermission(session.user.role, "user:manage", session.user.customPermissions)) {
+        if (!hasPermission(session.user.role, "user:approve", session.user.customPermissions)) {
             return { success: false as const, error: "No tienes permisos." };
         }
 
@@ -49,7 +49,7 @@ export async function getPendingCountAction() {
     try {
         const session = await auth();
         if (!session?.user) return { success: false as const, error: "No autorizado" };
-        if (!hasPermission(session.user.role, "user:manage", session.user.customPermissions)) {
+        if (!hasPermission(session.user.role, "user:approve", session.user.customPermissions)) {
             return { success: false as const, error: "No tienes permisos." };
         }
 
@@ -71,7 +71,7 @@ export async function approveUserAction(userId: string) {
     try {
         const session = await auth();
         if (!session?.user) return { success: false as const, error: "No autorizado" };
-        if (!hasPermission(session.user.role, "user:manage", session.user.customPermissions)) {
+        if (!hasPermission(session.user.role, "user:approve", session.user.customPermissions)) {
             return { success: false as const, error: "No tienes permisos para aprobar usuarios." };
         }
 
@@ -85,6 +85,10 @@ export async function approveUserAction(userId: string) {
 
         if (!isAccessRequestUser(targetUser)) {
             return { success: false as const, error: "Este usuario no tiene una solicitud pendiente." };
+        }
+
+        if (!canManageUserByHierarchy(session.user.role, targetUser.role)) {
+            return { success: false as const, error: "No puedes gestionar solicitudes de usuarios de igual o mayor jerarquía." };
         }
 
         await db.update(users).set({
@@ -113,7 +117,7 @@ export async function rejectUserAction(userId: string) {
     try {
         const session = await auth();
         if (!session?.user) return { success: false as const, error: "No autorizado" };
-        if (!hasPermission(session.user.role, "user:manage", session.user.customPermissions)) {
+        if (!hasPermission(session.user.role, "user:approve", session.user.customPermissions)) {
             return { success: false as const, error: "No tienes permisos." };
         }
 
@@ -126,6 +130,10 @@ export async function rejectUserAction(userId: string) {
 
         if (!isAccessRequestUser(targetUser)) {
             return { success: false as const, error: "Este usuario no tiene una solicitud pendiente." };
+        }
+
+        if (!canManageUserByHierarchy(session.user.role, targetUser.role)) {
+            return { success: false as const, error: "No puedes gestionar solicitudes de usuarios de igual o mayor jerarquía." };
         }
 
         await db.update(users).set({

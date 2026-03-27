@@ -15,6 +15,16 @@ import {
     ModerateUserSchema,
 } from "@/lib/validators/user";
 import { revalidatePath } from "next/cache";
+import { hasPermission } from "@/lib/permissions";
+
+function revalidateUserAdminViews() {
+    revalidatePath("/admin");
+    revalidatePath("/admin/users");
+    revalidatePath("/admin/areas");
+    revalidatePath("/admin/setup-wizard");
+    revalidatePath("/admin/audit");
+    revalidatePath("/dashboard");
+}
 
 // --- 1. Get Users with Filters ---
 export async function getUsersAction(
@@ -29,6 +39,17 @@ export async function getUsersAction(
     try {
         const session = await auth();
         if (!session?.user) return { success: false, error: "No autenticado" };
+
+        const actorRole = session.user.role;
+        const customPermissions = session.user.customPermissions;
+        const canManageUsers =
+            hasPermission(actorRole, "user:manage_role", customPermissions) ||
+            hasPermission(actorRole, "user:manage_data", customPermissions) ||
+            hasPermission(actorRole, "user:moderate", customPermissions);
+
+        if (!canManageUsers) {
+            return { success: false, error: "No tienes permisos para ver la gestión de usuarios." };
+        }
 
         const result = await getUsersListService(
             { search, role, status, areaId, sortBy, sortOrder },
@@ -48,6 +69,10 @@ export async function updateUserRoleAction(input: any): Promise<ActionResult<any
         const session = await auth();
         if (!session?.user?.id) return { success: false, error: "No autenticado" };
 
+        if (!hasPermission(session.user.role, "user:manage_role", session.user.customPermissions)) {
+            return { success: false, error: "No tienes permisos para cambiar rol o área." };
+        }
+
         // Validar input
         const validated = UpdateUserRoleSchema.safeParse(input);
         if (!validated.success) {
@@ -55,7 +80,7 @@ export async function updateUserRoleAction(input: any): Promise<ActionResult<any
         }
 
         const updatedUser = await promoteUserService(session.user.id, validated.data);
-        revalidatePath("/dashboard/users");
+        revalidateUserAdminViews();
         return { success: true, data: updatedUser };
     } catch (error: any) {
         return { success: false, error: error.message };
@@ -68,13 +93,17 @@ export async function updateUserDataAction(input: any): Promise<ActionResult<any
         const session = await auth();
         if (!session?.user?.id) return { success: false, error: "No autenticado" };
 
+        if (!hasPermission(session.user.role, "user:manage_data", session.user.customPermissions)) {
+            return { success: false, error: "No tienes permisos para editar datos administrativos." };
+        }
+
         const validated = UpdateUserProfileSchema.safeParse(input);
         if (!validated.success) {
             return { success: false, error: "Datos inválidos" };
         }
 
         const updatedUser = await updateUserDataService(session.user.id, validated.data);
-        revalidatePath("/dashboard/users");
+        revalidateUserAdminViews();
         return { success: true, data: updatedUser };
     } catch (error: any) {
         return { success: false, error: error.message };
@@ -87,13 +116,17 @@ export async function moderateUserAction(input: any): Promise<ActionResult<any>>
         const session = await auth();
         if (!session?.user?.id) return { success: false, error: "No autenticado" };
 
+        if (!hasPermission(session.user.role, "user:moderate", session.user.customPermissions)) {
+            return { success: false, error: "No tienes permisos para moderar usuarios." };
+        }
+
         const validated = ModerateUserSchema.safeParse(input);
         if (!validated.success) {
             return { success: false, error: "Razón de moderación requerida" };
         }
 
         const result = await moderateUserService(session.user.id, validated.data);
-        revalidatePath("/dashboard/users");
+        revalidateUserAdminViews();
         return { success: true, data: result };
     } catch (error: any) {
         return { success: false, error: error.message };

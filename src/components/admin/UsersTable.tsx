@@ -46,6 +46,10 @@ interface UsersTableProps {
     users: User[];
     areas: Area[];
     customRoles: any[];
+    canManageRole: boolean;
+    canManageData: boolean;
+    canModerate: boolean;
+    canManageCustomRoles: boolean;
     pagination?: {
         total: number;
         page: number;
@@ -107,7 +111,16 @@ const formatCUI = (user: User) => {
     return `${rolePrefix}${areaCode}-${last4}`;
 };
 
-export default function UsersTable({ users, areas, customRoles, pagination }: UsersTableProps) {
+export default function UsersTable({
+    users,
+    areas,
+    customRoles,
+    canManageRole,
+    canManageData,
+    canModerate,
+    canManageCustomRoles,
+    pagination,
+}: UsersTableProps) {
     const [selectedUser, setSelectedUser] = useState<User | null>(null);
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
     const [activeMenu, setActiveMenu] = useState<string | null>(null);
@@ -484,6 +497,10 @@ export default function UsersTable({ users, areas, customRoles, pagination }: Us
                 user={selectedUser}
                 areas={areas}
                 customRoles={customRoles}
+                canManageRole={canManageRole}
+                canManageData={canManageData}
+                canModerate={canModerate}
+                canManageCustomRoles={canManageCustomRoles}
                 isOpen={isDrawerOpen}
                 onClose={handleCloseDrawer}
                 onShowFeedback={showFeedback}

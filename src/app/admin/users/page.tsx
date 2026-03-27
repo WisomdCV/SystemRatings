@@ -1,8 +1,11 @@
+import { authFresh } from "@/server/auth-fresh";
 import UserFilters from "@/components/admin/UserFilters";
 import UsersTable from "@/components/admin/UsersTable";
 import { getAreasAction } from "@/server/actions/organization.actions";
 import { getUsersAction } from "@/server/actions/user.actions";
 import { getCustomRolesAction } from "@/server/actions/custom-role.actions";
+import { hasPermission } from "@/lib/permissions";
+import { redirect } from "next/navigation";
 
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
@@ -12,6 +15,22 @@ interface PageProps {
 }
 
 export default async function AdminUsersPage(props: PageProps) {
+    const session = await authFresh();
+    if (!session?.user) redirect("/login");
+
+    const roleValue = session.user.role || "";
+    const customPermissions = session.user.customPermissions;
+    const canManageRole = hasPermission(roleValue, "user:manage_role", customPermissions);
+    const canManageData = hasPermission(roleValue, "user:manage_data", customPermissions);
+    const canModerate = hasPermission(roleValue, "user:moderate", customPermissions);
+    const canManageCustomRoles = hasPermission(roleValue, "admin:full", customPermissions);
+    const canManageUsers =
+        canManageRole || canManageData || canModerate;
+
+    if (!canManageUsers) {
+        return redirect("/admin?error=AccessDenied");
+    }
+
     const searchParams = await props.searchParams;
     const search = typeof searchParams.search === 'string' ? searchParams.search : undefined;
     const role = typeof searchParams.role === 'string' ? searchParams.role : undefined;
@@ -82,6 +101,10 @@ export default async function AdminUsersPage(props: PageProps) {
                     users={usersResult.data.data}
                     areas={areasResult.data}
                     customRoles={customRolesResult.success ? customRolesResult.data : []}
+                    canManageRole={canManageRole}
+                    canManageData={canManageData}
+                    canModerate={canModerate}
+                    canManageCustomRoles={canManageCustomRoles}
                     pagination={usersResult.data.meta}
                 />
             </div>

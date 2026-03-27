@@ -7,6 +7,7 @@ import {
     UpdateUserProfileDTO,
     ModerateUserDTO,
 } from "@/lib/validators/user";
+import { canAssignRoleByHierarchy, canManageUserByHierarchy } from "@/lib/permissions";
 
 // --- Helpers ---
 async function getActiveSemesterId() {
@@ -32,32 +33,30 @@ export async function promoteUserService(
     actorId: string,
     data: UpdateUserRoleDTO
 ) {
-    // 1. Verificar Permisos del Actor
+    // 1. Verificar actor y usuario objetivo
     const actor = await userDAO.getUserById(actorId);
-    if (!actor || !["DEV", "PRESIDENT"].includes(actor.role || "")) {
-        throw new Error("No tienes permisos (Se requiere DEV o PRESIDENT).");
+    const targetUser = await userDAO.getUserById(data.userId);
+    if (!actor || !targetUser) throw new Error("Usuario no encontrado.");
+
+    if (!canManageUserByHierarchy(actor.role, targetUser.role)) {
+        throw new Error("No autorizado: no puedes modificar usuarios de igual o mayor jerarquía.");
     }
 
-    // 2. Verificar integridad del Target (Usuario a modificar)
-    const targetUser = await userDAO.getUserById(data.userId);
-    if (!targetUser) throw new Error("Usuario objetivo no encontrado.");
+    if (!canAssignRoleByHierarchy(actor.role, data.role)) {
+        throw new Error("No autorizado: no puedes asignar un rol igual o superior al tuyo.");
+    }
 
-    // 3. Regla de Negocio: DIRECTOR/SUBDIRECTOR debe tener área
+    // 2. Regla de Negocio: DIRECTOR/SUBDIRECTOR debe tener área
     if (["DIRECTOR", "SUBDIRECTOR"].includes(data.role) && !data.areaId) {
         throw new Error("Un Director o Subdirector debe pertenecer a un Área.");
     }
 
-    // 4. Seguridad: No se puede asignar el rol DEV
-    if (data.role === "DEV") {
-        throw new Error("Acción prohibida: No se puede asignar el rol de Desarrollador.");
-    }
-
-    // 4. Verificar si realmente hay cambios
+    // 3. Verificar si realmente hay cambios
     if (targetUser.role === data.role && targetUser.currentAreaId === data.areaId) {
         return targetUser; // No op
     }
 
-    // 5. Transacción de Base de Datos
+    // 4. Transacción de Base de Datos
     return await db.transaction(async (tx) => {
         const currentSemesterId = await getActiveSemesterId();
 
@@ -104,11 +103,13 @@ export async function updateUserDataService(
     actorId: string,
     data: UpdateUserProfileDTO
 ) {
-    // 1. Verificar Permisos (Admin genérico o solo DEV/PRESI? Asumimos DEV/PRES)
-    // Nota: Podríamos relajar esto si hay un rol RRHH, por ahora mantenemos strict
+    // 1. Verificar actor y target para regla jerárquica
     const actor = await userDAO.getUserById(actorId);
-    if (!actor || !["DEV", "PRESIDENT"].includes(actor.role || "")) {
-        throw new Error("No autorizado.");
+    const targetUser = await userDAO.getUserById(data.userId);
+    if (!actor || !targetUser) throw new Error("Usuario no encontrado.");
+
+    if (!canManageUserByHierarchy(actor.role, targetUser.role)) {
+        throw new Error("No autorizado: no puedes editar datos de usuarios de igual o mayor jerarquía.");
     }
 
     // 2. Verificar duplicidad de CUI (si aplica)
@@ -139,14 +140,8 @@ export async function moderateUserService(
 
     if (!actor || !targetUser) throw new Error("Usuario no encontrado.");
 
-    // Regla: PRESIDENT no puede banear a DEV
-    if (actor.role === "PRESIDENT" && targetUser.role === "DEV") {
-        throw new Error("Acción prohibida: El Presidente no puede moderar al Desarrollador.");
-    }
-
-    // Regla: Solo DEV y PRESIDENT moderan
-    if (!["DEV", "PRESIDENT"].includes(actor.role || "")) {
-        throw new Error("No autorizado.");
+    if (!canManageUserByHierarchy(actor.role, targetUser.role)) {
+        throw new Error("No autorizado: no puedes moderar usuarios de igual o mayor jerarquía.");
     }
 
     // Logic: If status is not SUSPENDED, clear suspendedUntil

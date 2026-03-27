@@ -174,7 +174,7 @@ export default async function DashboardPage() {
 
     // 4. Fetch pending approval users for admins
     let pendingApprovalUsers: { id: string; name: string | null; email: string; image: string | null; createdAt: Date | null }[] = [];
-    if (role && hasPermission(role, "user:manage", session.user.customPermissions)) {
+    if (role && hasPermission(role, "user:approve", session.user.customPermissions)) {
         pendingApprovalUsers = await db.query.users.findMany({
             where: or(
                 eq(users.status, "PENDING_APPROVAL"),

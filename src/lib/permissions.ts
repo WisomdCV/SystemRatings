@@ -25,6 +25,30 @@ export const ROLES = [
 export type Role = (typeof ROLES)[number];
 
 // ---------------------------------------------------------------------------
+// Jerarquia de roles para control de cambios de usuarios
+// Regla: solo se puede modificar/asignar a roles estrictamente menores.
+// ---------------------------------------------------------------------------
+export const USER_ROLE_HIERARCHY = [
+    "DEV",
+    "PRESIDENT",
+    "VICEPRESIDENT",
+    "SECRETARY",
+    "TREASURER",
+    "DIRECTOR",
+    "SUBDIRECTOR",
+    "MEMBER",
+    "VOLUNTEER",
+] as const;
+
+const USER_PERMISSION_LEGACY = "user:manage" as const;
+const USER_PERMISSION_SPLIT = [
+    "user:approve",
+    "user:manage_role",
+    "user:manage_data",
+    "user:moderate",
+] as const;
+
+// ---------------------------------------------------------------------------
 // Mapa de Permisos (Layer 1: System Role Defaults)
 // ---------------------------------------------------------------------------
 export const PERMISSIONS = {
@@ -55,6 +79,11 @@ export const PERMISSIONS = {
     "semester:manage": ["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER"],
 
     // --- Usuarios ---
+    "user:approve": ["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER"],
+    "user:manage_role": ["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER"],
+    "user:manage_data": ["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER"],
+    "user:moderate": ["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER"],
+    // Legacy compatibility: mantener temporalmente durante la migracion.
     "user:manage": ["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER"],
 
     // --- Áreas ---
@@ -99,7 +128,65 @@ export function hasPermission(
     if (role && (PERMISSIONS[permission] as readonly string[]).includes(role)) return true;
     // Layer 2+3: Custom role permissions + Area permissions (merged)
     if (customPermissions?.includes(permission)) return true;
+
+    // Compatibilidad transitoria user:* <-> user:manage (solo para custom permissions).
+    const splitUserPerms = USER_PERMISSION_SPLIT as readonly string[];
+    if (
+        permission === USER_PERMISSION_LEGACY &&
+        splitUserPerms.some((perm) => customPermissions?.includes(perm))
+    ) {
+        return true;
+    }
+    if (
+        splitUserPerms.includes(permission) &&
+        customPermissions?.includes(USER_PERMISSION_LEGACY)
+    ) {
+        return true;
+    }
+
     return false;
+}
+
+/**
+ * Retorna el ranking jerarquico de un rol. Menor valor = mayor jerarquia.
+ */
+export function getRoleHierarchyRank(role: string | null | undefined): number {
+    if (!role) return Number.POSITIVE_INFINITY;
+    const idx = USER_ROLE_HIERARCHY.indexOf(role as (typeof USER_ROLE_HIERARCHY)[number]);
+    return idx === -1 ? Number.POSITIVE_INFINITY : idx;
+}
+
+/**
+ * Regla jerarquica para modificar usuarios:
+ * - Solo se puede modificar a usuarios de rango estrictamente menor.
+ * - No se puede modificar a pares ni superiores.
+ */
+export function canManageUserByHierarchy(
+    actorRole: string | null | undefined,
+    targetRole: string | null | undefined
+): boolean {
+    const actorRank = getRoleHierarchyRank(actorRole);
+    const targetRank = getRoleHierarchyRank(targetRole);
+    if (!Number.isFinite(actorRank)) return false;
+    return actorRank < targetRank;
+}
+
+/**
+ * Regla jerarquica para asignar rol:
+ * - Solo DEV puede asignar DEV.
+ * - Un actor no puede asignar su mismo rango ni uno superior.
+ */
+export function canAssignRoleByHierarchy(
+    actorRole: string | null | undefined,
+    nextRole: string | null | undefined
+): boolean {
+    if (!actorRole || !nextRole) return false;
+    if (nextRole === "DEV") return actorRole === "DEV";
+
+    const actorRank = getRoleHierarchyRank(actorRole);
+    const nextRank = getRoleHierarchyRank(nextRole);
+    if (!Number.isFinite(actorRank) || !Number.isFinite(nextRank)) return false;
+    return actorRank < nextRank;
 }
 
 /**
