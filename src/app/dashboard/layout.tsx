@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { db } from "@/db";
 import { semesters } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { isAdmin } from "@/lib/permissions";
+import { hasPermission } from "@/lib/permissions";
 
 export default async function DashboardLayout({
     children
@@ -39,7 +39,7 @@ export default async function DashboardLayout({
         }
 
         const role = session.user.role;
-        const canManage = isAdmin(role);
+        const canManage = hasPermission(role, "semester:manage", session.user.customPermissions);
 
         if (canManage) {
             redirect("/setup");

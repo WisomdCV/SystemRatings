@@ -4,7 +4,7 @@ import { db } from "@/db";
 import { semesters } from "@/db/schema";
 import { desc, eq } from "drizzle-orm";
 import SetupView from "@/components/setup/SetupView";
-import { isAdmin } from "@/lib/permissions";
+import { hasPermission } from "@/lib/permissions";
 
 interface Props {
     searchParams: Promise<{ first?: string }>;
@@ -17,7 +17,7 @@ export default async function SetupPage({ searchParams }: Props) {
     const params = await searchParams;
     const isFirstTime = params.first === "true";
     const role = session.user.role;
-    const canManage = isAdmin(role) || isFirstTime;
+    const canManage = hasPermission(role, "semester:manage", session.user.customPermissions) || isFirstTime;
 
     // Si hay semestre activo, no debería estar aquí
     const activeSemester = await db.query.semesters.findFirst({

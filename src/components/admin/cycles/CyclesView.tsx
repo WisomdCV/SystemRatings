@@ -15,9 +15,11 @@ import CreateCycleModal from "./CreateCycleModal";
 
 interface CyclesViewProps {
     semesters: any[];
+    canManageSemesters: boolean;
+    canManagePillars: boolean;
 }
 
-export default function CyclesView({ semesters }: CyclesViewProps) {
+export default function CyclesView({ semesters, canManageSemesters, canManagePillars }: CyclesViewProps) {
     const router = useRouter();
     const [loadingId, setLoadingId] = useState<string | null>(null);
     const [confirmActivateId, setConfirmActivateId] = useState<string | null>(null);
@@ -65,7 +67,13 @@ export default function CyclesView({ semesters }: CyclesViewProps) {
                             <p className="text-meteorite-600 font-medium mt-1">Configura y controla los periodos académicos activos.</p>
                         </div>
                     </div>
-                    <CreateCycleModal />
+                    {canManageSemesters ? (
+                        <CreateCycleModal />
+                    ) : (
+                        <div className="inline-flex items-center px-4 py-2 rounded-xl bg-amber-50 text-amber-700 border border-amber-100 text-xs font-bold uppercase tracking-wide">
+                            Modo solo pilares
+                        </div>
+                    )}
                 </div>
 
                 {/* Active Cycle Hero Card */}
@@ -106,22 +114,28 @@ export default function CyclesView({ semesters }: CyclesViewProps) {
                                     </div>
                                 </div>
 
-                                <Button
-                                    variant="destructive"
-                                    className="h-auto py-3 px-6 rounded-xl bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700 border border-red-100 shadow-sm font-bold transition-all"
-                                    onClick={() => handleToggle(activeSemester.id, false)}
-                                    disabled={!!loadingId}
-                                >
-                                    <StopCircle className="w-4 h-4 mr-2" />
-                                    Finalizar Ciclo
-                                </Button>
+                                <div className="flex flex-wrap items-center gap-3">
+                                    {canManageSemesters && (
+                                        <Button
+                                            variant="destructive"
+                                            className="h-auto py-3 px-6 rounded-xl bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700 border border-red-100 shadow-sm font-bold transition-all"
+                                            onClick={() => handleToggle(activeSemester.id, false)}
+                                            disabled={!!loadingId}
+                                        >
+                                            <StopCircle className="w-4 h-4 mr-2" />
+                                            Finalizar Ciclo
+                                        </Button>
+                                    )}
 
-                                <Link href={`/admin/cycles/${activeSemester.id}/pillars`}>
-                                    <Button variant="outline" className="h-auto py-3 px-6 rounded-xl bg-white border border-gray-200 text-gray-700 font-bold hover:bg-meteorite-600 hover:text-white hover:border-meteorite-600 transition-all shadow-sm">
-                                        <Layers className="w-4 h-4 mr-2" />
-                                        Gestionar Pilares
-                                    </Button>
-                                </Link>
+                                    {canManagePillars && (
+                                        <Link href={`/admin/cycles/${activeSemester.id}/pillars`}>
+                                            <Button variant="outline" className="h-auto py-3 px-6 rounded-xl bg-white border border-gray-200 text-gray-700 font-bold hover:bg-meteorite-600 hover:text-white hover:border-meteorite-600 transition-all shadow-sm">
+                                                <Layers className="w-4 h-4 mr-2" />
+                                                Gestionar Pilares
+                                            </Button>
+                                        </Link>
+                                    )}
+                                </div>
                             </CardContent>
                         </Card>
                     ) : (
@@ -176,20 +190,27 @@ export default function CyclesView({ semesters }: CyclesViewProps) {
                                                 </span>
                                             </td>
                                             <td className="px-8 py-5 text-right opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <Button
-                                                    size="sm"
-                                                    className="bg-white border border-emerald-200 text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 font-bold rounded-lg shadow-sm"
-                                                    onClick={() => setConfirmActivateId(sem.id)}
-                                                    disabled={!!loadingId}
-                                                >
-                                                    <CheckCircle2 className="w-4 h-4 mr-2" />
-                                                    Reactivar
-                                                </Button>
-                                                <Link href={`/admin/cycles/${sem.id}/pillars`}>
-                                                    <Button size="sm" variant="ghost" className="text-gray-400 hover:text-meteorite-600">
-                                                        <Layers className="w-4 h-4" />
-                                                    </Button>
-                                                </Link>
+                                                <div className="flex items-center justify-end gap-2">
+                                                    {canManageSemesters && (
+                                                        <Button
+                                                            size="sm"
+                                                            className="bg-white border border-emerald-200 text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 font-bold rounded-lg shadow-sm"
+                                                            onClick={() => setConfirmActivateId(sem.id)}
+                                                            disabled={!!loadingId}
+                                                        >
+                                                            <CheckCircle2 className="w-4 h-4 mr-2" />
+                                                            Reactivar
+                                                        </Button>
+                                                    )}
+
+                                                    {canManagePillars && (
+                                                        <Link href={`/admin/cycles/${sem.id}/pillars`}>
+                                                            <Button size="sm" variant="ghost" className="text-gray-400 hover:text-meteorite-600">
+                                                                <Layers className="w-4 h-4" />
+                                                            </Button>
+                                                        </Link>
+                                                    )}
+                                                </div>
                                             </td>
                                         </tr>
                                     ))}

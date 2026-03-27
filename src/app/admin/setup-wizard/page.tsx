@@ -14,7 +14,7 @@ export default async function SetupWizardPage() {
     if (!session?.user) redirect("/login");
 
     const role = session.user.role || "";
-    if (!hasPermission(role, "semester:manage")) {
+    if (!hasPermission(role, "semester:manage", session.user.customPermissions)) {
         return redirect("/dashboard?error=AccessDenied");
     }
 

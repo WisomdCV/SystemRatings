@@ -8,12 +8,16 @@ import { getPillarsBySemesterAction } from "@/server/actions/pillar.actions";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
+import { hasPermission } from "@/lib/permissions";
 
 export default async function PillarsPage(props: { params: Promise<{ id: string }> }) {
     const params = await props.params;
     const session = await authFresh();
-    if (!session?.user || !["DEV", "PRESIDENT"].includes(session.user.role || "")) {
-        return <div className="p-8 text-center text-red-600">No autorizado</div>;
+    if (!session?.user) return redirect("/login");
+
+    const role = session.user.role;
+    if (!hasPermission(role, "pillar:manage", session.user.customPermissions)) {
+        return redirect("/dashboard?error=AccessDenied");
     }
 
     const { id: semesterId } = params;

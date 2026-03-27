@@ -9,8 +9,12 @@ export default async function CyclesPage() {
     if (!session?.user) redirect("/login");
 
     const role = session.user.role;
-    // Strict Access Control: Only President and Dev
-    if (!hasPermission(role, "semester:manage")) {
+    const customPermissions = session.user.customPermissions;
+
+    const canManageSemesters = hasPermission(role, "semester:manage", customPermissions);
+    const canManagePillars = hasPermission(role, "pillar:manage", customPermissions);
+
+    if (!canManageSemesters && !canManagePillars) {
         return redirect("/dashboard?error=AccessDenied");
     }
 
@@ -24,5 +28,11 @@ export default async function CyclesPage() {
         );
     }
 
-    return <CyclesView semesters={semesters} />;
+    return (
+        <CyclesView
+            semesters={semesters}
+            canManageSemesters={canManageSemesters}
+            canManagePillars={canManagePillars}
+        />
+    );
 }

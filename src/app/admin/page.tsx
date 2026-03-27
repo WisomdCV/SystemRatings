@@ -12,6 +12,9 @@ export default async function AdminHubPage() {
     if (!session?.user) redirect("/login");
 
     const role = session.user.role || "";
+    const customPermissions = session.user.customPermissions;
+    const canManageSemesters = hasPermission(role, "semester:manage", customPermissions);
+    const canManagePillars = hasPermission(role, "pillar:manage", customPermissions);
 
     // El usuario debe tener al menos permiso básico de acceso al panel admin
     if (!hasPermission(role, "admin:access", session.user.customPermissions)) {
@@ -69,12 +72,12 @@ export default async function AdminHubPage() {
         },
         {
             title: "Ciclos Académicos",
-            description: "Configura nuevos semestres, activa o desactiva ciclos para limpiar los datos.",
+            description: "Configura semestres y accede al gestor de pilares por ciclo.",
             href: "/admin/cycles",
             icon: <RefreshCcw className="w-8 h-8 text-white" />,
             colorClass: "from-purple-500 to-purple-700",
             shadowClass: "shadow-purple-500/30",
-            hasAccess: hasPermission(role, "semester:manage", session.user.customPermissions)
+            hasAccess: canManageSemesters || canManagePillars
         },
         {
             title: "Ajustes de Proyectos",
