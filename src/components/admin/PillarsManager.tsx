@@ -286,7 +286,7 @@ export function PillarsManager({ semesterId, initialPillars, otherSemesters }: P
                                     <TableCell className="px-6 py-4 text-center">
                                         {(pillar.isDirectorOnly || pillar.directorWeight !== null) ? (
                                             <span className="bg-purple-50 text-purple-700 border border-purple-100 px-3 py-1 rounded-lg text-sm font-bold shadow-sm inline-block min-w-[3rem]">
-                                                {pillar.isDirectorOnly ? pillar.weight : pillar.directorWeight}%
+                                                {(pillar.directorWeight !== null && pillar.directorWeight !== undefined) ? pillar.directorWeight : pillar.weight}%
                                             </span>
                                         ) : (
                                             <span className="text-gray-300 font-bold text-lg" title="Mismo peso que miembros">-</span>

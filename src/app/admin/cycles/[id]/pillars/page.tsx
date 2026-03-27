@@ -32,7 +32,7 @@ export default async function PillarsPage(props: { params: Promise<{ id: string 
         semesterId: p.semesterId,
         name: p.name,
         weight: p.weight,
-        directorWeight: p.directorWeight || null,
+        directorWeight: p.directorWeight ?? null,
         maxScore: p.maxScore ?? 5, // Nullish coalescing for default
         isDirectorOnly: p.isDirectorOnly ?? false // Nullish coalescing for default
     })) : [];

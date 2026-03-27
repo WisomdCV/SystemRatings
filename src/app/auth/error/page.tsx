@@ -8,6 +8,7 @@ import { Suspense } from "react";
 function ErrorContent() {
     const searchParams = useSearchParams();
     const error = searchParams.get("error");
+    const backHref = error === "RequestRejected" ? "https://iiseunsa.com" : "/";
 
     let title = "Autenticación Fallida";
     let message = "Ocurrió un error al intentar iniciar sesión.";
@@ -45,7 +46,7 @@ function ErrorContent() {
                 </div>
 
                 <Link
-                    href="/"
+                    href={backHref}
                     className="inline-flex items-center justify-center w-full px-6 py-3 text-white font-medium bg-meteorite-600 hover:bg-meteorite-700 rounded-xl transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5"
                 >
                     <ArrowLeft className="w-4 h-4 mr-2" />
