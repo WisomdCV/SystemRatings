@@ -7,6 +7,11 @@ import { eq, desc, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { hasPermission } from "@/lib/permissions";
 
+function isAccessRequestUser(user: { status: string | null; role: string | null }) {
+    // Keep the same business rule used in dashboard notifications.
+    return user.status === "PENDING_APPROVAL" || (user.role === "VOLUNTEER" && user.status === "ACTIVE");
+}
+
 // ─── Get pending approval users ──────────────────────────────────────────────
 
 export async function getPendingUsersAction() {
@@ -18,7 +23,7 @@ export async function getPendingUsersAction() {
         }
 
         const pendingUsers = await db.query.users.findMany({
-            where: eq(users.status, "PENDING_APPROVAL"),
+            where: sql`${users.status} = 'PENDING_APPROVAL' OR (${users.role} = 'VOLUNTEER' AND ${users.status} = 'ACTIVE')`,
             orderBy: [desc(users.createdAt)],
             columns: {
                 id: true,
@@ -51,7 +56,7 @@ export async function getPendingCountAction() {
         const [result] = await db
             .select({ count: sql<number>`count(*)` })
             .from(users)
-            .where(eq(users.status, "PENDING_APPROVAL"));
+            .where(sql`${users.status} = 'PENDING_APPROVAL' OR (${users.role} = 'VOLUNTEER' AND ${users.status} = 'ACTIVE')`);
 
         return { success: true as const, data: result.count };
     } catch (error) {
@@ -73,12 +78,12 @@ export async function approveUserAction(userId: string) {
         // Verify the user exists and is actually pending
         const targetUser = await db.query.users.findFirst({
             where: eq(users.id, userId),
-            columns: { id: true, status: true, email: true, name: true }
+            columns: { id: true, status: true, role: true, email: true, name: true }
         });
 
         if (!targetUser) return { success: false as const, error: "Usuario no encontrado." };
 
-        if (targetUser.status !== "PENDING_APPROVAL") {
+        if (!isAccessRequestUser(targetUser)) {
             return { success: false as const, error: "Este usuario no tiene una solicitud pendiente." };
         }
 
@@ -91,6 +96,7 @@ export async function approveUserAction(userId: string) {
         revalidatePath("/admin/approvals");
         revalidatePath("/admin/users");
         revalidatePath("/admin");
+        revalidatePath("/dashboard");
         return {
             success: true as const,
             message: `${targetUser.name || targetUser.email} aprobado como Miembro.`
@@ -113,12 +119,12 @@ export async function rejectUserAction(userId: string) {
 
         const targetUser = await db.query.users.findFirst({
             where: eq(users.id, userId),
-            columns: { id: true, status: true, email: true, name: true }
+            columns: { id: true, status: true, role: true, email: true, name: true }
         });
 
         if (!targetUser) return { success: false as const, error: "Usuario no encontrado." };
 
-        if (targetUser.status !== "PENDING_APPROVAL") {
+        if (!isAccessRequestUser(targetUser)) {
             return { success: false as const, error: "Este usuario no tiene una solicitud pendiente." };
         }
 
@@ -130,6 +136,7 @@ export async function rejectUserAction(userId: string) {
 
         revalidatePath("/admin/approvals");
         revalidatePath("/admin");
+        revalidatePath("/dashboard");
         return {
             success: true as const,
             message: `Solicitud de ${targetUser.name || targetUser.email} rechazada y cuenta baneada.`
