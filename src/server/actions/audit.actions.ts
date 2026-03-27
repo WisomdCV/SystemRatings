@@ -313,6 +313,9 @@ export async function getAuditDataAction(): Promise<ActionResult<AuditData>> {
                 }
             }
 
+            const areaPerms = u.currentAreaId ? (areaPermsMap.get(u.currentAreaId) ?? []) : [];
+            const allExtraPerms = Array.from(new Set([...customPerms, ...areaPerms]));
+
             return {
                 id: u.id,
                 name: u.name,
@@ -324,8 +327,8 @@ export async function getAuditDataAction(): Promise<ActionResult<AuditData>> {
                 currentAreaName: (u as any).currentArea?.name ?? null,
                 currentAreaColor: (u as any).currentArea?.color ?? null,
                 customRoleNames,
-                customPermissions: customPerms,
-                effectivePermissions: computeEffectivePermissions(u.role, customPerms),
+                customPermissions: allExtraPerms,
+                effectivePermissions: computeEffectivePermissions(u.role, allExtraPerms),
             };
         });
 

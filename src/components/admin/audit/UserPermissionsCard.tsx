@@ -125,7 +125,7 @@ export default function UserPermissionsCard({ user, allPermissions }: UserPermis
                 <div className="flex-1 px-4 py-3 flex items-center gap-2 border-l border-meteorite-100">
                     <KeyRound className="w-4 h-4 text-amber-500" />
                     <span className="text-sm font-bold text-amber-600">{user.customPermissions.length}</span>
-                    <span className="text-xs text-meteorite-400">vía custom</span>
+                    <span className="text-xs text-meteorite-400">vía extra</span>
                 </div>
             </div>
 
@@ -185,7 +185,7 @@ function SourceBadge({ source }: { source: "role" | "custom" | "both" }) {
         custom: "bg-amber-50 text-amber-600 border-amber-100",
         both: "bg-purple-50 text-purple-600 border-purple-100",
     };
-    const labels = { role: "Rol", custom: "Custom", both: "Ambos" };
+    const labels = { role: "Rol", custom: "Extra", both: "Ambos" };
     return (
         <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border flex-shrink-0 ${styles[source]}`}>
             {labels[source]}

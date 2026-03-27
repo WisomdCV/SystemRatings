@@ -136,7 +136,7 @@ export default function PermissionMatrix({ users, allPermissions }: PermissionMa
                     <span className="w-5 h-5 rounded-md bg-amber-100 border border-amber-200 flex items-center justify-center">
                         <Check className="w-3 h-3 text-amber-600" />
                     </span>
-                    Vía Rol Custom
+                    Vía permisos extra (custom/área)
                 </span>
                 <span className="flex items-center gap-1.5">
                     <span className="w-5 h-5 rounded-md bg-purple-100 border border-purple-200 flex items-center justify-center">
