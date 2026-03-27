@@ -83,42 +83,56 @@ export default async function AgendaPage() {
             const visibilityConditions = [eq(events.createdById, userId)];
 
             if (canCreateGeneral) {
-                visibilityConditions.push(and(
+                const clause = and(
                     eq(events.eventScope, "IISE"),
                     isNull(events.targetAreaId)
-                ));
+                );
+                if (clause) visibilityConditions.push(clause);
             }
 
             if (currentAreaId && (canManageOwn || canCreateAreaOwn)) {
-                visibilityConditions.push(and(
+                const clause = and(
                     eq(events.eventScope, "IISE"),
                     eq(events.targetAreaId, currentAreaId)
-                ));
+                );
+                if (clause) visibilityConditions.push(clause);
             }
 
             if (canCreateAreaAny) {
-                visibilityConditions.push(and(
+                const clause = and(
                     eq(events.eventScope, "IISE"),
                     isNotNull(events.targetAreaId)
-                ));
+                );
+                if (clause) visibilityConditions.push(clause);
             }
 
             if (projectIds.length > 0) {
-                visibilityConditions.push(and(
+                const clause = and(
                     eq(events.eventScope, "PROJECT"),
                     inArray(events.projectId, projectIds)
-                ));
+                );
+                if (clause) visibilityConditions.push(clause);
             }
 
             if (visibilityConditions.length > 0) {
-                eventsData = await db.query.events.findMany({
-                    where: and(
+                const visibilityClause = or(...visibilityConditions);
+                if (!visibilityClause) {
+                    eventsData = [];
+                } else {
+                    const whereClause = and(
                         eq(events.semesterId, activeSemester.id),
-                        or(...visibilityConditions)
-                    ),
-                    orderBy: [desc(events.date)],
-                    with: eventWith,
-                });
+                        visibilityClause
+                    );
+                    if (!whereClause) {
+                        eventsData = [];
+                    } else {
+                        eventsData = await db.query.events.findMany({
+                            where: whereClause,
+                            orderBy: [desc(events.date)],
+                            with: eventWith,
+                        });
+                    }
+                }
             }
         }
 

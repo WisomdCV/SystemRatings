@@ -27,8 +27,7 @@ interface Area {
     color: string | null;
     description: string | null;
     isLeadershipArea: boolean | null;
-    canCreateEvents: boolean | null;
-    canCreateIndividualEvents: boolean | null;
+    permissions?: { id: string; areaId: string; permission: string }[];
 }
 
 interface Leader {
@@ -112,22 +111,10 @@ const CAPABILITY_INFO = {
         description: "Los miembros de esta área forman parte de la dirección ejecutiva de IISE.",
         accent: "amber" as const,
     },
-    canCreateEvents: {
-        label: "Crear eventos de área",
-        description: "Los directores del área pueden crear eventos generales y de área para sus miembros.",
-        accent: "violet" as const,
-    },
-    canCreateIndividualEvents: {
-        label: "Reuniones individuales",
-        description: "Los directores pueden agendar reuniones 1-a-1 con miembros de su área.",
-        accent: "teal" as const,
-    },
 } as const;
 
 const ACCENT_CLASSES = {
     amber: { on: "bg-amber-500", ring: "bg-amber-50 border-amber-200" },
-    violet: { on: "bg-violet-500", ring: "bg-violet-50 border-violet-200" },
-    teal: { on: "bg-teal-500", ring: "bg-teal-50 border-teal-200" },
 };
 
 // ─── Main Component ──────────────────────────────────────────────────────────
@@ -222,8 +209,7 @@ export default function SetupWizard({
                 description: area.description,
                 color: area.color || "#6366f1",
                 isLeadershipArea: field === "isLeadershipArea" ? newValue : (area.isLeadershipArea ?? false),
-                canCreateEvents: field === "canCreateEvents" ? newValue : (area.canCreateEvents ?? false),
-                canCreateIndividualEvents: field === "canCreateIndividualEvents" ? newValue : (area.canCreateIndividualEvents ?? false),
+                permissions: (area.permissions ?? []).map(p => p.permission),
             });
             if (res.success) {
                 showFeedback("success", "Capacidad actualizada.");
