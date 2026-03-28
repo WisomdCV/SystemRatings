@@ -164,12 +164,6 @@ export function hasPermission(
     ) {
         return true;
     }
-    if (
-        permission === ADMIN_PERMISSION_LEGACY &&
-        customPermissions?.includes(ADMIN_PERMISSION_ROLES)
-    ) {
-        return true;
-    }
 
     // Compatibilidad transitoria dashboard:* (analytics <-> area_comparison/leadership_view).
     const dashboardLegacyPerms = DASHBOARD_PERMISSION_LEGACY as readonly string[];
