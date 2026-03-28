@@ -24,7 +24,10 @@ import {
 
 const revalidateRoles = () => {
     revalidatePath("/admin/roles");
-    revalidatePath("/dashboard/users");
+    revalidatePath("/admin");
+    revalidatePath("/admin/users");
+    revalidatePath("/admin/audit");
+    revalidatePath("/dashboard");
 };
 
 // =============================================================================
