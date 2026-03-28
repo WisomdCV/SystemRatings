@@ -71,8 +71,8 @@ export async function createCustomRoleAction(input: CreateCustomRoleDTO) {
         const session = await auth();
         if (!session?.user?.id) return { success: false as const, error: "No autorizado" };
 
-        if (!hasPermission(session.user.role, "admin:full", session.user.customPermissions)) {
-            return { success: false as const, error: "Solo DEV y PRESIDENT pueden gestionar roles." };
+        if (!hasPermission(session.user.role, "admin:roles", session.user.customPermissions)) {
+            return { success: false as const, error: "No tienes permisos para gestionar roles." };
         }
 
         const validated = CreateCustomRoleSchema.safeParse(input);
@@ -98,7 +98,7 @@ export async function updateCustomRoleAction(input: UpdateCustomRoleDTO) {
         const session = await auth();
         if (!session?.user?.id) return { success: false as const, error: "No autorizado" };
 
-        if (!hasPermission(session.user.role, "admin:full", session.user.customPermissions)) {
+        if (!hasPermission(session.user.role, "admin:roles", session.user.customPermissions)) {
             return { success: false as const, error: "No tienes permisos." };
         }
 
@@ -129,7 +129,7 @@ export async function deleteCustomRoleAction(roleId: string) {
         const session = await auth();
         if (!session?.user?.id) return { success: false as const, error: "No autorizado" };
 
-        if (!hasPermission(session.user.role, "admin:full", session.user.customPermissions)) {
+        if (!hasPermission(session.user.role, "admin:roles", session.user.customPermissions)) {
             return { success: false as const, error: "No tienes permisos." };
         }
 
@@ -159,7 +159,7 @@ export async function assignCustomRoleAction(input: AssignCustomRoleDTO) {
         const session = await auth();
         if (!session?.user?.id) return { success: false as const, error: "No autorizado" };
 
-        if (!hasPermission(session.user.role, "admin:full", session.user.customPermissions)) {
+        if (!hasPermission(session.user.role, "admin:roles", session.user.customPermissions)) {
             return { success: false as const, error: "No tienes permisos." };
         }
 
@@ -183,7 +183,7 @@ export async function removeCustomRoleAction(input: AssignCustomRoleDTO) {
         const session = await auth();
         if (!session?.user?.id) return { success: false as const, error: "No autorizado" };
 
-        if (!hasPermission(session.user.role, "admin:full", session.user.customPermissions)) {
+        if (!hasPermission(session.user.role, "admin:roles", session.user.customPermissions)) {
             return { success: false as const, error: "No tienes permisos." };
         }
 

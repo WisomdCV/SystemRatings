@@ -151,7 +151,7 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
     const canViewGrades =
         hasPermission(userRole, "grade:view_all", userCustomPermissions) ||
         hasPermission(userRole, "grade:view_own_area", userCustomPermissions);
-    const canViewAreaComparison = hasPermission(userRole, "dashboard:area_comparison", userCustomPermissions);
+    const canViewAreaComparison = hasPermission(userRole, "dashboard:analytics", userCustomPermissions);
 
     const eventsLink = canAccessAdmin ? "/admin/events" : "/dashboard/agenda";
 

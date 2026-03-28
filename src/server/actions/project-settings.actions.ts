@@ -5,11 +5,17 @@ import { db } from "@/db";
 import { projectAreas, projectRoles } from "@/db/schema";
 import { eq, asc, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { hasPermission } from "@/lib/permissions";
 
-/** Validates if the user is a system admin */
-async function isAdminUser() {
+/** Validates if the user can manage admin roles/settings */
+async function canManageProjectSettings() {
     const session = await auth();
-    return session?.user?.role === "DEV" || session?.user?.role === "PRESIDENT";
+    if (!session?.user) return false;
+    return hasPermission(
+        session.user.role,
+        "admin:roles",
+        session.user.customPermissions
+    );
 }
 
 // ============================================================================
@@ -33,7 +39,7 @@ export async function getProjectAreasAction() {
 
 export async function createProjectAreaAction(data: { name: string; description?: string; color: string }) {
     try {
-        if (!(await isAdminUser())) return { success: false as const, error: "No autorizado." };
+        if (!(await canManageProjectSettings())) return { success: false as const, error: "No autorizado." };
         if (!data.name.trim()) return { success: false as const, error: "El nombre es obligatorio." };
 
         const lastArea = await db.query.projectAreas.findFirst({ orderBy: [desc(projectAreas.position)] });
@@ -56,7 +62,7 @@ export async function createProjectAreaAction(data: { name: string; description?
 
 export async function updateProjectAreaAction(id: string, data: { name: string; description?: string; color: string; membersCanCreateEvents?: boolean }) {
     try {
-        if (!(await isAdminUser())) return { success: false as const, error: "No autorizado." };
+        if (!(await canManageProjectSettings())) return { success: false as const, error: "No autorizado." };
         if (!data.name.trim()) return { success: false as const, error: "El nombre es obligatorio." };
 
         // check if system area
@@ -80,7 +86,7 @@ export async function updateProjectAreaAction(id: string, data: { name: string; 
 
 export async function deleteProjectAreaAction(id: string) {
     try {
-        if (!(await isAdminUser())) return { success: false as const, error: "No autorizado." };
+        if (!(await canManageProjectSettings())) return { success: false as const, error: "No autorizado." };
 
         const existing = await db.query.projectAreas.findFirst({ where: eq(projectAreas.id, id) });
         if (!existing) return { success: false as const, error: "Área no encontrada." };
@@ -97,7 +103,7 @@ export async function deleteProjectAreaAction(id: string) {
 
 export async function reorderProjectAreasAction(orderedIds: string[]) {
     try {
-        if (!(await isAdminUser())) return { success: false as const, error: "No autorizado." };
+        if (!(await canManageProjectSettings())) return { success: false as const, error: "No autorizado." };
 
         // Fast batch-like update via loop
         for (let i = 0; i < orderedIds.length; i++) {
@@ -136,7 +142,7 @@ export async function getProjectRolesAction() {
 
 export async function createProjectRoleAction(data: { name: string; description?: string; color: string }) {
     try {
-        if (!(await isAdminUser())) return { success: false as const, error: "No autorizado." };
+        if (!(await canManageProjectSettings())) return { success: false as const, error: "No autorizado." };
         if (!data.name.trim()) return { success: false as const, error: "El nombre es obligatorio." };
 
         // Auto calculate a hierarchy level: lowest existing - 10, minimum 0
@@ -161,7 +167,7 @@ export async function createProjectRoleAction(data: { name: string; description?
 
 export async function updateProjectRoleAction(id: string, data: { name: string; description?: string; color: string; canCreateEvents?: boolean; canCreateTasks?: boolean }) {
     try {
-        if (!(await isAdminUser())) return { success: false as const, error: "No autorizado." };
+        if (!(await canManageProjectSettings())) return { success: false as const, error: "No autorizado." };
         if (!data.name.trim()) return { success: false as const, error: "El nombre es obligatorio." };
 
         const existing = await db.query.projectRoles.findFirst({ where: eq(projectRoles.id, id) });
@@ -185,7 +191,7 @@ export async function updateProjectRoleAction(id: string, data: { name: string; 
 
 export async function deleteProjectRoleAction(id: string) {
     try {
-        if (!(await isAdminUser())) return { success: false as const, error: "No autorizado." };
+        if (!(await canManageProjectSettings())) return { success: false as const, error: "No autorizado." };
 
         const existing = await db.query.projectRoles.findFirst({ where: eq(projectRoles.id, id) });
         if (!existing) return { success: false as const, error: "Rol no encontrado." };
@@ -206,7 +212,7 @@ export async function deleteProjectRoleAction(id: string) {
  */
 export async function reorderProjectRolesAction(orderedIds: string[]) {
     try {
-        if (!(await isAdminUser())) return { success: false as const, error: "No autorizado." };
+        if (!(await canManageProjectSettings())) return { success: false as const, error: "No autorizado." };
 
         const total = orderedIds.length;
         for (let i = 0; i < total; i++) {

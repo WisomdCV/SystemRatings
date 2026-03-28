@@ -57,7 +57,10 @@ const PERMISSION_LABELS: Record<string, string> = {
     "project:create": "Crear proyectos",
     "project:manage": "Gestionar proyectos",
     "admin:access": "Acceso al panel admin",
-    "admin:full": "Admin completo (CRUD roles)",
+    "admin:audit": "Ver auditoría de permisos",
+    "admin:roles": "Gestionar roles y ajustes admin",
+    "admin:full": "Admin completo (legacy)",
+    "dashboard:analytics": "Ver analíticas de dashboard",
     "dashboard:area_comparison": "Ver comparación de áreas",
     "dashboard:leadership_view": "Vista de liderazgo",
 };

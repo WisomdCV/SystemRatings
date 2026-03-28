@@ -23,7 +23,7 @@ export default async function AdminUsersPage(props: PageProps) {
     const canManageRole = hasPermission(roleValue, "user:manage_role", customPermissions);
     const canManageData = hasPermission(roleValue, "user:manage_data", customPermissions);
     const canModerate = hasPermission(roleValue, "user:moderate", customPermissions);
-    const canManageCustomRoles = hasPermission(roleValue, "admin:full", customPermissions);
+    const canManageCustomRoles = hasPermission(roleValue, "admin:roles", customPermissions);
     const canManageUsers =
         canManageRole || canManageData || canModerate;
 

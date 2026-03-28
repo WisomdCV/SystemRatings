@@ -246,8 +246,8 @@ export async function getAuditDataAction(): Promise<ActionResult<AuditData>> {
         const session = await auth();
         if (!session?.user?.id) return { success: false, error: "No autenticado" };
 
-        const role = session.user.role;
-        if (!role || !["DEV", "PRESIDENT"].includes(role)) {
+        const role = session.user.role || "";
+        if (!hasPermission(role, "admin:audit", session.user.customPermissions)) {
             return { success: false, error: "Sin permisos para acceder a la auditoría" };
         }
 

@@ -17,7 +17,7 @@ export default async function EventsPage() {
     const currentAreaId = session.user.currentAreaId;
 
     // 1. Role Protection
-    if (!hasPermission(role, "admin:access")) {
+    if (!hasPermission(role, "admin:access", session.user.customPermissions)) {
         return redirect("/dashboard?error=AccessDenied");
     }
 

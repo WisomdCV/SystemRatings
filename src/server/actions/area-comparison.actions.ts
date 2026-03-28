@@ -16,6 +16,14 @@ export interface AreaComparisonData {
 const MONTH_NAMES = ["", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
     "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
 
+function canAccessDashboardAnalytics(
+    session: { user?: { role?: string | null; customPermissions?: string[] } } | null
+): boolean {
+    if (!session?.user) return false;
+    const role = session.user.role || "";
+    return hasPermission(role, "dashboard:analytics", session.user.customPermissions);
+}
+
 /**
  * Gets area comparison data for the active semester
  */
@@ -30,11 +38,7 @@ export async function getAreaComparisonAction(): Promise<{
             return { success: false, error: "No autorizado" };
         }
 
-        // Only allow leadership to see this
-        const role = session.user.role || "";
-        const canViewComparison = hasPermission(role, "dashboard:area_comparison", session.user.customPermissions);
-
-        if (!canViewComparison) {
+        if (!canAccessDashboardAnalytics(session)) {
             return { success: false, error: "No tienes permisos para ver esta información." };
         }
 
@@ -142,6 +146,10 @@ export async function getAreaMonthlyRankingAction(month: number, year: number): 
             return { success: false, error: "No autorizado" };
         }
 
+        if (!canAccessDashboardAnalytics(session)) {
+            return { success: false, error: "No tienes permisos para ver esta información." };
+        }
+
         // 1. Get Active Semester
         const activeSemester = await db.query.semesters.findFirst({
             where: eq(semesters.isActive, true)
@@ -196,6 +204,9 @@ export async function getTopMembersGlobalAction(month: number, year: number): Pr
     try {
         const session = await auth();
         if (!session?.user) return { success: false, error: "No autorizado" };
+        if (!canAccessDashboardAnalytics(session)) {
+            return { success: false, error: "No tienes permisos para ver esta información." };
+        }
 
         const activeSemester = await db.query.semesters.findFirst({
             where: eq(semesters.isActive, true)
@@ -283,6 +294,9 @@ export async function getPerformanceDistributionAction(month: number, year: numb
     try {
         const session = await auth();
         if (!session?.user) return { success: false, error: "No autorizado" };
+        if (!canAccessDashboardAnalytics(session)) {
+            return { success: false, error: "No tienes permisos para ver esta información." };
+        }
 
         const activeSemester = await db.query.semesters.findFirst({
             where: eq(semesters.isActive, true)
@@ -335,6 +349,9 @@ export async function getAreaPillarsAction(areaId: string, month: number, year: 
     try {
         const session = await auth();
         if (!session?.user) return { success: false, error: "No autorizado" };
+        if (!canAccessDashboardAnalytics(session)) {
+            return { success: false, error: "No tienes permisos para ver esta información." };
+        }
 
         const activeSemester = await db.query.semesters.findFirst({
             where: eq(semesters.isActive, true)

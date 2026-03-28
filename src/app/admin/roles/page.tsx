@@ -12,7 +12,7 @@ export default async function RolesPage() {
     if (!session?.user) redirect("/login");
 
     const role = session.user.role || "";
-    if (!hasPermission(role, "admin:full", session.user.customPermissions)) {
+    if (!hasPermission(role, "admin:roles", session.user.customPermissions)) {
         return redirect("/dashboard?error=AccessDenied");
     }
 

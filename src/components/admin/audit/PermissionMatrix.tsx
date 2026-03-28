@@ -41,10 +41,13 @@ const SHORT_LABELS: Record<string, string> = {
     "area:manage": "Gestionar",
     "project:create": "Crear",
     "project:manage": "Gestionar",
+    "dashboard:analytics": "Analíticas",
     "dashboard:area_comparison": "Áreas KPI",
     "dashboard:leadership_view": "Liderazgo",
     "admin:access": "Acceso",
-    "admin:full": "Completo",
+    "admin:audit": "Auditoría",
+    "admin:roles": "Roles",
+    "admin:full": "Completo (legacy)",
 };
 
 interface PermissionMatrixProps {

@@ -2,13 +2,15 @@ import { authFresh } from "@/server/auth-fresh";
 import { redirect } from "next/navigation";
 import { getProjectAreasAction, getProjectRolesAction } from "@/server/actions/project-settings.actions";
 import ProjectSettings from "@/components/admin/ProjectSettings";
+import { hasPermission } from "@/lib/permissions";
 import { Settings, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 
 export default async function ProjectSettingsPage() {
     const session = await authFresh();
-    if (session?.user?.role !== "DEV" && session?.user?.role !== "PRESIDENT") {
-        redirect("/dashboard");
+    const role = session?.user?.role || "";
+    if (!session?.user || !hasPermission(role, "admin:roles", session.user.customPermissions)) {
+        redirect("/dashboard?error=AccessDenied");
     }
 
     const [areasResult, rolesResult] = await Promise.all([

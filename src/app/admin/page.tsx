@@ -20,6 +20,8 @@ export default async function AdminHubPage() {
     const canManageUserData = hasPermission(role, "user:manage_data", customPermissions);
     const canModerateUsers = hasPermission(role, "user:moderate", customPermissions);
     const canManageUsers = canManageUserRoles || canManageUserData || canModerateUsers;
+    const canManageAdminRoles = hasPermission(role, "admin:roles", customPermissions);
+    const canViewAdminAudit = hasPermission(role, "admin:audit", customPermissions);
 
     // El usuario debe tener al menos permiso básico de acceso al panel admin
     if (!hasPermission(role, "admin:access", session.user.customPermissions)) {
@@ -73,7 +75,7 @@ export default async function AdminHubPage() {
             icon: <Shield className="w-8 h-8 text-white" />,
             colorClass: "from-amber-500 to-amber-700",
             shadowClass: "shadow-amber-500/30",
-            hasAccess: hasPermission(role, "admin:full", session.user.customPermissions)
+            hasAccess: canManageAdminRoles
         },
         {
             title: "Ciclos Académicos",
@@ -91,7 +93,7 @@ export default async function AdminHubPage() {
             icon: <Settings className="w-8 h-8 text-white" />,
             colorClass: "from-indigo-500 to-indigo-700",
             shadowClass: "shadow-indigo-500/30",
-            hasAccess: role === "DEV" || role === "PRESIDENT"
+            hasAccess: canManageAdminRoles
         },
         {
             title: "Auditoría de Permisos",
@@ -100,7 +102,7 @@ export default async function AdminHubPage() {
             icon: <ShieldCheck className="w-8 h-8 text-white" />,
             colorClass: "from-rose-500 to-rose-700",
             shadowClass: "shadow-rose-500/30",
-            hasAccess: role === "DEV" || role === "PRESIDENT"
+            hasAccess: canViewAdminAudit
         }
     ];
 

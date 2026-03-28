@@ -48,6 +48,16 @@ const USER_PERMISSION_SPLIT = [
     "user:moderate",
 ] as const;
 
+const ADMIN_PERMISSION_LEGACY = "admin:full" as const;
+const ADMIN_PERMISSION_ROLES = "admin:roles" as const;
+const ADMIN_PERMISSION_AUDIT = "admin:audit" as const;
+
+const DASHBOARD_PERMISSION_ANALYTICS = "dashboard:analytics" as const;
+const DASHBOARD_PERMISSION_LEGACY = [
+    "dashboard:area_comparison",
+    "dashboard:leadership_view",
+] as const;
+
 // ---------------------------------------------------------------------------
 // Mapa de Permisos (Layer 1: System Role Defaults)
 // ---------------------------------------------------------------------------
@@ -94,11 +104,14 @@ export const PERMISSIONS = {
     "project:manage": ["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER"],
 
     // --- Dashboard / Vistas ---
+    "dashboard:analytics":      ["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER", "DIRECTOR", "SUBDIRECTOR"],
     "dashboard:area_comparison":  ["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER", "DIRECTOR", "SUBDIRECTOR"],
     "dashboard:leadership_view":  ["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER", "DIRECTOR", "SUBDIRECTOR"],
 
     // --- Admin panel access (route-level) ---
     "admin:access": ["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER", "DIRECTOR", "SUBDIRECTOR"],
+    "admin:audit":  ["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER"],
+    "admin:roles":  ["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER"],
     "admin:full":   ["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER"],
 } as const satisfies Record<string, readonly Role[]>;
 
@@ -140,6 +153,35 @@ export function hasPermission(
     if (
         splitUserPerms.includes(permission) &&
         customPermissions?.includes(USER_PERMISSION_LEGACY)
+    ) {
+        return true;
+    }
+
+    // Compatibilidad transitoria admin:* (admin:full <-> admin:roles/audit).
+    if (
+        (permission === ADMIN_PERMISSION_AUDIT || permission === ADMIN_PERMISSION_ROLES) &&
+        customPermissions?.includes(ADMIN_PERMISSION_LEGACY)
+    ) {
+        return true;
+    }
+    if (
+        permission === ADMIN_PERMISSION_LEGACY &&
+        customPermissions?.includes(ADMIN_PERMISSION_ROLES)
+    ) {
+        return true;
+    }
+
+    // Compatibilidad transitoria dashboard:* (analytics <-> area_comparison/leadership_view).
+    const dashboardLegacyPerms = DASHBOARD_PERMISSION_LEGACY as readonly string[];
+    if (
+        permission === DASHBOARD_PERMISSION_ANALYTICS &&
+        dashboardLegacyPerms.some((perm) => customPermissions?.includes(perm))
+    ) {
+        return true;
+    }
+    if (
+        dashboardLegacyPerms.includes(permission) &&
+        customPermissions?.includes(DASHBOARD_PERMISSION_ANALYTICS)
     ) {
         return true;
     }

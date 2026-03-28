@@ -49,10 +49,13 @@ const PERMISSION_LABELS: Record<string, string> = {
     "area:manage": "Gestionar áreas",
     "project:create": "Crear proyectos",
     "project:manage": "Gestionar todos los proyectos",
+    "dashboard:analytics": "Ver analíticas del dashboard",
     "dashboard:area_comparison": "Ver comparativa de áreas",
     "dashboard:leadership_view": "Vista de liderazgo",
     "admin:access": "Acceso al panel admin",
-    "admin:full": "Acceso admin completo",
+    "admin:audit": "Acceso a auditoría de permisos",
+    "admin:roles": "Gestionar roles y ajustes admin",
+    "admin:full": "Acceso admin completo (legacy)",
 };
 
 interface UserPermissionsCardProps {

@@ -50,7 +50,7 @@ async function main() {
 
     // Seed area permissions for TH (Talento Humano) and MD (Mesa Directiva)
     // TH: event + attendance + grading capabilities.
-    // MD: same base plus granular user-management permissions.
+    // MD: same base plus user-management and admin/dashboard permissions.
     console.log("🔑 Sincronizando permisos de área...");
     const thArea = await db.query.areas.findFirst({ where: eq(areas.code, "TH") });
     const mdArea = await db.query.areas.findFirst({ where: eq(areas.code, "MD") });
@@ -72,6 +72,9 @@ async function main() {
 
     const mdUserPerms = [
         "admin:access",
+        "admin:audit",
+        "admin:roles",
+        "dashboard:analytics",
         "user:approve",
         "user:manage_role",
         "user:manage_data",

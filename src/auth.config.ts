@@ -20,6 +20,7 @@ export const authConfig = {
     async session({ session, token }) {
       if (session.user && token) {
         (session.user as any).role = token.role;
+        (session.user as any).customPermissions = token.customPermissions as string[] | undefined;
       }
       return session;
     },
@@ -34,7 +35,11 @@ export const authConfig = {
 
         // Check for Role (Assuming role is populated in session)
         const role = (auth.user as any)?.role;
-        if (!hasPermission(role, "admin:access")) {
+        const customPermissions =
+          ((auth.user as any)?.customPermissions as string[] | undefined) ??
+          ((auth as any)?.token?.customPermissions as string[] | undefined);
+
+        if (!hasPermission(role, "admin:access", customPermissions)) {
           // Redirect to Access Denied error page
           return Response.redirect(new URL('/auth/error?error=AccessDenied', nextUrl));
         }
