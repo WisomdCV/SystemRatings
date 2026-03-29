@@ -277,9 +277,6 @@ export const projectAreas = sqliteTable("project_area", {
   color: text("color").default("#94a3b8"), // Slate-400 Default
   position: integer("position").default(0),
   isSystem: integer("is_system", { mode: "boolean" }).default(false),
-
-  // Event capability: members of this area can create project events (e.g. RRHH)
-  membersCanCreateEvents: integer("members_can_create_events", { mode: "boolean" }).default(false),
 });
 
 export const projectRoles = sqliteTable("project_role", {
@@ -288,17 +285,7 @@ export const projectRoles = sqliteTable("project_role", {
   description: text("description"),
   hierarchyLevel: integer("hierarchy_level").default(10).notNull(), // 100 = Coordinator, 10 = Member
   color: text("color").default("#6366f1"), // Added for UI Role badges
-  permissions: text("permissions"), // JSON stringified array of local permissions
   isSystem: integer("is_system", { mode: "boolean" }).default(false),
-
-  // Event capability: roles with this flag can create project events (configurable, replaces hardcoded hierarchy check)
-  canCreateEvents: integer("can_create_events", { mode: "boolean" }).default(false),
-
-  // Task capability: roles with this flag can create tasks within the project
-  canCreateTasks: integer("can_create_tasks", { mode: "boolean" }).default(false),
-
-  // Visibility capability: roles with this flag see ALL project area events (not just their own area)
-  canViewAllAreaEvents: integer("can_view_all_area_events", { mode: "boolean" }).default(false),
 });
 
 export const projectMembers = sqliteTable("project_member", {
@@ -336,6 +323,12 @@ export const taskAssignments = sqliteTable("task_assignment", {
   taskId: text("task_id").references(() => projectTasks.id, { onDelete: "cascade" }).notNull(),
   userId: text("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
   assignedAt: integer("assigned_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
+});
+
+export const projectRolePermissions = sqliteTable("project_role_permission", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  projectRoleId: text("project_role_id").references(() => projectRoles.id, { onDelete: "cascade" }).notNull(),
+  permission: text("permission").notNull(),
 });
 
 // =============================================================================
@@ -472,6 +465,11 @@ export const projectAreasRelations = relations(projectAreas, ({ many }) => ({
 
 export const projectRolesRelations = relations(projectRoles, ({ many }) => ({
   members: many(projectMembers),
+  permissions: many(projectRolePermissions),
+}));
+
+export const projectRolePermissionsRelations = relations(projectRolePermissions, ({ one }) => ({
+  projectRole: one(projectRoles, { fields: [projectRolePermissions.projectRoleId], references: [projectRoles.id] }),
 }));
 
 export const projectMembersRelations = relations(projectMembers, ({ one }) => ({

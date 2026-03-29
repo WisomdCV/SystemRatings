@@ -66,7 +66,6 @@ interface ProjectArea {
     color: string | null;
     position: number | null;
     isSystem: boolean | null;
-    membersCanCreateEvents: boolean | null;
 }
 
 interface ProjectRole {
@@ -76,7 +75,7 @@ interface ProjectRole {
     hierarchyLevel: number;
     color: string | null;
     isSystem: boolean | null;
-    canCreateEvents: boolean | null;
+    permissions?: { permission: string }[];
 }
 
 interface Props {
@@ -622,8 +621,8 @@ export default function SetupWizard({
                                         </div>
                                         <div className="flex-1 min-w-0">
                                             <span className="font-bold text-sm text-meteorite-950 block truncate">{pa.name}</span>
-                                            {pa.membersCanCreateEvents && (
-                                                <span className="text-[10px] text-violet-600 font-medium">Miembros crean eventos</span>
+                                            {pa.isSystem && (
+                                                <span className="text-[10px] text-violet-600 font-medium">Sistema</span>
                                             )}
                                         </div>
                                         {pa.isSystem && (
@@ -670,8 +669,8 @@ export default function SetupWizard({
                                             <span className="font-bold text-sm text-meteorite-950 block truncate">{pr.name}</span>
                                             <div className="flex items-center gap-2">
                                                 <span className="text-[10px] text-meteorite-500">Nivel {pr.hierarchyLevel}</span>
-                                                {pr.canCreateEvents && (
-                                                    <span className="text-[10px] text-violet-600 font-medium">Crea eventos</span>
+                                                {(pr.permissions?.length ?? 0) > 0 && (
+                                                    <span className="text-[10px] text-violet-600 font-medium">{pr.permissions!.length} permisos</span>
                                                 )}
                                             </div>
                                         </div>

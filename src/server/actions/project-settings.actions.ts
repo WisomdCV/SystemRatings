@@ -2,10 +2,11 @@
 
 import { auth } from "@/server/auth";
 import { db } from "@/db";
-import { projectAreas, projectRoles } from "@/db/schema";
+import { projectAreas, projectRoles, projectRolePermissions } from "@/db/schema";
 import { eq, asc, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { hasPermission } from "@/lib/permissions";
+import { PROJECT_PERMISSIONS, type ProjectPermission } from "@/lib/project-permissions";
 
 /** Validates if the user can manage admin roles/settings */
 async function canManageProjectSettings() {
@@ -60,12 +61,11 @@ export async function createProjectAreaAction(data: { name: string; description?
     }
 }
 
-export async function updateProjectAreaAction(id: string, data: { name: string; description?: string; color: string; membersCanCreateEvents?: boolean }) {
+export async function updateProjectAreaAction(id: string, data: { name: string; description?: string; color: string }) {
     try {
         if (!(await canManageProjectSettings())) return { success: false as const, error: "No autorizado." };
         if (!data.name.trim()) return { success: false as const, error: "El nombre es obligatorio." };
 
-        // check if system area
         const existing = await db.query.projectAreas.findFirst({ where: eq(projectAreas.id, id) });
         if (!existing) return { success: false as const, error: "Área no encontrada." };
 
@@ -73,7 +73,6 @@ export async function updateProjectAreaAction(id: string, data: { name: string; 
             name: data.name.trim(),
             description: data.description?.trim() || null,
             color: data.color,
-            membersCanCreateEvents: data.membersCanCreateEvents ?? false,
         }).where(eq(projectAreas.id, id));
 
         revalidatePath("/admin/project-settings");
@@ -105,7 +104,6 @@ export async function reorderProjectAreasAction(orderedIds: string[]) {
     try {
         if (!(await canManageProjectSettings())) return { success: false as const, error: "No autorizado." };
 
-        // Fast batch-like update via loop
         for (let i = 0; i < orderedIds.length; i++) {
             await db.update(projectAreas)
                 .set({ position: i })
@@ -129,9 +127,9 @@ export async function getProjectRolesAction() {
         const session = await auth();
         if (!session?.user) return { success: false as const, error: "No autorizado" };
 
-        // We order by hierarchy level descending by default so highest role is first
         const roles = await db.query.projectRoles.findMany({
             orderBy: [desc(projectRoles.hierarchyLevel)],
+            with: { permissions: true },
         });
         return { success: true as const, data: roles };
     } catch (error) {
@@ -140,7 +138,7 @@ export async function getProjectRolesAction() {
     }
 }
 
-export async function createProjectRoleAction(data: { name: string; description?: string; color: string }) {
+export async function createProjectRoleAction(data: { name: string; description?: string; color: string; permissions?: string[] }) {
     try {
         if (!(await canManageProjectSettings())) return { success: false as const, error: "No autorizado." };
         if (!data.name.trim()) return { success: false as const, error: "El nombre es obligatorio." };
@@ -148,24 +146,38 @@ export async function createProjectRoleAction(data: { name: string; description?
         // Auto calculate a hierarchy level: lowest existing - 10, minimum 0
         const roles = await db.query.projectRoles.findMany({ orderBy: [asc(projectRoles.hierarchyLevel)] });
         const lowestLevel = roles.length > 0 ? roles[0].hierarchyLevel : 100;
-        let newLevel = Math.max(0, lowestLevel - 10);
+        const newLevel = Math.max(0, lowestLevel - 10);
 
-        const [newRole] = await db.insert(projectRoles).values({
-            name: data.name.trim(),
-            description: data.description?.trim() || null,
-            color: data.color,
-            hierarchyLevel: newLevel,
-        }).returning();
+        const result = await db.transaction(async (tx) => {
+            const [newRole] = await tx.insert(projectRoles).values({
+                name: data.name.trim(),
+                description: data.description?.trim() || null,
+                color: data.color,
+                hierarchyLevel: newLevel,
+            }).returning();
+
+            // Insert permissions if provided
+            const validPerms = (data.permissions ?? []).filter(p =>
+                (PROJECT_PERMISSIONS as readonly string[]).includes(p)
+            );
+            if (validPerms.length > 0) {
+                await tx.insert(projectRolePermissions).values(
+                    validPerms.map(p => ({ projectRoleId: newRole.id, permission: p }))
+                );
+            }
+
+            return newRole;
+        });
 
         revalidatePath("/admin/project-settings");
-        return { success: true as const, data: newRole, message: "Rol creado exitosamente." };
+        return { success: true as const, data: result, message: "Rol creado exitosamente." };
     } catch (error) {
         console.error("Error creating project role:", error);
         return { success: false as const, error: "Error al crear el rol. Quizás el nombre ya existe." };
     }
 }
 
-export async function updateProjectRoleAction(id: string, data: { name: string; description?: string; color: string; canCreateEvents?: boolean; canCreateTasks?: boolean }) {
+export async function updateProjectRoleAction(id: string, data: { name: string; description?: string; color: string; permissions?: string[] }) {
     try {
         if (!(await canManageProjectSettings())) return { success: false as const, error: "No autorizado." };
         if (!data.name.trim()) return { success: false as const, error: "El nombre es obligatorio." };
@@ -173,13 +185,26 @@ export async function updateProjectRoleAction(id: string, data: { name: string; 
         const existing = await db.query.projectRoles.findFirst({ where: eq(projectRoles.id, id) });
         if (!existing) return { success: false as const, error: "Rol no encontrado." };
 
-        await db.update(projectRoles).set({
-            name: data.name.trim(),
-            description: data.description?.trim() || null,
-            color: data.color,
-            canCreateEvents: data.canCreateEvents ?? false,
-            canCreateTasks: data.canCreateTasks ?? false,
-        }).where(eq(projectRoles.id, id));
+        await db.transaction(async (tx) => {
+            await tx.update(projectRoles).set({
+                name: data.name.trim(),
+                description: data.description?.trim() || null,
+                color: data.color,
+            }).where(eq(projectRoles.id, id));
+
+            // Update permissions: delete all + re-insert (same pattern as IISE area permissions)
+            if (data.permissions !== undefined) {
+                await tx.delete(projectRolePermissions).where(eq(projectRolePermissions.projectRoleId, id));
+                const validPerms = data.permissions.filter(p =>
+                    (PROJECT_PERMISSIONS as readonly string[]).includes(p)
+                );
+                if (validPerms.length > 0) {
+                    await tx.insert(projectRolePermissions).values(
+                        validPerms.map(p => ({ projectRoleId: id, permission: p }))
+                    );
+                }
+            }
+        });
 
         revalidatePath("/admin/project-settings");
         return { success: true as const, message: "Rol actualizado." };
@@ -206,7 +231,7 @@ export async function deleteProjectRoleAction(id: string) {
     }
 }
 
-/** 
+/**
  * Reorders visually but translates the order into mathematical hierarchyLevels.
  * Highest item (first in array) gets `length * 10`, lowest gets `10`.
  */
@@ -216,8 +241,6 @@ export async function reorderProjectRolesAction(orderedIds: string[]) {
 
         const total = orderedIds.length;
         for (let i = 0; i < total; i++) {
-            // first item is most powerful. Mathematical logic:
-            // e.g. i=0 -> level 100. i=1 -> level 90. i=2 -> level 80...
             const newHierarchyLevel = Math.max(10, 100 - (i * 10));
 
             await db.update(projectRoles)
@@ -231,4 +254,58 @@ export async function reorderProjectRolesAction(orderedIds: string[]) {
         console.error("Error reordering project roles:", error);
         return { success: false as const, error: "Error al guardar jerarquías." };
     }
+}
+
+// ============================================================================
+// PROJECT ROLE PERMISSIONS (Granular management)
+// ============================================================================
+
+/** Get permissions for a specific project role */
+export async function getProjectRolePermissionsAction(roleId: string) {
+    try {
+        const session = await auth();
+        if (!session?.user) return { success: false as const, error: "No autorizado" };
+
+        const perms = await db.query.projectRolePermissions.findMany({
+            where: eq(projectRolePermissions.projectRoleId, roleId),
+        });
+        return { success: true as const, data: perms.map(p => p.permission) };
+    } catch (error) {
+        console.error("Error fetching role permissions:", error);
+        return { success: false as const, error: "Error al cargar permisos del rol." };
+    }
+}
+
+/** Update permissions for a specific project role (delete + re-insert) */
+export async function updateProjectRolePermissionsAction(roleId: string, permissions: string[]) {
+    try {
+        if (!(await canManageProjectSettings())) return { success: false as const, error: "No autorizado." };
+
+        const existing = await db.query.projectRoles.findFirst({ where: eq(projectRoles.id, roleId) });
+        if (!existing) return { success: false as const, error: "Rol no encontrado." };
+
+        const validPerms = permissions.filter(p =>
+            (PROJECT_PERMISSIONS as readonly string[]).includes(p)
+        );
+
+        await db.transaction(async (tx) => {
+            await tx.delete(projectRolePermissions).where(eq(projectRolePermissions.projectRoleId, roleId));
+            if (validPerms.length > 0) {
+                await tx.insert(projectRolePermissions).values(
+                    validPerms.map(p => ({ projectRoleId: roleId, permission: p }))
+                );
+            }
+        });
+
+        revalidatePath("/admin/project-settings");
+        return { success: true as const, message: "Permisos actualizados." };
+    } catch (error) {
+        console.error("Error updating role permissions:", error);
+        return { success: false as const, error: "Error al actualizar permisos." };
+    }
+}
+
+/** Get the list of all available project permissions (for admin UI) */
+export async function getAvailableProjectPermissionsAction() {
+    return { success: true as const, data: [...PROJECT_PERMISSIONS] };
 }

@@ -91,9 +91,8 @@ export interface ProjectEventCapability {
     canGeneral: boolean;
     canArea: boolean;
     canIndividual: boolean;
-    /** "any" = role grants all areas, "own" = area flag grants own area only, null = can't */
+    /** "any" = permission grants all areas, "own" = own area only, null = can't */
     areaTarget: "any" | "own" | null;
-    source: "project_role" | "project_area" | "both" | null;
 }
 
 export interface AuditEventCapabilities {
@@ -192,6 +191,7 @@ function computeIISECapability(
 
 /**
  * Compute PROJECT event capabilities for a single project membership.
+ * Uses permission strings from projectRolePermissions table.
  */
 function computeProjectCapability(
     userId: string,
@@ -199,29 +199,17 @@ function computeProjectCapability(
     projectName: string,
     roleName: string | null,
     areaName: string | null,
-    roleCanCreate: boolean,
-    areaMembersCanCreate: boolean,
+    rolePermissions: string[],
 ): ProjectEventCapability {
-    const canGeneral = roleCanCreate;
-    const canArea = roleCanCreate || areaMembersCanCreate;
-    const canIndividual = roleCanCreate || areaMembersCanCreate;
+    const canGeneral = rolePermissions.includes("project:event_create_any");
+    const canOwnArea = rolePermissions.includes("project:event_create_own_area");
+    const canArea = canGeneral || canOwnArea;
+    const canIndividual = canGeneral || canOwnArea;
 
     let areaTarget: ProjectEventCapability["areaTarget"] = null;
     if (canArea) {
-        if (roleCanCreate) {
-            areaTarget = areaMembersCanCreate ? "any" : "any"; // role-level = any area
-        } else {
-            areaTarget = "own"; // area flag = own area only
-        }
+        areaTarget = canGeneral ? "any" : "own";
     }
-
-    const source: ProjectEventCapability["source"] = roleCanCreate && areaMembersCanCreate
-        ? "both"
-        : roleCanCreate
-            ? "project_role"
-            : areaMembersCanCreate
-                ? "project_area"
-                : null;
 
     return {
         userId,
@@ -233,7 +221,6 @@ function computeProjectCapability(
         canArea,
         canIndividual,
         areaTarget,
-        source,
     };
 }
 
@@ -282,8 +269,8 @@ export async function getAuditDataAction(): Promise<ActionResult<AuditData>> {
             db.query.projectMembers.findMany({
                 with: {
                     project: { columns: { id: true, name: true, status: true } },
-                    projectRole: { columns: { id: true, name: true, canCreateEvents: true, canViewAllAreaEvents: true } },
-                    projectArea: { columns: { id: true, name: true, membersCanCreateEvents: true } },
+                    projectRole: { with: { permissions: true } },
+                    projectArea: { columns: { id: true, name: true } },
                 },
             }),
             // Fetch all area permissions for capability audit
@@ -378,8 +365,7 @@ export async function getAuditDataAction(): Promise<ActionResult<AuditData>> {
         const projectCapabilities: ProjectEventCapability[] = allProjectMemberships
             .filter((m: any) => m.project?.status !== "CANCELLED")
             .map((m: any) => {
-                const roleCanCreate = !!m.projectRole?.canCreateEvents;
-                const areaMembersCanCreate = !!m.projectArea?.membersCanCreateEvents;
+                const rolePermissions = (m.projectRole?.permissions ?? []).map((p: any) => p.permission);
 
                 return computeProjectCapability(
                     m.userId,
@@ -387,8 +373,7 @@ export async function getAuditDataAction(): Promise<ActionResult<AuditData>> {
                     m.project?.name ?? "Proyecto Desconocido",
                     m.projectRole?.name ?? null,
                     m.projectArea?.name ?? null,
-                    roleCanCreate,
-                    areaMembersCanCreate,
+                    rolePermissions,
                 );
             });
 

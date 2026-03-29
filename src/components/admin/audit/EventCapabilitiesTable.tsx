@@ -304,9 +304,7 @@ export default function EventCapabilitiesTable({ users, eventCapabilities }: Eve
                 <SourceBadge source="area_flag" />
                 <span className="text-[10px] text-meteorite-400">= Flag de área (BD)</span>
                 <SourceBadge source="project_role" />
-                <span className="text-[10px] text-meteorite-400">= Rol de proyecto</span>
-                <SourceBadge source="project_area" />
-                <span className="text-[10px] text-meteorite-400">= Área de proyecto</span>
+                <span className="text-[10px] text-meteorite-400">= Permisos de rol de proyecto</span>
             </div>
         </div>
     );
@@ -518,7 +516,6 @@ function ProjectTable({
                                                 <th className="text-center px-2 py-2 font-bold text-meteorite-600 text-xs">Área</th>
                                                 <th className="text-center px-2 py-2 font-bold text-meteorite-600 text-xs">Individual</th>
                                                 <th className="text-center px-2 py-2 font-bold text-meteorite-600 text-xs">Alcance</th>
-                                                <th className="text-center px-2 py-2 font-bold text-meteorite-600 text-xs">Fuente</th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -556,9 +553,6 @@ function ProjectTable({
                                                     </td>
                                                     <td className="px-2 py-2 text-center">
                                                         <AreaTargetBadge target={c.areaTarget} areaName={c.projectAreaName} />
-                                                    </td>
-                                                    <td className="px-2 py-2 text-center">
-                                                        <SourceBadge source={c.source} />
                                                     </td>
                                                 </tr>
                                             ))}

@@ -5,7 +5,10 @@ import { db } from "@/db";
 import { projects, projectMembers, projectTasks, taskAssignments, semesters } from "@/db/schema";
 import { eq, and, asc, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { hasPermission, isAdmin } from "@/lib/permissions";
+import { hasPermission } from "@/lib/permissions";
+import {
+    hasProjectPermission, hasAnyProjectPermission, canBypassProjectPerms,
+} from "@/lib/project-permissions";
 import {
     CreateProjectSchema, UpdateProjectSchema,
     AddProjectMemberSchema, UpdateProjectMemberRoleSchema,
@@ -19,25 +22,19 @@ import type {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-/** Get the user's project role and area in a project, or null if not a member */
-async function getUserProjectMembership(userId: string, projectId: string) {
+/** Load membership with full permission set (projectRole.permissions + projectArea) */
+async function getProjectMembershipWithPerms(userId: string, projectId: string) {
     const membership = await db.query.projectMembers.findFirst({
         where: and(
             eq(projectMembers.projectId, projectId),
             eq(projectMembers.userId, userId),
         ),
         with: {
-            projectRole: true,
-        }
+            projectRole: { with: { permissions: true } },
+            projectArea: true,
+        },
     });
     return membership ?? null;
-}
-
-/** Check if user can manage a project (system admin OR project hierarchy level >= 80) */
-async function canManageProject(userId: string, role: string, projectId: string, customPermissions?: string[]) {
-    if (hasPermission(role, "project:manage", customPermissions)) return true;
-    const membership = await getUserProjectMembership(userId, projectId);
-    return (membership?.projectRole?.hierarchyLevel ?? 0) >= 80;
 }
 
 const revalidateProjects = () => {
@@ -96,7 +93,7 @@ export async function getProjectByIdAction(projectId: string) {
                 members: {
                     with: {
                         user: { columns: { id: true, name: true, image: true, email: true, role: true } },
-                        projectRole: true,
+                        projectRole: { with: { permissions: true } },
                         projectArea: true,
                     },
                 },
@@ -152,7 +149,7 @@ export async function createProjectAction(input: CreateProjectDTO) {
                 createdById: session.user.id,
             }).returning();
 
-            // Auto-add creator as Coordinador (hierarchy: 100) or find the highest available
+            // Auto-add creator as Coordinador (highest hierarchy) or find the highest available
             const coordinatorRole = await tx.query.projectRoles.findFirst({
                 orderBy: [desc(projectRoles.hierarchyLevel)],
             });
@@ -185,8 +182,14 @@ export async function updateProjectAction(input: UpdateProjectDTO) {
         const validated = UpdateProjectSchema.safeParse(input);
         if (!validated.success) return { success: false as const, error: validated.error.issues[0].message };
 
-        const canManage = await canManageProject(session.user.id, session.user.role || "", validated.data.id, session.user.customPermissions);
-        if (!canManage) return { success: false as const, error: "No tienes permisos para editar este proyecto." };
+        // IISE bypass OR project:manage_settings
+        const iiseBypass = canBypassProjectPerms(session.user.role || "", session.user.customPermissions);
+        if (!iiseBypass) {
+            const membership = await getProjectMembershipWithPerms(session.user.id, validated.data.id);
+            if (!hasProjectPermission(membership, "project:manage_settings")) {
+                return { success: false as const, error: "No tienes permisos para editar este proyecto." };
+            }
+        }
 
         await db.update(projects).set({
             name: validated.data.name,
@@ -213,8 +216,14 @@ export async function deleteProjectAction(projectId: string) {
         const session = await auth();
         if (!session?.user?.id) return { success: false as const, error: "No autorizado" };
 
-        const canManage = await canManageProject(session.user.id, session.user.role || "", projectId, session.user.customPermissions);
-        if (!canManage) return { success: false as const, error: "No tienes permisos." };
+        // IISE bypass OR project:delete
+        const iiseBypass = canBypassProjectPerms(session.user.role || "", session.user.customPermissions);
+        if (!iiseBypass) {
+            const membership = await getProjectMembershipWithPerms(session.user.id, projectId);
+            if (!hasProjectPermission(membership, "project:delete")) {
+                return { success: false as const, error: "No tienes permisos para eliminar este proyecto." };
+            }
+        }
 
         await db.delete(projects).where(eq(projects.id, projectId));
         revalidateProjects();
@@ -238,8 +247,14 @@ export async function addProjectMemberAction(input: AddProjectMemberDTO) {
         const validated = AddProjectMemberSchema.safeParse(input);
         if (!validated.success) return { success: false as const, error: validated.error.issues[0].message };
 
-        const canManage = await canManageProject(session.user.id, session.user.role || "", validated.data.projectId, session.user.customPermissions);
-        if (!canManage) return { success: false as const, error: "No tienes permisos para gestionar miembros." };
+        // IISE bypass OR project:manage_members
+        const iiseBypass = canBypassProjectPerms(session.user.role || "", session.user.customPermissions);
+        if (!iiseBypass) {
+            const membership = await getProjectMembershipWithPerms(session.user.id, validated.data.projectId);
+            if (!hasProjectPermission(membership, "project:manage_members")) {
+                return { success: false as const, error: "No tienes permisos para gestionar miembros." };
+            }
+        }
 
         // Check if already a member
         const existing = await db.query.projectMembers.findFirst({
@@ -274,14 +289,25 @@ export async function updateProjectMemberRoleAction(input: UpdateProjectMemberRo
         const validated = UpdateProjectMemberRoleSchema.safeParse(input);
         if (!validated.success) return { success: false as const, error: validated.error.issues[0].message };
 
-        // Look up the member to get projectId
-        const member = await db.query.projectMembers.findFirst({
+        // Look up the target member with their role
+        const targetMember = await db.query.projectMembers.findFirst({
             where: eq(projectMembers.id, validated.data.memberId),
+            with: { projectRole: true },
         });
-        if (!member) return { success: false as const, error: "Miembro no encontrado." };
+        if (!targetMember) return { success: false as const, error: "Miembro no encontrado." };
 
-        const canManage = await canManageProject(session.user.id, session.user.role || "", member.projectId, session.user.customPermissions);
-        if (!canManage) return { success: false as const, error: "No tienes permisos." };
+        // IISE bypass OR project:manage_members + hierarchy guard
+        const iiseBypass = canBypassProjectPerms(session.user.role || "", session.user.customPermissions);
+        if (!iiseBypass) {
+            const myMembership = await getProjectMembershipWithPerms(session.user.id, targetMember.projectId);
+            if (!hasProjectPermission(myMembership, "project:manage_members")) {
+                return { success: false as const, error: "No tienes permisos para gestionar miembros." };
+            }
+            // Hierarchy guard: can't modify someone at or above your level
+            if (myMembership && targetMember.projectRole.hierarchyLevel >= myMembership.projectRole.hierarchyLevel) {
+                return { success: false as const, error: "No puedes modificar a un miembro de igual o mayor jerarquía." };
+            }
+        }
 
         await db.update(projectMembers).set({
             projectRoleId: validated.data.projectRoleId,
@@ -304,11 +330,22 @@ export async function removeProjectMemberAction(memberId: string) {
 
         const member = await db.query.projectMembers.findFirst({
             where: eq(projectMembers.id, memberId),
+            with: { projectRole: true },
         });
         if (!member) return { success: false as const, error: "Miembro no encontrado." };
 
-        const canManage = await canManageProject(session.user.id, session.user.role || "", member.projectId, session.user.customPermissions);
-        if (!canManage) return { success: false as const, error: "No tienes permisos." };
+        // IISE bypass OR project:manage_members + hierarchy guard
+        const iiseBypass = canBypassProjectPerms(session.user.role || "", session.user.customPermissions);
+        if (!iiseBypass) {
+            const myMembership = await getProjectMembershipWithPerms(session.user.id, member.projectId);
+            if (!hasProjectPermission(myMembership, "project:manage_members")) {
+                return { success: false as const, error: "No tienes permisos para gestionar miembros." };
+            }
+            // Hierarchy guard
+            if (myMembership && member.projectRole.hierarchyLevel >= myMembership.projectRole.hierarchyLevel) {
+                return { success: false as const, error: "No puedes remover a un miembro de igual o mayor jerarquía." };
+            }
+        }
 
         await db.delete(projectMembers).where(eq(projectMembers.id, memberId));
         revalidateProjects();
@@ -332,24 +369,27 @@ export async function createTaskAction(input: CreateTaskDTO) {
         const validated = CreateTaskSchema.safeParse(input);
         if (!validated.success) return { success: false as const, error: validated.error.issues[0].message };
 
-        // Must be a member of the project with task creation permission
-        const membership = await getUserProjectMembership(session.user.id, validated.data.projectId);
-        const isSystemAdmin = isAdmin(session.user.role);
-        if (!membership && !isSystemAdmin) {
-            return { success: false as const, error: "Debes ser miembro del proyecto para crear tareas." };
-        }
+        const iiseBypass = canBypassProjectPerms(session.user.role || "", session.user.customPermissions);
 
-        // Check canCreateTasks permission (hierarchy >= 80 always can, or explicit flag)
-        const roleLevel = membership?.projectRole?.hierarchyLevel ?? 0;
-        const canCreateTasks = isSystemAdmin || roleLevel >= 80 || (membership?.projectRole as any)?.canCreateTasks;
-        if (!canCreateTasks) {
-            return { success: false as const, error: "Tu rol no permite crear tareas." };
-        }
+        if (!iiseBypass) {
+            const membership = await getProjectMembershipWithPerms(session.user.id, validated.data.projectId);
+            if (!membership) {
+                return { success: false as const, error: "Debes ser miembro del proyecto para crear tareas." };
+            }
 
-        // Area-restricted roles (< 70) can only create tasks for their own area or general
-        if (!isSystemAdmin && roleLevel < 70 && validated.data.projectAreaId) {
-            if (membership?.projectAreaId !== validated.data.projectAreaId) {
-                return { success: false as const, error: "Solo puedes crear tareas para tu propia área o tareas generales." };
+            // Check task creation permission
+            const canCreateAny = hasProjectPermission(membership, "project:task_create_any");
+            const canCreateOwnArea = hasProjectPermission(membership, "project:task_create_own_area");
+
+            if (!canCreateAny && !canCreateOwnArea) {
+                return { success: false as const, error: "Tu rol no permite crear tareas." };
+            }
+
+            // If only own-area permission, validate area match
+            if (!canCreateAny && canCreateOwnArea && validated.data.projectAreaId) {
+                if (membership.projectAreaId !== validated.data.projectAreaId) {
+                    return { success: false as const, error: "Solo puedes crear tareas para tu propia área o tareas generales." };
+                }
             }
         }
 
@@ -392,8 +432,22 @@ export async function updateTaskAction(input: UpdateTaskDTO) {
         });
         if (!task) return { success: false as const, error: "Tarea no encontrada." };
 
-        const canManage = await canManageProject(session.user.id, session.user.role || "", task.projectId, session.user.customPermissions);
-        if (!canManage) return { success: false as const, error: "No tienes permisos para editar esta tarea." };
+        // IISE bypass OR task_manage_any OR (task_manage_own + ownership/area)
+        const iiseBypass = canBypassProjectPerms(session.user.role || "", session.user.customPermissions);
+        if (!iiseBypass) {
+            const membership = await getProjectMembershipWithPerms(session.user.id, task.projectId);
+            const canManageAny = hasProjectPermission(membership, "project:task_manage_any");
+            const canManageOwn = hasProjectPermission(membership, "project:task_manage_own");
+
+            if (!canManageAny) {
+                // Check own: creator OR same area
+                const isOwner = task.createdById === session.user.id;
+                const isSameArea = membership?.projectAreaId != null && membership.projectAreaId === task.projectAreaId;
+                if (!canManageOwn || (!isOwner && !isSameArea)) {
+                    return { success: false as const, error: "No tienes permisos para editar esta tarea." };
+                }
+            }
+        }
 
         await db.update(projectTasks).set({
             title: validated.data.title,
@@ -413,7 +467,7 @@ export async function updateTaskAction(input: UpdateTaskDTO) {
     }
 }
 
-/** Quick status update (any assigned member or project manager can do this) */
+/** Quick status update (any assigned member or user with task_update_status) */
 export async function updateTaskStatusAction(input: UpdateTaskStatusDTO) {
     try {
         const session = await auth();
@@ -428,12 +482,16 @@ export async function updateTaskStatusAction(input: UpdateTaskStatusDTO) {
         });
         if (!task) return { success: false as const, error: "Tarea no encontrada." };
 
-        // Allow: assigned user, project manager, or system admin
+        // Allow: assigned user, IISE bypass, or user with task_update_status
         const isAssigned = task.assignments.some(a => a.userId === session.user.id);
-        const canManage = await canManageProject(session.user.id, session.user.role || "", task.projectId, session.user.customPermissions);
-
-        if (!isAssigned && !canManage) {
-            return { success: false as const, error: "Solo puedes actualizar tareas asignadas a ti." };
+        if (!isAssigned) {
+            const iiseBypass = canBypassProjectPerms(session.user.role || "", session.user.customPermissions);
+            if (!iiseBypass) {
+                const membership = await getProjectMembershipWithPerms(session.user.id, task.projectId);
+                if (!hasProjectPermission(membership, "project:task_update_status")) {
+                    return { success: false as const, error: "Solo puedes actualizar tareas asignadas a ti." };
+                }
+            }
         }
 
         await db.update(projectTasks).set({
@@ -461,8 +519,21 @@ export async function deleteTaskAction(taskId: string) {
         });
         if (!task) return { success: false as const, error: "Tarea no encontrada." };
 
-        const canManage = await canManageProject(session.user.id, session.user.role || "", task.projectId, session.user.customPermissions);
-        if (!canManage) return { success: false as const, error: "No tienes permisos." };
+        // IISE bypass OR task_manage_any OR (task_manage_own + ownership/area)
+        const iiseBypass = canBypassProjectPerms(session.user.role || "", session.user.customPermissions);
+        if (!iiseBypass) {
+            const membership = await getProjectMembershipWithPerms(session.user.id, task.projectId);
+            const canManageAny = hasProjectPermission(membership, "project:task_manage_any");
+            const canManageOwn = hasProjectPermission(membership, "project:task_manage_own");
+
+            if (!canManageAny) {
+                const isOwner = task.createdById === session.user.id;
+                const isSameArea = membership?.projectAreaId != null && membership.projectAreaId === task.projectAreaId;
+                if (!canManageOwn || (!isOwner && !isSameArea)) {
+                    return { success: false as const, error: "No tienes permisos para eliminar esta tarea." };
+                }
+            }
+        }
 
         await db.delete(projectTasks).where(eq(projectTasks.id, taskId));
         revalidateProjects();
@@ -491,8 +562,14 @@ export async function assignTaskAction(input: AssignTaskDTO) {
         });
         if (!task) return { success: false as const, error: "Tarea no encontrada." };
 
-        const canManage = await canManageProject(session.user.id, session.user.role || "", task.projectId);
-        if (!canManage) return { success: false as const, error: "No tienes permisos para asignar tareas." };
+        // IISE bypass OR project:task_assign
+        const iiseBypass = canBypassProjectPerms(session.user.role || "", session.user.customPermissions);
+        if (!iiseBypass) {
+            const membership = await getProjectMembershipWithPerms(session.user.id, task.projectId);
+            if (!hasProjectPermission(membership, "project:task_assign")) {
+                return { success: false as const, error: "No tienes permisos para asignar tareas." };
+            }
+        }
 
         // Check not already assigned
         const existing = await db.query.taskAssignments.findFirst({
@@ -528,8 +605,14 @@ export async function unassignTaskAction(assignmentId: string) {
         });
         if (!assignment) return { success: false as const, error: "Asignación no encontrada." };
 
-        const canManage = await canManageProject(session.user.id, session.user.role || "", assignment.task.projectId, session.user.customPermissions);
-        if (!canManage) return { success: false as const, error: "No tienes permisos." };
+        // IISE bypass OR project:task_assign
+        const iiseBypass = canBypassProjectPerms(session.user.role || "", session.user.customPermissions);
+        if (!iiseBypass) {
+            const membership = await getProjectMembershipWithPerms(session.user.id, assignment.task.projectId);
+            if (!hasProjectPermission(membership, "project:task_assign")) {
+                return { success: false as const, error: "No tienes permisos para desasignar tareas." };
+            }
+        }
 
         await db.delete(taskAssignments).where(eq(taskAssignments.id, assignmentId));
         revalidateProjects();

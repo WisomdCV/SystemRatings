@@ -12,6 +12,7 @@
  */
 
 import { hasPermission } from "@/lib/permissions";
+import { hasProjectPermission, hasAnyProjectPermission } from "@/lib/project-permissions";
 import { db } from "@/db";
 import { projectMembers } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
@@ -100,6 +101,7 @@ export function canTargetAnyArea(
 
 /**
  * Check if a user can create a project-level event of a given type.
+ * Uses project permission strings from projectRolePermissions table.
  */
 export async function canCreateProjectEvent(
     context: ProjectContext,
@@ -114,33 +116,28 @@ export async function canCreateProjectEvent(
             eq(projectMembers.userId, userId)
         ),
         with: {
-            projectRole: true,
-            projectArea: true,
+            projectRole: { with: { permissions: true } },
         }
     });
 
     if (!membership) return false;
 
-    const role = membership.projectRole;
-    const area = membership.projectArea;
-
     switch (eventType) {
         case "GENERAL":
-            return !!role?.canCreateEvents;
+            return hasProjectPermission(membership, "project:event_create_any");
 
         case "AREA": {
-            if (role?.canCreateEvents) return true;
-            if (area?.membersCanCreateEvents) {
+            // Can create for ANY area
+            if (hasProjectPermission(membership, "project:event_create_any")) return true;
+            // Can create for OWN area only
+            if (hasProjectPermission(membership, "project:event_create_own_area")) {
                 if (!targetProjectAreaId || targetProjectAreaId === membership.projectAreaId) return true;
             }
             return false;
         }
 
-        case "INDIVIDUAL_GROUP": {
-            if (role?.canCreateEvents) return true;
-            if (area?.membersCanCreateEvents) return true;
-            return false;
-        }
+        case "INDIVIDUAL_GROUP":
+            return hasAnyProjectPermission(membership, ["project:event_create_any", "project:event_create_own_area"]);
 
         default:
             return false;
@@ -196,17 +193,23 @@ export async function canManageEvent(
         }
     }
 
-    // For PROJECT events: check project role capability
+    // For PROJECT events: check project permission strings
     if (event.eventScope === "PROJECT" && event.projectId) {
         const membership = await db.query.projectMembers.findFirst({
             where: and(
                 eq(projectMembers.projectId, event.projectId),
                 eq(projectMembers.userId, userId)
             ),
-            with: { projectRole: true }
+            with: { projectRole: { with: { permissions: true } } }
         });
 
-        if (membership?.projectRole?.canCreateEvents) return true;
+        // event_manage_any → can manage any event in the project
+        if (hasProjectPermission(membership, "project:event_manage_any")) return true;
+        // event_manage_own → creator OR same area
+        if (hasProjectPermission(membership, "project:event_manage_own")) {
+            if (event.createdById === userId) return true;
+            if (event.targetProjectAreaId && membership?.projectAreaId === event.targetProjectAreaId) return true;
+        }
     }
 
     return false;

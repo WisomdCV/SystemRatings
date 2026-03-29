@@ -27,8 +27,7 @@ export interface EventPermissions {
 export interface ProjectMembershipContext {
     projectId: string;
     projectAreaId: string | null;
-    canViewAllAreaEvents: boolean;   // from projectRole flag
-    canCreateEvents: boolean;        // from projectRole flag
+    projectPermissions: string[];    // from projectRole.permissions
 }
 
 /** Everything the visibility engine needs to know about the current user */
@@ -53,7 +52,7 @@ export interface VisibilityContext {
  * Rules:
  * - GENERAL (IISE or PROJECT): visible to all relevant users
  * - AREA (IISE): handled at query level (only user's area + general fetched)
- * - AREA (PROJECT): visible to members of that project area OR roles with canViewAllAreaEvents
+ * - AREA (PROJECT): visible to members of that project area OR roles with project:view_all_areas permission
  * - INDIVIDUAL_GROUP: visible only to invitees + creator
  */
 export function filterVisibleEvents<T extends {
@@ -78,8 +77,8 @@ export function filterVisibleEvents<T extends {
         if (event.eventScope === "PROJECT" && event.eventType === "AREA" && event.targetProjectArea?.id && event.projectId) {
             const membership = ctx.projectMemberships.find(m => m.projectId === event.projectId);
             if (!membership) return false;
-            // Role flag: can see all area events
-            if (membership.canViewAllAreaEvents) return true;
+            // Permission check: can see all area events
+            if (membership.projectPermissions.includes("project:view_all_areas")) return true;
             // Otherwise: only own area
             return membership.projectAreaId === event.targetProjectArea.id;
         }

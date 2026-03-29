@@ -71,9 +71,9 @@ export default async function ProjectDetailPage(props: { params: Promise<{ id: s
         m => m.user.id === session.user!.id
     );
     const currentUserProjectAreaId = currentUserMembership?.projectArea?.id || null;
-    const currentUserCanViewAll = currentUserMembership?.projectRole?.canViewAllAreaEvents ?? false;
+    const currentUserPermissions = (currentUserMembership?.projectRole?.permissions ?? []).map((p: { permission: string }) => p.permission);
 
-    // Centralized visibility filter (uses canViewAllAreaEvents flag instead of hierarchyLevel)
+    // Centralized visibility filter (uses project permission strings)
     const visibilityCtx: VisibilityContext = {
         userId: session.user.id,
         userRole: session.user.role || "",
@@ -82,8 +82,7 @@ export default async function ProjectDetailPage(props: { params: Promise<{ id: s
         projectMemberships: [{
             projectId: params.id,
             projectAreaId: currentUserProjectAreaId,
-            canViewAllAreaEvents: currentUserCanViewAll,
-            canCreateEvents: currentUserMembership?.projectRole?.canCreateEvents ?? false,
+            projectPermissions: currentUserPermissions,
         }],
     };
     const projectEvents = filterVisibleEvents(allProjectEvents, visibilityCtx);

@@ -57,7 +57,7 @@ export default async function DashboardPage() {
             where: eq(projectMembers.userId, userId),
             with: {
                 project: { columns: { id: true, semesterId: true } },
-                projectRole: { columns: { canViewAllAreaEvents: true, canCreateEvents: true } },
+                projectRole: { with: { permissions: true } },
             }
         });
 
@@ -66,8 +66,7 @@ export default async function DashboardPage() {
         userProjectMemberships = activeMemberships.map(m => ({
             projectId: m.project!.id,
             projectAreaId: m.projectAreaId,
-            canViewAllAreaEvents: m.projectRole?.canViewAllAreaEvents ?? false,
-            canCreateEvents: m.projectRole?.canCreateEvents ?? false,
+            projectPermissions: (m.projectRole?.permissions ?? []).map(p => p.permission),
         }));
 
         const eventWith = {

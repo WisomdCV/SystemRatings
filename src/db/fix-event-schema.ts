@@ -1,20 +1,20 @@
 /**
- * ONE-TIME DATA MIGRATION: Set defaults for existing events and configure area/role capabilities.
- * 
+ * ONE-TIME DATA MIGRATION: normalize legacy events and backfill string-based project permissions.
+ *
  * This script:
- * 1. Sets eventScope="IISE", eventType="GENERAL", tracksAttendance=true on existing events
- * 2. Sets eventType="AREA" where targetAreaId is not null
- * 3. Activates canCreateEvents on "Talento Humano" area
- * 4. Activates membersCanCreateEvents on "Mesa de recursos humanos" project area
- * 5. Activates canCreateEvents on project roles with hierarchy >= 70
- * 
- * Run: npx tsx src/db/fix-event-schema.ts
+ * 1. Sets eventScope="IISE", eventType="GENERAL|AREA", tracksAttendance=true on legacy events.
+ * 2. Ensures Talento Humano has event+attendance permissions via area_permissions.
+ * 3. Backfills project_role_permission rows from DEFAULT_ROLE_PERMISSIONS when missing.
+ *
+ * Note: This script no longer uses removed boolean flags from project roles/areas.
+ * Run manually only when migrating legacy data.
  */
 
 import "dotenv/config";
 import { db } from "./index";
-import { events, areas, areaPermissions, projectAreas, projectRoles } from "./schema";
+import { events, areas, areaPermissions, projectRoles, projectRolePermissions } from "./schema";
 import { eq, isNotNull, gte, sql } from "drizzle-orm";
+import { DEFAULT_ROLE_PERMISSIONS } from "@/lib/project-permissions";
 
 async function main() {
     console.log("🔧 Migrating event data...");
@@ -64,34 +64,28 @@ async function main() {
         console.log(`   ⚠️  No area with code "TH" found. Configure manually from /admin/areas.`);
     }
 
-    // 3. Configure project area capabilities
-    console.log("\n📁 Configuring project area capabilities...");
+    // 3. Migrate project role permissions to projectRolePermissions table
+    console.log("\n🛡️ Migrating project role permissions to string-based system...");
 
-    const rrhhArea = await db.query.projectAreas.findFirst({
-        where: eq(projectAreas.isSystem, true)
+    const roles = await db.query.projectRoles.findMany({
+        with: { permissions: true },
     });
-
-    if (rrhhArea) {
-        await db.update(projectAreas).set({
-            membersCanCreateEvents: true,
-        }).where(eq(projectAreas.id, rrhhArea.id));
-        console.log(`   ✅ "${rrhhArea.name}" → membersCanCreateEvents=true`);
-    } else {
-        console.log(`   ⚠️  No system project area found. Configure manually.`);
-    }
-
-    // 4. Configure project role capabilities
-    console.log("\n🛡️ Configuring project role event capabilities...");
-
-    const roles = await db.query.projectRoles.findMany();
     for (const role of roles) {
-        const shouldCreate = role.hierarchyLevel >= 60;
-        const shouldViewAll = role.hierarchyLevel >= 70;
-        await db.update(projectRoles).set({
-            canCreateEvents: shouldCreate,
-            canViewAllAreaEvents: shouldViewAll,
-        }).where(eq(projectRoles.id, role.id));
-        console.log(`   ${shouldCreate ? "✅" : "⏭️"} "${role.name}" (LVL ${role.hierarchyLevel}) → canCreateEvents=${shouldCreate}, canViewAllAreaEvents=${shouldViewAll}`);
+        // Skip if role already has permissions in the new table
+        if (role.permissions && role.permissions.length > 0) {
+            console.log(`   ⏭️ "${role.name}" already has ${role.permissions.length} permissions, skipping.`);
+            continue;
+        }
+
+        const defaultPerms = DEFAULT_ROLE_PERMISSIONS[role.name] ?? [];
+        if (defaultPerms.length > 0) {
+            await db.insert(projectRolePermissions).values(
+                defaultPerms.map(p => ({ projectRoleId: role.id, permission: p }))
+            );
+            console.log(`   ✅ "${role.name}" (LVL ${role.hierarchyLevel}) → ${defaultPerms.length} permissions inserted`);
+        } else {
+            console.log(`   ⚠️  "${role.name}" has no default permissions defined.`);
+        }
     }
 
     console.log("\n✅ Migration complete!");

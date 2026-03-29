@@ -1,7 +1,7 @@
 // src/db/seed.ts
 import "dotenv/config";
 import { db } from "./index";
-import { areas, areaPermissions, semesters, users, gradeDefinitions, customRoles, customRolePermissions, projectAreas, projectRoles } from "./schema";
+import { areas, areaPermissions, semesters, users, gradeDefinitions, customRoles, customRolePermissions, projectAreas, projectRoles, projectRolePermissions } from "./schema";
 import { eq, sql } from "drizzle-orm";
 
 async function main() {
@@ -195,7 +195,7 @@ async function main() {
             { name: "Marketing", color: "#e11d48" },           // rose-600
             { name: "Académica", color: "#8b5cf6" },           // violet-500
             { name: "Sistemas", color: "#10b981" },            // emerald-500
-            { name: "Mesa de recursos humanos", color: "#f59e0b", isSystem: true, membersCanCreateEvents: true }, // amber-500, RRHH: members can create events
+            { name: "Mesa de recursos humanos", color: "#f59e0b", isSystem: true }, // amber-500
         ]);
         console.log("   ✅ Áreas insertadas.");
     } else {
@@ -205,15 +205,30 @@ async function main() {
     console.log("🛡️ Sincronizando Jerarquías (Roles) de Proyecto...");
     const existingRoles = await db.query.projectRoles.findMany();
     if (existingRoles.length === 0) {
-        await db.insert(projectRoles).values([
-            { name: "Coordinador / Project Management", hierarchyLevel: 100, isSystem: true, canCreateEvents: true, canCreateTasks: true, canViewAllAreaEvents: true },
-            { name: "Director de proyecto", hierarchyLevel: 90, isSystem: true, canCreateEvents: true, canCreateTasks: true, canViewAllAreaEvents: true },
-            { name: "Subdirector de proyecto", hierarchyLevel: 80, isSystem: true, canCreateEvents: true, canCreateTasks: true, canViewAllAreaEvents: true },
-            { name: "Tesorero de proyecto", hierarchyLevel: 70, isSystem: true, canCreateEvents: false, canCreateTasks: true, canViewAllAreaEvents: false },
-            { name: "Director de Área", hierarchyLevel: 60, isSystem: true, canCreateEvents: true, canCreateTasks: true, canViewAllAreaEvents: false },
-            { name: "Miembro de Área", hierarchyLevel: 50, isSystem: true, canCreateEvents: false, canCreateTasks: false, canViewAllAreaEvents: false },
-        ]);
+        const insertedRoles = await db.insert(projectRoles).values([
+            { name: "Coordinador / Project Management", hierarchyLevel: 100, isSystem: true },
+            { name: "Director de proyecto", hierarchyLevel: 90, isSystem: true },
+            { name: "Subdirector de proyecto", hierarchyLevel: 80, isSystem: true },
+            { name: "Tesorero de proyecto", hierarchyLevel: 70, isSystem: true },
+            { name: "Director de Área", hierarchyLevel: 60, isSystem: true },
+            { name: "Miembro de Área", hierarchyLevel: 50, isSystem: true },
+        ]).returning();
         console.log("   ✅ Roles insertados.");
+
+        // Insert default permissions for each role
+        console.log("🔐 Insertando permisos por defecto de roles de proyecto...");
+        const { DEFAULT_ROLE_PERMISSIONS } = await import("@/lib/project-permissions");
+        const permissionRows: { projectRoleId: string; permission: string }[] = [];
+        for (const role of insertedRoles) {
+            const perms = DEFAULT_ROLE_PERMISSIONS[role.name] ?? [];
+            for (const perm of perms) {
+                permissionRows.push({ projectRoleId: role.id, permission: perm });
+            }
+        }
+        if (permissionRows.length > 0) {
+            await db.insert(projectRolePermissions).values(permissionRows);
+        }
+        console.log(`   ✅ ${permissionRows.length} permisos de proyecto insertados.`);
     } else {
         console.log("   ⏭️ Roles ya existían, omitiendo.");
     }

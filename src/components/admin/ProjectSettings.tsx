@@ -20,7 +20,12 @@ interface Area {
     color: string | null;
     position: number | null;
     isSystem: boolean | null;
-    membersCanCreateEvents: boolean | null;
+}
+
+interface RolePermission {
+    id: string;
+    permission: string;
+    projectRoleId: string;
 }
 
 interface Role {
@@ -30,8 +35,7 @@ interface Role {
     hierarchyLevel: number;
     color: string | null;
     isSystem: boolean | null;
-    canCreateEvents: boolean | null;
-    canCreateTasks: boolean | null;
+    permissions: RolePermission[];
 }
 
 interface Props {
@@ -39,37 +43,78 @@ interface Props {
     initialRoles: Role[];
 }
 
+/** Permission display labels */
+const PERMISSION_LABELS: Record<string, { label: string; group: string; icon: "event" | "task" | "manage" | "visibility" }> = {
+    "project:event_create_any": { label: "Crear eventos (cualquier área)", group: "Eventos", icon: "event" },
+    "project:event_create_own_area": { label: "Crear eventos (su área)", group: "Eventos", icon: "event" },
+    "project:event_manage_any": { label: "Gestionar cualquier evento", group: "Eventos", icon: "event" },
+    "project:event_manage_own": { label: "Gestionar eventos propios/área", group: "Eventos", icon: "event" },
+    "project:event_view_all": { label: "Ver eventos de todas las áreas", group: "Eventos", icon: "visibility" },
+    "project:task_create_any": { label: "Crear tareas (cualquier área)", group: "Tareas", icon: "task" },
+    "project:task_create_own_area": { label: "Crear tareas (su área)", group: "Tareas", icon: "task" },
+    "project:task_manage_any": { label: "Gestionar cualquier tarea", group: "Tareas", icon: "task" },
+    "project:task_manage_own": { label: "Gestionar tareas propias/área", group: "Tareas", icon: "task" },
+    "project:task_assign": { label: "Asignar miembros a tareas", group: "Tareas", icon: "task" },
+    "project:task_update_status": { label: "Actualizar estado de tareas", group: "Tareas", icon: "task" },
+    "project:manage_settings": { label: "Editar configuración del proyecto", group: "Gestión", icon: "manage" },
+    "project:manage_members": { label: "Gestionar miembros", group: "Gestión", icon: "manage" },
+    "project:manage_status": { label: "Cambiar estado del proyecto", group: "Gestión", icon: "manage" },
+    "project:delete": { label: "Eliminar proyecto", group: "Gestión", icon: "manage" },
+    "project:view_all_areas": { label: "Ver contenido de todas las áreas", group: "Visibilidad", icon: "visibility" },
+};
+
+const ALL_PERMISSIONS = Object.keys(PERMISSION_LABELS);
+const PERMISSION_GROUPS = ["Eventos", "Tareas", "Gestión", "Visibilidad"];
+
+function getGroupIcon(group: string) {
+    switch (group) {
+        case "Eventos": return <CalendarCheck className="w-3 h-3" />;
+        case "Tareas": return <ListChecks className="w-3 h-3" />;
+        case "Gestión": return <UserCog className="w-3 h-3" />;
+        case "Visibilidad": return <Eye className="w-3 h-3" />;
+        default: return null;
+    }
+}
+
 export default function ProjectSettings({ initialAreas, initialRoles }: Props) {
     const router = useRouter();
     const [isPending, startTransition] = useTransition();
     const [activeTab, setActiveTab] = useState<"AREAS" | "ROLES">("ROLES");
 
-    // States for rendering DnD correctly without hydration mismatch
     const [isMounted, setIsMounted] = useState(false);
     useEffect(() => { setIsMounted(true); }, []);
 
-    // Local state for lists
     const [areas, setAreas] = useState<Area[]>(initialAreas);
     const [roles, setRoles] = useState<Role[]>(initialRoles);
 
     const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
-    // Form states
     const [editingArea, setEditingArea] = useState<Area | null>(null);
     const [editingRole, setEditingRole] = useState<Role | null>(null);
+    const [editingPermissions, setEditingPermissions] = useState<string[]>([]);
 
     const [newArea, setNewArea] = useState({ name: "", description: "", color: "#94a3b8" });
     const [newRole, setNewRole] = useState({ name: "", description: "", color: "#6366f1" });
     const [isCreatingArea, setIsCreatingArea] = useState(false);
     const [isCreatingRole, setIsCreatingRole] = useState(false);
 
-    // Sync state if props change (revalidation)
     useEffect(() => { setAreas(initialAreas); }, [initialAreas]);
     useEffect(() => { setRoles(initialRoles); }, [initialRoles]);
 
     const showFeedback = (type: "success" | "error", message: string) => {
         setFeedback({ type, message });
         setTimeout(() => setFeedback(null), 4000);
+    };
+
+    const startEditingRole = (role: Role) => {
+        setEditingRole(role);
+        setEditingPermissions(role.permissions.map(p => p.permission));
+    };
+
+    const togglePermission = (perm: string) => {
+        setEditingPermissions(prev =>
+            prev.includes(perm) ? prev.filter(p => p !== perm) : [...prev, perm]
+        );
     };
 
     // ==========================================
@@ -82,12 +127,12 @@ export default function ProjectSettings({ initialAreas, initialRoles }: Props) {
         const [reorderedItem] = items.splice(result.source.index, 1);
         items.splice(result.destination.index, 0, reorderedItem);
 
-        setRoles(items); // optimistically update UI
+        setRoles(items);
 
         startTransition(async () => {
             const res = await reorderProjectRolesAction(items.map(r => r.id));
             if (res.success) { showFeedback("success", res.message!); router.refresh(); }
-            else { showFeedback("error", res.error!); setRoles(initialRoles); } // revert
+            else { showFeedback("error", res.error!); setRoles(initialRoles); }
         });
     };
 
@@ -129,7 +174,6 @@ export default function ProjectSettings({ initialAreas, initialRoles }: Props) {
                 name: editingArea.name,
                 description: editingArea.description || undefined,
                 color: editingArea.color || "#94a3b8",
-                membersCanCreateEvents: editingArea.membersCanCreateEvents ?? false,
             };
             const res = await updateProjectAreaAction(editingArea.id, payload);
             if (res.success) { showFeedback("success", res.message!); setEditingArea(null); router.refresh(); }
@@ -169,8 +213,7 @@ export default function ProjectSettings({ initialAreas, initialRoles }: Props) {
                 name: editingRole.name,
                 description: editingRole.description || undefined,
                 color: editingRole.color || "#6366f1",
-                canCreateEvents: editingRole.canCreateEvents ?? false,
-                canCreateTasks: editingRole.canCreateTasks ?? false,
+                permissions: editingPermissions,
             };
             const res = await updateProjectRoleAction(editingRole.id, payload);
             if (res.success) { showFeedback("success", res.message!); setEditingRole(null); router.refresh(); }
@@ -188,6 +231,41 @@ export default function ProjectSettings({ initialAreas, initialRoles }: Props) {
     };
 
     if (!isMounted) return <div className="p-8 text-center text-meteorite-500 font-bold"><Loader2 className="w-6 h-6 animate-spin mx-auto" /></div>;
+
+    /** Render a compact summary of a role's permissions */
+    const renderPermissionSummary = (role: Role) => {
+        const perms = role.permissions.map(p => p.permission);
+        const counts: Record<string, number> = {};
+        for (const group of PERMISSION_GROUPS) {
+            const groupPerms = ALL_PERMISSIONS.filter(p => PERMISSION_LABELS[p].group === group);
+            const active = groupPerms.filter(p => perms.includes(p)).length;
+            counts[group] = active;
+        }
+
+        return (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+                {PERMISSION_GROUPS.map(group => {
+                    const total = ALL_PERMISSIONS.filter(p => PERMISSION_LABELS[p].group === group).length;
+                    const active = counts[group];
+                    const isActive = active > 0;
+                    const isFull = active === total;
+
+                    return (
+                        <span key={group}
+                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                                isFull ? "bg-emerald-50 border-emerald-200 text-emerald-700"
+                                : isActive ? "bg-blue-50 border-blue-200 text-blue-700"
+                                : "bg-gray-50 border-gray-100 text-gray-400"
+                            }`}
+                        >
+                            {getGroupIcon(group)}
+                            {group} {active}/{total}
+                        </span>
+                    );
+                })}
+            </div>
+        );
+    };
 
     return (
         <div className="space-y-6">
@@ -225,7 +303,7 @@ export default function ProjectSettings({ initialAreas, initialRoles }: Props) {
                             <h3 className="text-xl font-black text-meteorite-950">Jerarquía de Roles</h3>
                             <p className="text-sm text-meteorite-500">
                                 Arrastra y suelta para ordenar la jerarquia de los roles.
-                                <strong className="text-meteorite-700 block mt-0.5">⬆️ Arriba = Mayor jerarquia | ⬇️ Abajo = Menor jerarquia</strong>
+                                <strong className="text-meteorite-700 block mt-0.5">Arriba = Mayor jerarquia | Abajo = Menor jerarquia</strong>
                             </p>
                         </div>
                         <button onClick={() => setIsCreatingRole(true)} disabled={isPending}
@@ -262,15 +340,15 @@ export default function ProjectSettings({ initialAreas, initialRoles }: Props) {
                                         <Draggable key={role.id} draggableId={role.id} index={index}>
                                             {(provided, snapshot) => (
                                                 <div ref={provided.innerRef} {...provided.draggableProps}
-                                                    className={`bg-white border rounded-2xl p-3 flex gap-4 items-center transition-all ${snapshot.isDragging ? "shadow-2xl border-violet-400 rotate-1 scale-[1.02]" : "shadow-sm border-gray-200"
+                                                    className={`bg-white border rounded-2xl p-3 flex gap-4 items-start transition-all ${snapshot.isDragging ? "shadow-2xl border-violet-400 rotate-1 scale-[1.02]" : "shadow-sm border-gray-200"
                                                         }`}
                                                 >
-                                                    <div {...provided.dragHandleProps} className="p-2 -m-2 text-gray-400 hover:text-meteorite-900 cursor-grab active:cursor-grabbing">
+                                                    <div {...provided.dragHandleProps} className="p-2 -m-2 text-gray-400 hover:text-meteorite-900 cursor-grab active:cursor-grabbing mt-1">
                                                         <GripVertical className="w-5 h-5" />
                                                     </div>
 
                                                     {editingRole?.id === role.id ? (
-                                                        <div className="flex-1 space-y-2">
+                                                        <div className="flex-1 space-y-3">
                                                             <div className="flex gap-2">
                                                                 <input autoFocus type="text" value={editingRole.name} onChange={e => setEditingRole({ ...editingRole, name: e.target.value })}
                                                                     className="px-3 py-1.5 rounded-lg border border-gray-200 font-bold text-sm text-meteorite-950" />
@@ -279,22 +357,51 @@ export default function ProjectSettings({ initialAreas, initialRoles }: Props) {
                                                                 <input type="color" value={editingRole.color || "#6366f1"} onChange={e => setEditingRole({ ...editingRole, color: e.target.value })}
                                                                     className="w-8 h-8 rounded cursor-pointer border-none bg-transparent self-center shrink-0" />
                                                             </div>
-                                                            <label className="flex items-center gap-2 cursor-pointer">
-                                                                <input type="checkbox" checked={editingRole.canCreateEvents ?? false}
-                                                                    onChange={e => setEditingRole({ ...editingRole, canCreateEvents: e.target.checked })}
-                                                                    className="w-4 h-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500" />
-                                                                <span className="text-xs font-bold text-meteorite-600 flex items-center gap-1">
-                                                                    <CalendarCheck className="w-3.5 h-3.5" /> Puede crear eventos
-                                                                </span>
-                                                            </label>
-                                                            <label className="flex items-center gap-2 cursor-pointer">
-                                                                <input type="checkbox" checked={editingRole.canCreateTasks ?? false}
-                                                                    onChange={e => setEditingRole({ ...editingRole, canCreateTasks: e.target.checked })}
-                                                                    className="w-4 h-4 rounded border-gray-300 text-violet-600 focus:ring-violet-500" />
-                                                                <span className="text-xs font-bold text-meteorite-600 flex items-center gap-1">
-                                                                    <ListChecks className="w-3.5 h-3.5" /> Puede crear tareas
-                                                                </span>
-                                                            </label>
+                                                            {/* Permission checkboxes grouped */}
+                                                            <div className="border rounded-xl p-3 bg-gray-50/50 space-y-3">
+                                                                <div className="flex items-center justify-between">
+                                                                    <span className="text-xs font-black text-meteorite-700 uppercase tracking-wider">Permisos</span>
+                                                                    <span className="text-[10px] font-bold text-meteorite-400">{editingPermissions.length}/{ALL_PERMISSIONS.length} activos</span>
+                                                                </div>
+                                                                {PERMISSION_GROUPS.map(group => {
+                                                                    const groupPerms = ALL_PERMISSIONS.filter(p => PERMISSION_LABELS[p].group === group);
+                                                                    const allChecked = groupPerms.every(p => editingPermissions.includes(p));
+                                                                    return (
+                                                                        <div key={group}>
+                                                                            <div className="flex items-center gap-2 mb-1">
+                                                                                {getGroupIcon(group)}
+                                                                                <span className="text-[10px] font-black text-meteorite-600 uppercase tracking-wider">{group}</span>
+                                                                                <button
+                                                                                    type="button"
+                                                                                    onClick={() => {
+                                                                                        if (allChecked) {
+                                                                                            setEditingPermissions(prev => prev.filter(p => !groupPerms.includes(p)));
+                                                                                        } else {
+                                                                                            setEditingPermissions(prev => [...new Set([...prev, ...groupPerms])]);
+                                                                                        }
+                                                                                    }}
+                                                                                    className="text-[9px] font-bold text-violet-500 hover:text-violet-700 ml-auto"
+                                                                                >
+                                                                                    {allChecked ? "Desmarcar todos" : "Marcar todos"}
+                                                                                </button>
+                                                                            </div>
+                                                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
+                                                                                {groupPerms.map(perm => (
+                                                                                    <label key={perm} className="flex items-center gap-2 cursor-pointer hover:bg-white/60 rounded px-1.5 py-0.5 transition-colors">
+                                                                                        <input
+                                                                                            type="checkbox"
+                                                                                            checked={editingPermissions.includes(perm)}
+                                                                                            onChange={() => togglePermission(perm)}
+                                                                                            className="w-3.5 h-3.5 rounded border-gray-300 text-violet-600 focus:ring-violet-500"
+                                                                                        />
+                                                                                        <span className="text-[11px] font-medium text-meteorite-700">{PERMISSION_LABELS[perm].label}</span>
+                                                                                    </label>
+                                                                                ))}
+                                                                            </div>
+                                                                        </div>
+                                                                    );
+                                                                })}
+                                                            </div>
                                                         </div>
                                                     ) : (
                                                         <div className="flex-1 min-w-0">
@@ -313,69 +420,7 @@ export default function ProjectSettings({ initialAreas, initialRoles }: Props) {
                                                             {role.description && (
                                                                 <p className="text-[11px] text-meteorite-400 font-medium mt-0.5 truncate">{role.description}</p>
                                                             )}
-                                                            {/* ── Capability Indicators ── */}
-                                                            <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-                                                                {/* Events column */}
-                                                                <div className={`rounded-lg border p-2 ${role.canCreateEvents ? "bg-emerald-50/70 border-emerald-200" : "bg-gray-50 border-gray-100"}`}>
-                                                                    <div className="flex items-center gap-1.5 mb-1">
-                                                                        <CalendarCheck className={`w-3 h-3 ${role.canCreateEvents ? "text-emerald-600" : "text-gray-400"}`} />
-                                                                        <span className={`text-[10px] font-black uppercase tracking-wider ${role.canCreateEvents ? "text-emerald-700" : "text-gray-400"}`}>Eventos</span>
-                                                                    </div>
-                                                                    <div className="space-y-0.5">
-                                                                        <div className="flex items-center gap-1">
-                                                                            {role.canCreateEvents
-                                                                                ? <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
-                                                                                : <X className="w-3 h-3 text-gray-300 shrink-0" />}
-                                                                            <span className={`text-[10px] font-bold ${role.canCreateEvents ? "text-emerald-700" : "text-gray-400"}`}>Crear eventos</span>
-                                                                        </div>
-                                                                        <div className="flex items-center gap-1">
-                                                                            {role.hierarchyLevel >= 80
-                                                                                ? <Eye className="w-3 h-3 text-blue-500 shrink-0" />
-                                                                                : <EyeOff className="w-3 h-3 text-gray-300 shrink-0" />}
-                                                                            <span className={`text-[10px] font-bold ${role.hierarchyLevel >= 80 ? "text-blue-600" : "text-gray-400"}`}>
-                                                                                {role.hierarchyLevel >= 80 ? "Ve todos los eventos" : "Solo eventos de su área"}
-                                                                            </span>
-                                                                        </div>
-                                                                    </div>
-                                                                </div>
-                                                                {/* Tasks column */}
-                                                                <div className={`rounded-lg border p-2 ${role.canCreateTasks ? "bg-violet-50/70 border-violet-200" : "bg-gray-50 border-gray-100"}`}>
-                                                                    <div className="flex items-center gap-1.5 mb-1">
-                                                                        <ListChecks className={`w-3 h-3 ${role.canCreateTasks ? "text-violet-600" : "text-gray-400"}`} />
-                                                                        <span className={`text-[10px] font-black uppercase tracking-wider ${role.canCreateTasks ? "text-violet-700" : "text-gray-400"}`}>Tareas</span>
-                                                                    </div>
-                                                                    <div className="space-y-0.5">
-                                                                        <div className="flex items-center gap-1">
-                                                                            {role.canCreateTasks
-                                                                                ? <CheckCircle2 className="w-3 h-3 text-violet-500 shrink-0" />
-                                                                                : <X className="w-3 h-3 text-gray-300 shrink-0" />}
-                                                                            <span className={`text-[10px] font-bold ${role.canCreateTasks ? "text-violet-700" : "text-gray-400"}`}>Crear tareas</span>
-                                                                        </div>
-                                                                        <div className="flex items-center gap-1">
-                                                                            {role.canCreateTasks
-                                                                                ? (role.hierarchyLevel >= 70
-                                                                                    ? <FolderKanban className="w-3 h-3 text-indigo-500 shrink-0" />
-                                                                                    : <Shield className="w-3 h-3 text-amber-500 shrink-0" />)
-                                                                                : <X className="w-3 h-3 text-gray-300 shrink-0" />}
-                                                                            <span className={`text-[10px] font-bold ${role.canCreateTasks ? (role.hierarchyLevel >= 70 ? "text-indigo-600" : "text-amber-600") : "text-gray-400"}`}>
-                                                                                {!role.canCreateTasks
-                                                                                    ? "Sin permisos"
-                                                                                    : role.hierarchyLevel >= 70
-                                                                                        ? "Cualquier área"
-                                                                                        : "Solo su área + General"}
-                                                                            </span>
-                                                                        </div>
-                                                                        <div className="flex items-center gap-1">
-                                                                            {role.hierarchyLevel >= 80
-                                                                                ? <UserCog className="w-3 h-3 text-blue-500 shrink-0" />
-                                                                                : <X className="w-3 h-3 text-gray-300 shrink-0" />}
-                                                                            <span className={`text-[10px] font-bold ${role.hierarchyLevel >= 80 ? "text-blue-600" : "text-gray-400"}`}>
-                                                                                {role.hierarchyLevel >= 80 ? "Gestionar + asignar + eliminar" : "Solo crear"}
-                                                                            </span>
-                                                                        </div>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
+                                                            {renderPermissionSummary(role)}
                                                         </div>
                                                     )}
 
@@ -387,7 +432,7 @@ export default function ProjectSettings({ initialAreas, initialRoles }: Props) {
                                                             </>
                                                         ) : (
                                                             <>
-                                                                <button onClick={() => setEditingRole(role)} disabled={isPending} className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"><Edit2 className="w-4 h-4" /></button>
+                                                                <button onClick={() => startEditingRole(role)} disabled={isPending} className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"><Edit2 className="w-4 h-4" /></button>
                                                                 {!role.isSystem && (
                                                                     <button onClick={() => handleDeleteRole(role.id, role.name)} disabled={isPending} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash2 className="w-4 h-4" /></button>
                                                                 )}
@@ -453,14 +498,6 @@ export default function ProjectSettings({ initialAreas, initialRoles }: Props) {
                                                                 <input autoFocus type="text" value={editingArea.name} onChange={e => setEditingArea({ ...editingArea, name: e.target.value })} className="flex-1 px-3 py-1 rounded-lg border text-sm font-bold shadow-inner text-meteorite-950" />
                                                             </div>
                                                             <textarea value={editingArea.description || ""} onChange={e => setEditingArea({ ...editingArea, description: e.target.value })} className="w-full px-3 py-2 rounded-lg border text-xs resize-none shadow-inner text-meteorite-950" rows={2} />
-                                                            <label className="flex items-center gap-2 cursor-pointer">
-                                                                <input type="checkbox" checked={editingArea.membersCanCreateEvents ?? false}
-                                                                    onChange={e => setEditingArea({ ...editingArea, membersCanCreateEvents: e.target.checked })}
-                                                                    className="w-4 h-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500" />
-                                                                <span className="text-xs font-bold text-meteorite-600 flex items-center gap-1">
-                                                                    <CalendarCheck className="w-3.5 h-3.5" /> Miembros pueden crear eventos
-                                                                </span>
-                                                            </label>
                                                             <div className="flex gap-2 justify-end">
                                                                 <button onClick={() => setEditingArea(null)} className="px-3 py-1 bg-gray-100 text-meteorite-600 hover:text-meteorite-800 hover:bg-gray-200 rounded-lg text-xs font-bold transition-colors">Cancelar</button>
                                                                 <button onClick={handleUpdateArea} disabled={isPending} className="px-3 py-1 bg-violet-600 text-white rounded-lg text-xs font-bold">Guardar</button>
@@ -488,11 +525,6 @@ export default function ProjectSettings({ initialAreas, initialRoles }: Props) {
                                                             <p className="text-xs text-meteorite-500 line-clamp-2 min-h-8">
                                                                 {area.description || "Sin descripción proporcionada."}
                                                             </p>
-                                                            {area.membersCanCreateEvents && (
-                                                                <span className="self-start bg-emerald-50 text-emerald-600 text-[10px] font-black px-2 py-0.5 rounded flex items-center gap-1 w-fit">
-                                                                    <CalendarCheck className="w-3 h-3" /> Eventos Habilitados
-                                                                </span>
-                                                            )}
                                                         </>
                                                     )}
                                                 </div>

@@ -38,12 +38,12 @@ interface Task {
 
 interface Member {
     id: string;
-    projectRole: { id: string; name: string; hierarchyLevel: number; color: string | null; isSystem: boolean | null; canCreateTasks?: boolean | null };
+    projectRole: { id: string; name: string; hierarchyLevel: number; color: string | null; isSystem: boolean | null; permissions?: { permission: string }[] };
     projectArea: { id: string; name: string; color: string | null } | null;
     user: { id: string; name: string | null; image: string | null; email: string; role: string | null };
 }
 
-interface ProjectRole { id: string; name: string; hierarchyLevel: number; color: string | null; canCreateTasks?: boolean | null; }
+interface ProjectRole { id: string; name: string; hierarchyLevel: number; color: string | null; permissions?: { permission: string }[] }
 interface ProjectArea { id: string; name: string; color: string | null; }
 
 interface Project {
@@ -133,12 +133,13 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
 
     const userMembership = project.members.find(m => m.user.id === currentUserId);
     const userProjectRole = userMembership?.projectRole;
-    const canManage = isSystemAdmin || (userProjectRole?.hierarchyLevel ?? 0) >= 80;
-    const userCanCreateTasks = canManage || (userProjectRole?.canCreateTasks ?? false);
+    const userPerms = (userProjectRole?.permissions ?? []).map(p => p.permission);
+    const canManage = isSystemAdmin || userPerms.includes("project:manage_settings");
+    const userCanCreateTasks = isSystemAdmin || userPerms.includes("project:task_create_any") || userPerms.includes("project:task_create_own_area");
     const userProjectAreaId = userMembership?.projectArea?.id || null;
     const userProjectAreaName = userMembership?.projectArea?.name || null;
-    // Area-level roles (like Director de Área) can only create tasks for their own area or general
-    const isAreaRestricted = !canManage && userCanCreateTasks && (userProjectRole?.hierarchyLevel ?? 0) < 70;
+    // Only own-area permission = restricted to own area or general tasks
+    const isAreaRestricted = !isSystemAdmin && !userPerms.includes("project:task_create_any") && userPerms.includes("project:task_create_own_area");
 
     const showFeedback = (type: "success" | "error", message: string) => {
         setFeedback({ type, message });
@@ -148,7 +149,7 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
     // ── Members ──
     const handleAddMember = (userId: string) => {
         startTransition(async () => {
-            const defaultRole = allProjectRoles.find(r => r.hierarchyLevel === 10) || allProjectRoles[allProjectRoles.length - 1];
+            const defaultRole = allProjectRoles[allProjectRoles.length - 1] || allProjectRoles[0];
             if (!defaultRole) return;
             const payload: any = {
                 projectId: project.id,
