@@ -302,6 +302,28 @@ export const projectMembers = sqliteTable("project_member", {
   joinedAt: integer("joined_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
 });
 
+export const projectInvitations = sqliteTable("project_invitation", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  projectId: text("project_id").references(() => projects.id, { onDelete: "cascade" }).notNull(),
+  userId: text("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+
+  // Snapshot of the proposed assignment at invite time.
+  projectRoleId: text("project_role_id").references(() => projectRoles.id).notNull(),
+  projectAreaId: text("project_area_id").references(() => projectAreas.id),
+
+  invitedById: text("invited_by_id").references(() => users.id).notNull(),
+
+  // PENDING | ACCEPTED | REJECTED | CANCELLED | EXPIRED
+  status: text("status").default("PENDING").notNull(),
+
+  message: text("message"),
+  rejectionReason: text("rejection_reason"),
+
+  createdAt: integer("created_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
+  expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
+  respondedAt: integer("responded_at", { mode: "timestamp" }),
+});
+
 export const projectTasks = sqliteTable("project_task", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
   projectId: text("project_id").references(() => projects.id, { onDelete: "cascade" }).notNull(),
@@ -375,6 +397,8 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   monthlySummaries: many(kpiMonthlySummaries),
   createdEvents: many(events, { relationName: "creator" }),
   projectMemberships: many(projectMembers),
+  receivedProjectInvitations: many(projectInvitations, { relationName: "invitedUser" }),
+  sentProjectInvitations: many(projectInvitations, { relationName: "inviter" }),
   createdProjects: many(projects, { relationName: "projectCreator" }),
   taskAssignments: many(taskAssignments),
   customRoles: many(userCustomRoles, { relationName: "userCustomRoles" }),
@@ -456,17 +480,20 @@ export const projectsRelations = relations(projects, ({ one, many }) => ({
   semester: one(semesters, { fields: [projects.semesterId], references: [semesters.id] }),
   createdBy: one(users, { fields: [projects.createdById], references: [users.id], relationName: "projectCreator" }),
   members: many(projectMembers),
+  invitations: many(projectInvitations),
   tasks: many(projectTasks),
   events: many(events, { relationName: "projectEvents" }),
 }));
 
 export const projectAreasRelations = relations(projectAreas, ({ many }) => ({
   members: many(projectMembers),
+  invitations: many(projectInvitations),
   events: many(events),
 }));
 
 export const projectRolesRelations = relations(projectRoles, ({ many }) => ({
   members: many(projectMembers),
+  invitations: many(projectInvitations),
   permissions: many(projectRolePermissions),
 }));
 
@@ -479,6 +506,14 @@ export const projectMembersRelations = relations(projectMembers, ({ one }) => ({
   user: one(users, { fields: [projectMembers.userId], references: [users.id] }),
   projectRole: one(projectRoles, { fields: [projectMembers.projectRoleId], references: [projectRoles.id] }),
   projectArea: one(projectAreas, { fields: [projectMembers.projectAreaId], references: [projectAreas.id] }),
+}));
+
+export const projectInvitationsRelations = relations(projectInvitations, ({ one }) => ({
+  project: one(projects, { fields: [projectInvitations.projectId], references: [projects.id] }),
+  user: one(users, { fields: [projectInvitations.userId], references: [users.id], relationName: "invitedUser" }),
+  invitedBy: one(users, { fields: [projectInvitations.invitedById], references: [users.id], relationName: "inviter" }),
+  projectRole: one(projectRoles, { fields: [projectInvitations.projectRoleId], references: [projectRoles.id] }),
+  projectArea: one(projectAreas, { fields: [projectInvitations.projectAreaId], references: [projectAreas.id] }),
 }));
 
 export const projectTasksRelations = relations(projectTasks, ({ one, many }) => ({

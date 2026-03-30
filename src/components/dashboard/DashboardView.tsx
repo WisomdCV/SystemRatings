@@ -37,6 +37,7 @@ import {
 } from "lucide-react";
 import { logoutAction } from "@/server/actions/auth.actions";
 import { submitJustificationAction, acknowledgeRejectionAction } from "@/server/actions/attendance.actions";
+import { respondToInvitationAction } from "@/server/actions/project-invitations.actions";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -96,10 +97,19 @@ interface DashboardViewProps {
         };
     };
     pendingApprovalUsers?: Array<{ id: string; name: string | null; email: string; image: string | null; createdAt: Date | null }>;
+    pendingProjectInvitations?: Array<{
+        id: string;
+        project: { id: string; name: string; color: string | null };
+        invitedBy: { id: string; name: string | null; image: string | null };
+        projectRole: { id: string; name: string; color: string | null };
+        projectArea: { id: string; name: string } | null;
+        message: string | null;
+        expiresAt: Date | null;
+    }>;
     roleChanged?: boolean;
 }
 
-export default function DashboardView({ user, upcomingEvents = [], pendingJustifications = [], attendanceHistory = [], currentSemester, dashboardData, pendingApprovalUsers = [], roleChanged = false }: DashboardViewProps) {
+export default function DashboardView({ user, upcomingEvents = [], pendingJustifications = [], attendanceHistory = [], currentSemester, dashboardData, pendingApprovalUsers = [], pendingProjectInvitations = [], roleChanged = false }: DashboardViewProps) {
     const [chartView, setChartView] = useState<"monthly" | "semester">("monthly");
     const [isSidebarExpanded, setIsSidebarExpanded] = useState(true);
 
@@ -264,8 +274,10 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
     const [justificationReason, setJustificationReason] = useState("");
     const [justificationLink, setJustificationLink] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [invitationLoadingId, setInvitationLoadingId] = useState<string | null>(null);
     const [roleNotifDismissed, setRoleNotifDismissed] = useState(false);
     const router = useRouter();
+    const totalNotifications = pendingJustifications.length + pendingApprovalUsers.length + pendingProjectInvitations.length + (roleChanged && !roleNotifDismissed ? 1 : 0);
 
     const handleOpenJustify = (record: any) => {
         setSelectedRecord(record);
@@ -450,6 +462,23 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
         }
     };
 
+    const handleInvitationResponse = async (invitationId: string, action: "ACCEPT" | "REJECT") => {
+        setInvitationLoadingId(invitationId);
+        try {
+            const res = await respondToInvitationAction({ invitationId, action });
+            if (res.success) {
+                toast.success(res.message || (action === "ACCEPT" ? "Invitación aceptada." : "Invitación rechazada."));
+                router.refresh();
+            } else {
+                toast.error(res.error || "No se pudo procesar la invitación.");
+            }
+        } catch {
+            toast.error("Error inesperado al responder la invitación.");
+        } finally {
+            setInvitationLoadingId(null);
+        }
+    };
+
     return (
         <div className="flex h-screen overflow-hidden text-gray-800 font-sans bg-meteorite-50">
             {/* 1. SIDEBAR (DESKTOP) */}
@@ -627,7 +656,7 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
                             {greeting}, {user.name?.split(" ")[0]} 👋
                         </h1>
                         <p className="text-sm text-meteorite-600 font-medium">
-                            Tienes {upcomingEvents.length} eventos y {actionableJustificationsCount} justificaciones pendientes
+                            Tienes {upcomingEvents.length} eventos, {actionableJustificationsCount} justificaciones y {pendingProjectInvitations.length} invitaciones pendientes
                         </p>
                     </div>
 
@@ -644,7 +673,7 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
                             onClick={() => setIsDrawerOpen(!isDrawerOpen)}
                         >
                             <Bell className="w-5 h-5" />
-                            {(pendingJustifications.length + pendingApprovalUsers.length + (roleChanged && !roleNotifDismissed ? 1 : 0)) > 0 && (
+                            {totalNotifications > 0 && (
                                 <span className="absolute top-2 right-2.5 w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
                             )}
                         </button>
@@ -1055,13 +1084,76 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
                             <div className="p-4 border-b border-meteorite-100 bg-meteorite-50/50 flex justify-between items-center">
                                 <h3 className="font-bold text-meteorite-900">Avisos Importantes</h3>
                                 <span className="bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
-                                    {pendingJustifications.length + pendingApprovalUsers.length + (roleChanged && !roleNotifDismissed ? 1 : 0)}
+                                    {totalNotifications}
                                 </span>
                             </div>
 
 
 
                             <div className="max-h-96 overflow-y-auto p-2">
+                                {pendingProjectInvitations.map((invitation) => {
+                                    const inviterName = invitation.invitedBy.name || "Un miembro del proyecto";
+                                    const expiresText = invitation.expiresAt
+                                        ? new Date(invitation.expiresAt).toLocaleDateString("es-PE", {
+                                            day: "2-digit",
+                                            month: "short",
+                                            year: "numeric",
+                                        })
+                                        : "sin fecha";
+
+                                    return (
+                                        <div key={invitation.id} className="p-3 mb-2 rounded-xl border bg-indigo-50 border-indigo-200">
+                                            <div className="flex items-start justify-between gap-2">
+                                                <div className="min-w-0 flex items-start gap-2">
+                                                    <div
+                                                        className="mt-0.5 h-3 w-3 rounded-full border border-white/80 shadow-sm"
+                                                        style={{ backgroundColor: invitation.project.color || "#6366f1" }}
+                                                        title="Color del proyecto"
+                                                    />
+                                                    <div className="min-w-0">
+                                                        <h4 className="font-bold text-xs text-indigo-900 truncate">
+                                                            Invitación a proyecto
+                                                        </h4>
+                                                        <p className="text-[11px] text-indigo-700 font-semibold truncate">
+                                                            {invitation.project.name}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                <Link
+                                                    href={`/dashboard/projects/${invitation.project.id}`}
+                                                    className="text-[10px] font-bold bg-white text-indigo-700 px-2 py-0.5 rounded-full border border-indigo-200 hover:bg-indigo-100"
+                                                >
+                                                    Ver
+                                                </Link>
+                                            </div>
+
+                                            <div className="mt-1 text-[11px] text-indigo-700 space-y-0.5">
+                                                <p>Te invitó: <strong>{inviterName}</strong></p>
+                                                <p>Rol: <strong>{invitation.projectRole.name}</strong>{invitation.projectArea ? ` • Área: ${invitation.projectArea.name}` : ""}</p>
+                                                <p>Expira: <strong>{expiresText}</strong></p>
+                                                {invitation.message && <p className="italic text-indigo-600/90">"{invitation.message}"</p>}
+                                            </div>
+
+                                            <div className="flex gap-2 mt-2">
+                                                <button
+                                                    onClick={() => handleInvitationResponse(invitation.id, "REJECT")}
+                                                    disabled={invitationLoadingId === invitation.id}
+                                                    className="flex-1 py-1.5 rounded-lg text-xs font-bold bg-white text-indigo-700 border border-indigo-200 hover:bg-indigo-100 disabled:opacity-50"
+                                                >
+                                                    Rechazar
+                                                </button>
+                                                <button
+                                                    onClick={() => handleInvitationResponse(invitation.id, "ACCEPT")}
+                                                    disabled={invitationLoadingId === invitation.id}
+                                                    className="flex-1 py-1.5 rounded-lg text-xs font-bold bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
+                                                >
+                                                    {invitationLoadingId === invitation.id ? "Procesando..." : "Aceptar"}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+
                                 {/* Role Changed Notification */}
                                 {roleChanged && !roleNotifDismissed && (
                                     <div className="p-3 mb-2 rounded-xl border bg-blue-50 border-blue-200">
@@ -1133,7 +1225,7 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
                                     </>
                                 )}
 
-                                {pendingJustifications.length === 0 && pendingApprovalUsers.length === 0 && !(roleChanged && !roleNotifDismissed) ? (
+                                {pendingJustifications.length === 0 && pendingApprovalUsers.length === 0 && pendingProjectInvitations.length === 0 && !(roleChanged && !roleNotifDismissed) ? (
                                     <div className="p-8 text-center text-gray-400 text-sm">
                                         ¡Estás al día! No tienes avisos pendientes.
                                     </div>

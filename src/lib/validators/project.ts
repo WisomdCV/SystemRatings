@@ -5,6 +5,8 @@ export const PROJECT_STATUSES = ["PLANNING", "ACTIVE", "PAUSED", "COMPLETED", "C
 export const PROJECT_PRIORITIES = ["LOW", "MEDIUM", "HIGH", "CRITICAL"] as const;
 export const TASK_STATUSES = ["TODO", "IN_PROGRESS", "REVIEW", "DONE", "BLOCKED"] as const;
 export const TASK_PRIORITIES = ["LOW", "MEDIUM", "HIGH"] as const;
+export const INVITATION_STATUSES = ["PENDING", "ACCEPTED", "REJECTED", "CANCELLED", "EXPIRED"] as const;
+export const INVITATION_EXPIRY_DAYS = 7;
 
 // ─── Project Schemas ─────────────────────────────────────────────────────────
 
@@ -43,6 +45,26 @@ export const UpdateProjectMemberRoleSchema = z.object({
     projectAreaId: z.string().uuid().optional().nullable(),
 });
 
+// ─── Invitation Schemas ─────────────────────────────────────────────────────
+
+export const CreateProjectInvitationSchema = z.object({
+    projectId: z.string().uuid(),
+    userId: z.string().uuid(),
+    projectRoleId: z.string().uuid(),
+    projectAreaId: z.string().uuid().optional().nullable(),
+    message: z.string().max(500).optional().nullable(),
+});
+
+export const RespondInvitationSchema = z.object({
+    invitationId: z.string().uuid(),
+    action: z.enum(["ACCEPT", "REJECT"]),
+    rejectionReason: z.string().max(500).optional().nullable(),
+});
+
+export const CancelInvitationSchema = z.object({
+    invitationId: z.string().uuid(),
+});
+
 // ─── Task Schemas ────────────────────────────────────────────────────────────
 
 export const CreateTaskSchema = z.object({
@@ -79,6 +101,9 @@ export type CreateProjectDTO = z.infer<typeof CreateProjectSchema>;
 export type UpdateProjectDTO = z.infer<typeof UpdateProjectSchema>;
 export type AddProjectMemberDTO = z.infer<typeof AddProjectMemberSchema>;
 export type UpdateProjectMemberRoleDTO = z.infer<typeof UpdateProjectMemberRoleSchema>;
+export type CreateProjectInvitationDTO = z.infer<typeof CreateProjectInvitationSchema>;
+export type RespondInvitationDTO = z.infer<typeof RespondInvitationSchema>;
+export type CancelInvitationDTO = z.infer<typeof CancelInvitationSchema>;
 export type CreateTaskDTO = z.infer<typeof CreateTaskSchema>;
 export type UpdateTaskDTO = z.infer<typeof UpdateTaskSchema>;
 export type UpdateTaskStatusDTO = z.infer<typeof UpdateTaskStatusSchema>;

@@ -6,6 +6,7 @@ import { projects, projectMembers, projectTasks, taskAssignments, semesters, pro
 import { eq, and, asc, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { hasPermission } from "@/lib/permissions";
+import { createProjectInvitationAction } from "@/server/actions/project-invitations.actions";
 import {
     hasProjectPermission, hasAnyProjectPermission, canBypassProjectPerms,
 } from "@/lib/project-permissions";
@@ -254,60 +255,18 @@ export async function deleteProjectAction(projectId: string) {
 
 /** Add a member to a project */
 export async function addProjectMemberAction(input: AddProjectMemberDTO) {
-    try {
-        const session = await auth();
-        if (!session?.user?.id) return { success: false as const, error: "No autorizado" };
-
-        const validated = AddProjectMemberSchema.safeParse(input);
-        if (!validated.success) return { success: false as const, error: validated.error.issues[0].message };
-
-        // IISE bypass OR project:manage_members
-        const iiseBypass = canBypassProjectPerms(session.user.role || "", session.user.customPermissions);
-        if (!iiseBypass) {
-            const membership = await getProjectMembershipWithPerms(session.user.id, validated.data.projectId);
-            if (!hasProjectPermission(membership, "project:manage_members")) {
-                return { success: false as const, error: "No tienes permisos para gestionar miembros." };
-            }
-
-            if (!membership) {
-                return { success: false as const, error: "No eres miembro del proyecto." };
-            }
-
-            const targetRole = await db.query.projectRoles.findFirst({
-                where: eq(projectRoles.id, validated.data.projectRoleId),
-                columns: { hierarchyLevel: true },
-            });
-            if (!targetRole) {
-                return { success: false as const, error: "Rol de proyecto no encontrado." };
-            }
-
-            if (targetRole.hierarchyLevel > membership.projectRole.hierarchyLevel) {
-                return { success: false as const, error: "No puedes asignar un rol de mayor jerarquía que el tuyo." };
-            }
-        }
-
-        // Check if already a member
-        const existing = await db.query.projectMembers.findFirst({
-            where: and(
-                eq(projectMembers.projectId, validated.data.projectId),
-                eq(projectMembers.userId, validated.data.userId),
-            ),
-        });
-        if (existing) return { success: false as const, error: "El usuario ya es miembro de este proyecto." };
-
-        await db.insert(projectMembers).values({
-            projectId: validated.data.projectId,
-            userId: validated.data.userId,
-            projectRoleId: validated.data.projectRoleId,
-            projectAreaId: validated.data.projectAreaId || null,
-        });
-
-        revalidateProjects();
-        return { success: true as const, message: "Miembro agregado." };
-    } catch (error) {
-        console.error("Error adding project member:", error);
-        return { success: false as const, error: "Error al agregar miembro." };
+    const validated = AddProjectMemberSchema.safeParse(input);
+    if (!validated.success) {
+        return { success: false as const, error: validated.error.issues[0].message };
     }
+
+    return createProjectInvitationAction({
+        projectId: validated.data.projectId,
+        userId: validated.data.userId,
+        projectRoleId: validated.data.projectRoleId,
+        projectAreaId: validated.data.projectAreaId || null,
+        message: null,
+    });
 }
 
 /** Update a member's project role */

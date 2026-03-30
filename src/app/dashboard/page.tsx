@@ -6,6 +6,7 @@ import { events, semesters, areas, users, projectMembers } from "@/db/schema";
 import { asc, eq, and, or, isNull, isNotNull, gte, inArray } from "drizzle-orm";
 import { getPendingJustificationsAction, getMyAttendanceHistoryAction } from "@/server/actions/attendance.actions";
 import { getMyDashboardDataAction } from "@/server/actions/dashboard.actions";
+import { getPendingInvitationsForUserAction } from "@/server/actions/project-invitations.actions";
 import { hasPermission } from "@/lib/permissions";
 import { prepareEventsForClient, type VisibilityContext, type ProjectMembershipContext } from "@/server/services/event-visibility.service";
 
@@ -167,6 +168,7 @@ export default async function DashboardPage() {
     // 2. Fetch Pending Justifications & History
     const { data: pendingJustifications } = await getPendingJustificationsAction();
     const { data: attendanceHistory } = await getMyAttendanceHistoryAction();
+    const { data: pendingProjectInvitations } = await getPendingInvitationsForUserAction();
 
     // 3. Fetch Dashboard KPI & Grades Data
     const { data: dashboardData } = await getMyDashboardDataAction();
@@ -198,6 +200,7 @@ export default async function DashboardPage() {
         currentSemester={activeSemester ? { id: activeSemester.id, name: activeSemester.name } : null}
         dashboardData={dashboardData}
         pendingApprovalUsers={pendingApprovalUsers}
+        pendingProjectInvitations={pendingProjectInvitations || []}
         roleChanged={session.user.roleChanged === true}
     />;
 }

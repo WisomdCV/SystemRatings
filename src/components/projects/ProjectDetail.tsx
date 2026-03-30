@@ -4,10 +4,11 @@ import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import {
-    updateProjectAction, addProjectMemberAction, removeProjectMemberAction,
+    updateProjectAction, removeProjectMemberAction,
     updateProjectMemberRoleAction, createTaskAction, updateTaskStatusAction,
     deleteTaskAction, assignTaskAction, unassignTaskAction,
 } from "@/server/actions/project.actions";
+import { createProjectInvitationAction, cancelProjectInvitationAction } from "@/server/actions/project-invitations.actions";
 import { PROJECT_STATUSES, PROJECT_PRIORITIES, TASK_STATUSES, TASK_PRIORITIES } from "@/lib/validators/project";
 import {
     Users, ListChecks, Plus, Loader2, Trash2, Crown, UserPlus,
@@ -69,6 +70,18 @@ interface EligibleUser {
     image: string | null;
 }
 
+interface ProjectInvitation {
+    id: string;
+    status: string;
+    message: string | null;
+    expiresAt: Date | null;
+    createdAt: Date | null;
+    user: { id: string; name: string | null; email: string; image: string | null };
+    invitedBy: { id: string; name: string | null; image: string | null };
+    projectRole: { id: string; name: string; color: string | null };
+    projectArea: { id: string; name: string } | null;
+}
+
 interface Props {
     project: Project;
     eligibleUsers: EligibleUser[];
@@ -77,6 +90,7 @@ interface Props {
     currentUserId: string;
     isSystemAdmin: boolean;
     currentUserHierarchyLevel: number;
+    projectInvitations: ProjectInvitation[];
 }
 
 // ─── Visual Configs ──────────────────────────────────────────────────────────
@@ -119,7 +133,7 @@ const toDateInput = (value: Date | null) => {
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
-export default function ProjectDetail({ project, eligibleUsers, allProjectRoles, allProjectAreas, currentUserId, isSystemAdmin, currentUserHierarchyLevel }: Props) {
+export default function ProjectDetail({ project, eligibleUsers, allProjectRoles, allProjectAreas, currentUserId, isSystemAdmin, currentUserHierarchyLevel, projectInvitations }: Props) {
     const router = useRouter();
     const [isPending, startTransition] = useTransition();
     const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
@@ -129,6 +143,7 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
     const [memberSearch, setMemberSearch] = useState("");
     const [selectedAreaId, setSelectedAreaId] = useState<string>("none"); // 'none' means system/sin area
     const [selectedRoleId, setSelectedRoleId] = useState<string>("");
+    const [invitationMessage, setInvitationMessage] = useState("");
 
     // Task create
     const [showCreateTask, setShowCreateTask] = useState(false);
@@ -160,6 +175,7 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
     const userProjectRole = userMembership?.projectRole;
     const userPerms = (userProjectRole?.permissions ?? []).map(p => p.permission);
     const canManage = isSystemAdmin || userPerms.includes("project:manage_settings");
+    const canManageMembers = isSystemAdmin || userPerms.includes("project:manage_members");
     const canChangeStatus = isSystemAdmin || userPerms.includes("project:manage_status");
     const userCanCreateTasks = isSystemAdmin || userPerms.includes("project:task_create_any") || userPerms.includes("project:task_create_own_area");
     const userProjectAreaId = userMembership?.projectArea?.id || null;
@@ -238,12 +254,25 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
                 projectId: project.id,
                 userId,
                 projectRoleId: roleId,
+                message: invitationMessage.trim() ? invitationMessage.trim() : null,
             };
             if (selectedAreaId !== "none") payload.projectAreaId = selectedAreaId;
 
-            const res = await addProjectMemberAction(payload);
-            if (res.success) { showFeedback("success", res.message!); setShowAddMember(false); setMemberSearch(""); setSelectedRoleId(""); router.refresh(); }
+            const res = await createProjectInvitationAction(payload);
+            if (res.success) { showFeedback("success", res.message!); setShowAddMember(false); setMemberSearch(""); setSelectedRoleId(""); setInvitationMessage(""); router.refresh(); }
             else showFeedback("error", res.error!);
+        });
+    };
+
+    const handleCancelInvitation = (invitationId: string) => {
+        startTransition(async () => {
+            const res = await cancelProjectInvitationAction({ invitationId });
+            if (res.success) {
+                showFeedback("success", res.message || "Invitación cancelada.");
+                router.refresh();
+            } else {
+                showFeedback("error", res.error || "No se pudo cancelar la invitación.");
+            }
         });
     };
 
@@ -345,6 +374,8 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
         const term = memberSearch.toLowerCase();
         return u.name?.toLowerCase().includes(term) || u.email.toLowerCase().includes(term);
     });
+
+    const pendingProjectInvitations = projectInvitations.filter((inv) => inv.status === "PENDING");
 
     const filteredAssignUsers = project.members.filter(m => {
         if (!assignSearch) return true;
@@ -828,7 +859,7 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
                                 <Users className="w-4 h-4 text-violet-500" />
                                 Equipo ({project.members.length})
                             </h4>
-                            {canManage && (
+                            {canManageMembers && (
                                 <button onClick={() => {
                                     const next = !showAddMember;
                                     setShowAddMember(next);
@@ -836,6 +867,7 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
                                         setMemberSearch("");
                                         setSelectedAreaId("none");
                                         setSelectedRoleId("");
+                                        setInvitationMessage("");
                                     }
                                 }} disabled={isPending}
                                     className="p-1.5 text-violet-600 hover:bg-violet-50 rounded-lg transition-colors disabled:opacity-50">
@@ -869,6 +901,13 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
                                             ))}
                                         </select>
                                     </div>
+                                    <textarea
+                                        value={invitationMessage}
+                                        onChange={e => setInvitationMessage(e.target.value)}
+                                        rows={2}
+                                        placeholder="Mensaje opcional para la invitación..."
+                                        className="w-full px-3 py-1.5 text-xs rounded-lg border border-gray-200 outline-none resize-none"
+                                    />
                                     <input type="text" value={memberSearch} onChange={e => setMemberSearch(e.target.value)}
                                         placeholder="Buscar usuario…" autoFocus
                                         className="w-full px-3 py-1.5 text-xs rounded-lg border border-gray-200 outline-none" />
@@ -888,6 +927,46 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
                                     {filteredEligible.length === 0 && (
                                         <div className="p-3 text-center text-xs text-gray-500">No hay usuarios disponibles.</div>
                                     )}
+                                </div>
+                            </div>
+                        )}
+
+                        {canManageMembers && pendingProjectInvitations.length > 0 && (
+                            <div className="mb-3 rounded-xl border border-indigo-200 bg-indigo-50/60 p-3">
+                                <p className="text-[11px] font-black text-indigo-800 uppercase tracking-wider mb-2">
+                                    Invitaciones pendientes ({pendingProjectInvitations.length})
+                                </p>
+                                <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
+                                    {pendingProjectInvitations.map((invitation) => (
+                                        <div key={invitation.id} className="rounded-lg border border-indigo-100 bg-white p-2">
+                                            <div className="flex items-start justify-between gap-2">
+                                                <div className="min-w-0">
+                                                    <p className="text-xs font-bold text-meteorite-900 truncate">
+                                                        {invitation.user.name || invitation.user.email}
+                                                    </p>
+                                                    <p className="text-[10px] text-indigo-700">
+                                                        Rol: <strong>{invitation.projectRole.name}</strong>
+                                                        {invitation.projectArea ? ` • Área: ${invitation.projectArea.name}` : ""}
+                                                    </p>
+                                                    <p className="text-[10px] text-gray-500">
+                                                        Expira: {invitation.expiresAt
+                                                            ? new Date(invitation.expiresAt).toLocaleDateString("es-PE", { day: "2-digit", month: "short", year: "numeric" })
+                                                            : "sin fecha"}
+                                                    </p>
+                                                    {invitation.message && (
+                                                        <p className="text-[10px] text-gray-500 italic mt-1 line-clamp-2">"{invitation.message}"</p>
+                                                    )}
+                                                </div>
+                                                <button
+                                                    onClick={() => handleCancelInvitation(invitation.id)}
+                                                    disabled={isPending}
+                                                    className="text-[10px] font-bold px-2 py-1 rounded-md border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-50"
+                                                >
+                                                    Cancelar
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))}
                                 </div>
                             </div>
                         )}
@@ -943,7 +1022,7 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
                                                         <div className="flex flex-col items-end gap-1">
                                                             {(() => {
                                                                 const canModifyThisMember = isSystemAdmin || m.projectRole.hierarchyLevel < currentUserHierarchyLevel;
-                                                                if (canManage && canModifyThisMember) {
+                                                                if (canManageMembers && canModifyThisMember) {
                                                                     return (
                                                                         <>
                                                                             <select
@@ -984,7 +1063,7 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
                                                                 );
                                                             })()}
 
-                                                            {canManage && (isSystemAdmin || m.projectRole.hierarchyLevel < currentUserHierarchyLevel) && m.user.id !== currentUserId && (
+                                                            {canManageMembers && (isSystemAdmin || m.projectRole.hierarchyLevel < currentUserHierarchyLevel) && m.user.id !== currentUserId && (
                                                                 <button onClick={() => handleRemoveMember(m.id)} disabled={isPending}
                                                                     className="text-[10px] flex items-center gap-1 text-red-400 hover:text-red-500 transition-colors disabled:opacity-50">
                                                                     Quitar

@@ -1,6 +1,7 @@
 import { authFresh } from "@/server/auth-fresh";
 import { redirect } from "next/navigation";
 import { getProjectByIdAction } from "@/server/actions/project.actions";
+import { getProjectInvitationsAction } from "@/server/actions/project-invitations.actions";
 import { hasPermission } from "@/lib/permissions";
 import ProjectDetail from "@/components/projects/ProjectDetail";
 import ProjectEventsTab from "@/components/projects/ProjectEventsTab";
@@ -39,7 +40,12 @@ export default async function ProjectDetailPage(props: { params: Promise<{ id: s
         columns: { id: true, name: true, email: true, role: true, image: true },
         where: eq(users.status, "ACTIVE"),
     });
-    const eligibleUsers = allUsers.filter(u => !projectMemberIds.includes(u.id));
+    const invitationsResult = await getProjectInvitationsAction(params.id);
+    const projectInvitations = invitationsResult.success ? invitationsResult.data : [];
+    const pendingInvitedUserIds = new Set(
+        projectInvitations.filter((inv) => inv.status === "PENDING").map((inv) => inv.user.id)
+    );
+    const eligibleUsers = allUsers.filter(u => !projectMemberIds.includes(u.id) && !pendingInvitedUserIds.has(u.id));
 
     // Fetch dynamic project roles and areas to pass into the component
     const allRoles = await db.query.projectRoles.findMany({
@@ -144,6 +150,7 @@ export default async function ProjectDetailPage(props: { params: Promise<{ id: s
                         currentUserId={session.user.id!}
                         isSystemAdmin={isSystemAdmin}
                         currentUserHierarchyLevel={currentUserHierarchyLevel}
+                        projectInvitations={projectInvitations}
                     />
 
                     <ProjectEventsTab
