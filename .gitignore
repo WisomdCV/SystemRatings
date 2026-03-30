@@ -40,3 +40,4 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 .github/prompts/analisis-backend-permisos-roles.prompt.md
+docs/

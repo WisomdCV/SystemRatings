@@ -51,6 +51,7 @@ export async function getProjectsAction() {
         const session = await auth();
         if (!session?.user) return { success: false as const, error: "No autorizado" };
 
+        // TODO(multi-cycle): stop hard-filtering by active semester when projects become cross-cycle.
         const activeSemester = await db.query.semesters.findFirst({
             where: eq(semesters.isActive, true),
         });
@@ -131,6 +132,7 @@ export async function createProjectAction(input: CreateProjectDTO) {
         const validated = CreateProjectSchema.safeParse(input);
         if (!validated.success) return { success: false as const, error: validated.error.issues[0].message };
 
+        // TODO(multi-cycle): semester should become optional metadata in a future phase.
         const activeSemester = await db.query.semesters.findFirst({
             where: eq(semesters.isActive, true),
         });
@@ -143,6 +145,7 @@ export async function createProjectAction(input: CreateProjectDTO) {
                 semesterId: activeSemester.id,
                 name: validated.data.name,
                 description: validated.data.description || null,
+                color: validated.data.color || undefined,
                 priority: validated.data.priority,
                 startDate: validated.data.startDate || null,
                 deadline: validated.data.deadline || null,
@@ -182,18 +185,31 @@ export async function updateProjectAction(input: UpdateProjectDTO) {
         const validated = UpdateProjectSchema.safeParse(input);
         if (!validated.success) return { success: false as const, error: validated.error.issues[0].message };
 
-        // IISE bypass OR project:manage_settings
+        const currentProject = await db.query.projects.findFirst({
+            where: eq(projects.id, validated.data.id),
+            columns: { status: true },
+        });
+        if (!currentProject) return { success: false as const, error: "Proyecto no encontrado." };
+
+        // IISE bypass OR project:manage_settings (+ project:manage_status if status changes)
         const iiseBypass = canBypassProjectPerms(session.user.role || "", session.user.customPermissions);
         if (!iiseBypass) {
             const membership = await getProjectMembershipWithPerms(session.user.id, validated.data.id);
             if (!hasProjectPermission(membership, "project:manage_settings")) {
                 return { success: false as const, error: "No tienes permisos para editar este proyecto." };
             }
+
+            if (validated.data.status !== currentProject.status) {
+                if (!hasProjectPermission(membership, "project:manage_status")) {
+                    return { success: false as const, error: "No tienes permisos para cambiar el estado del proyecto." };
+                }
+            }
         }
 
         await db.update(projects).set({
             name: validated.data.name,
             description: validated.data.description || null,
+            color: validated.data.color,
             status: validated.data.status,
             priority: validated.data.priority,
             startDate: validated.data.startDate || null,

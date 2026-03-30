@@ -255,9 +255,10 @@ export const areaKpiSummaries = sqliteTable("area_kpi_summary", {
 
 export const projects = sqliteTable("project", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-  semesterId: text("semester_id").references(() => semesters.id).notNull(),
+  semesterId: text("semester_id").references(() => semesters.id).notNull(), // TODO: make nullable for multi-cycle persistence in a future phase.
   name: text("name").notNull(),
   description: text("description"),
+  color: text("color").default("#6366f1").notNull(),
   // PLANNING | ACTIVE | PAUSED | COMPLETED | CANCELLED
   status: text("status").default("PLANNING").notNull(),
   // LOW | MEDIUM | HIGH | CRITICAL

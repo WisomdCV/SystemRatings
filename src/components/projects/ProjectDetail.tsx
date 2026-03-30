@@ -50,6 +50,7 @@ interface Project {
     id: string;
     name: string;
     description: string | null;
+    color: string | null;
     status: string;
     priority: string;
     startDate: Date | null;
@@ -103,6 +104,18 @@ const TASK_BG_COLORS: Record<string, string> = {
     BLOCKED: "bg-red-50/50 border-red-200",
 };
 
+const PRIORITY_LABEL: Record<string, string> = {
+    LOW: "Baja",
+    MEDIUM: "Media",
+    HIGH: "Alta",
+    CRITICAL: "Crítica",
+};
+
+const toDateInput = (value: Date | null) => {
+    if (!value) return "";
+    return new Date(value).toISOString().split("T")[0];
+};
+
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export default function ProjectDetail({ project, eligibleUsers, allProjectRoles, allProjectAreas, currentUserId, isSystemAdmin }: Props) {
@@ -127,6 +140,16 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
     const [assigningTaskId, setAssigningTaskId] = useState<string | null>(null);
     const [assignSearch, setAssignSearch] = useState("");
 
+    // Project edit
+    const [showEditProject, setShowEditProject] = useState(false);
+    const [editName, setEditName] = useState(project.name);
+    const [editDescription, setEditDescription] = useState(project.description || "");
+    const [editColor, setEditColor] = useState(project.color || "#6366f1");
+    const [editPriority, setEditPriority] = useState(project.priority);
+    const [editStatus, setEditStatus] = useState(project.status);
+    const [editStartDate, setEditStartDate] = useState(toDateInput(project.startDate));
+    const [editDeadline, setEditDeadline] = useState(toDateInput(project.deadline));
+
     // Task filter
     const [statusFilter, setStatusFilter] = useState<string>("ALL");
     const [areaFilter, setAreaFilter] = useState<string>("ALL");
@@ -135,6 +158,7 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
     const userProjectRole = userMembership?.projectRole;
     const userPerms = (userProjectRole?.permissions ?? []).map(p => p.permission);
     const canManage = isSystemAdmin || userPerms.includes("project:manage_settings");
+    const canChangeStatus = isSystemAdmin || userPerms.includes("project:manage_status");
     const userCanCreateTasks = isSystemAdmin || userPerms.includes("project:task_create_any") || userPerms.includes("project:task_create_own_area");
     const userProjectAreaId = userMembership?.projectArea?.id || null;
     const userProjectAreaName = userMembership?.projectArea?.name || null;
@@ -144,6 +168,45 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
     const showFeedback = (type: "success" | "error", message: string) => {
         setFeedback({ type, message });
         setTimeout(() => setFeedback(null), 4000);
+    };
+
+    const openEditProject = () => {
+        setEditName(project.name);
+        setEditDescription(project.description || "");
+        setEditColor(project.color || "#6366f1");
+        setEditPriority(project.priority);
+        setEditStatus(project.status);
+        setEditStartDate(toDateInput(project.startDate));
+        setEditDeadline(toDateInput(project.deadline));
+        setShowEditProject(true);
+    };
+
+    const handleUpdateProject = () => {
+        if (!editName.trim()) {
+            showFeedback("error", "El nombre del proyecto es obligatorio.");
+            return;
+        }
+
+        startTransition(async () => {
+            const res = await updateProjectAction({
+                id: project.id,
+                name: editName.trim(),
+                description: editDescription.trim() ? editDescription : null,
+                color: editColor,
+                priority: editPriority as any,
+                status: (canChangeStatus ? editStatus : project.status) as any,
+                startDate: editStartDate ? new Date(editStartDate) : null,
+                deadline: editDeadline ? new Date(editDeadline) : null,
+            });
+
+            if (res.success) {
+                showFeedback("success", res.message || "Proyecto actualizado.");
+                setShowEditProject(false);
+                router.refresh();
+            } else {
+                showFeedback("error", res.error || "Error al actualizar proyecto.");
+            }
+        });
     };
 
     // ── Members ──
@@ -289,27 +352,156 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
             )}
 
             {/* Project Info Bar */}
-            <div className="bg-white/80 backdrop-blur-md border border-gray-200 rounded-2xl p-4 flex flex-wrap gap-4 items-center justify-between">
-                <div className="flex items-center gap-3 flex-wrap">
-                    <span className={`px-3 py-1 rounded-lg text-xs font-bold ${STATUS_BADGE[project.status]?.color || "bg-gray-100 text-gray-600"}`}>
-                        {STATUS_BADGE[project.status]?.label || project.status}
-                    </span>
-                    <span className="text-xs text-gray-500">
-                        Creado por <strong>{project.createdBy.name || project.createdBy.email}</strong>
-                    </span>
-                    {project.deadline && (
-                        <span className="text-xs text-gray-500 flex items-center gap-1">
-                            <Clock className="w-3 h-3" />
-                            Deadline: {new Date(project.deadline).toLocaleDateString("es", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" })}
+            <div className="bg-white/80 backdrop-blur-md border border-gray-200 rounded-2xl overflow-hidden">
+                <div className="h-1.5 w-full" style={{ backgroundColor: project.color || "#6366f1" }} />
+                <div className="p-4 flex flex-wrap gap-4 items-center justify-between">
+                    <div className="flex items-center gap-3 flex-wrap">
+                        <span className={`px-3 py-1 rounded-lg text-xs font-bold ${STATUS_BADGE[project.status]?.color || "bg-gray-100 text-gray-600"}`}>
+                            {STATUS_BADGE[project.status]?.label || project.status}
                         </span>
-                    )}
-                </div>
-                <div className="flex gap-3 text-xs font-bold">
-                    <span className="text-gray-600"><Users className="w-3.5 h-3.5 inline mr-1" />{project.members.length}</span>
-                    <span className="text-emerald-600"><CheckCircle2 className="w-3.5 h-3.5 inline mr-1" />{taskStats.done}/{taskStats.total}</span>
-                    {taskStats.blocked > 0 && <span className="text-red-500"><X className="w-3.5 h-3.5 inline mr-1" />{taskStats.blocked} bloq.</span>}
+                        <span className="text-xs font-bold text-gray-600">
+                            Prioridad: {PRIORITY_LABEL[project.priority] || project.priority}
+                        </span>
+                        <span className="text-xs text-gray-500">
+                            Creado por <strong>{project.createdBy.name || project.createdBy.email}</strong>
+                        </span>
+                        {project.deadline && (
+                            <span className="text-xs text-gray-500 flex items-center gap-1">
+                                <Clock className="w-3 h-3" />
+                                Deadline: {new Date(project.deadline).toLocaleDateString("es", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" })}
+                            </span>
+                        )}
+                    </div>
+                    <div className="flex items-center gap-3 text-xs font-bold">
+                        <span className="text-gray-600"><Users className="w-3.5 h-3.5 inline mr-1" />{project.members.length}</span>
+                        <span className="text-emerald-600"><CheckCircle2 className="w-3.5 h-3.5 inline mr-1" />{taskStats.done}/{taskStats.total}</span>
+                        {taskStats.blocked > 0 && <span className="text-red-500"><X className="w-3.5 h-3.5 inline mr-1" />{taskStats.blocked} bloq.</span>}
+                        {canManage && (
+                            <button
+                                onClick={() => showEditProject ? setShowEditProject(false) : openEditProject()}
+                                disabled={isPending}
+                                className="px-3 py-1.5 text-xs font-bold rounded-lg bg-violet-50 text-violet-700 hover:bg-violet-100 transition-colors disabled:opacity-50"
+                            >
+                                {showEditProject ? "Cerrar edición" : "Editar proyecto"}
+                            </button>
+                        )}
+                    </div>
                 </div>
             </div>
+
+            {showEditProject && canManage && (
+                <div className="bg-white/80 backdrop-blur-md border border-violet-200 rounded-2xl p-4 space-y-4">
+                    <h4 className="text-sm font-black text-meteorite-950">Editar Proyecto</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div>
+                            <label className="block text-xs font-bold text-meteorite-700 mb-1">Nombre</label>
+                            <input
+                                type="text"
+                                value={editName}
+                                onChange={e => setEditName(e.target.value)}
+                                className="w-full px-3 py-2.5 rounded-xl border border-gray-200 focus:border-violet-500 focus:ring-2 focus:ring-violet-200 outline-none bg-white font-medium text-meteorite-950"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-meteorite-700 mb-1">Prioridad</label>
+                            <select
+                                value={editPriority}
+                                onChange={e => setEditPriority(e.target.value)}
+                                className="w-full px-3 py-2.5 rounded-xl border border-gray-200 focus:border-violet-500 outline-none bg-white font-medium text-meteorite-950"
+                            >
+                                {PROJECT_PRIORITIES.map(p => (
+                                    <option key={p} value={p}>{PRIORITY_LABEL[p] || p}</option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div>
+                            <label className="block text-xs font-bold text-meteorite-700 mb-1">Color</label>
+                            <div className="h-[42px] px-3 rounded-xl border border-gray-200 bg-white flex items-center justify-between">
+                                <input
+                                    type="color"
+                                    value={editColor}
+                                    onChange={e => setEditColor(e.target.value)}
+                                    className="w-8 h-8 rounded cursor-pointer border-none bg-transparent"
+                                />
+                                <span className="text-xs font-bold text-gray-500">{editColor.toUpperCase()}</span>
+                            </div>
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-meteorite-700 mb-1">Estado</label>
+                            {canChangeStatus ? (
+                                <select
+                                    value={editStatus}
+                                    onChange={e => setEditStatus(e.target.value)}
+                                    className="w-full px-3 py-2.5 rounded-xl border border-gray-200 focus:border-violet-500 outline-none bg-white font-medium text-meteorite-950"
+                                >
+                                    {PROJECT_STATUSES.map(status => (
+                                        <option key={status} value={status}>
+                                            {STATUS_BADGE[status]?.label || status}
+                                        </option>
+                                    ))}
+                                </select>
+                            ) : (
+                                <div className="h-[42px] px-3 rounded-xl border border-gray-200 bg-gray-50 flex items-center justify-between">
+                                    <span className={`px-2 py-0.5 rounded-lg text-[11px] font-bold ${STATUS_BADGE[project.status]?.color || "bg-gray-100 text-gray-600"}`}>
+                                        {STATUS_BADGE[project.status]?.label || project.status}
+                                    </span>
+                                    <span className="text-[11px] text-gray-500 font-medium">Sin permiso para cambiar estado</span>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="block text-xs font-bold text-meteorite-700 mb-1">Descripción</label>
+                        <textarea
+                            value={editDescription}
+                            onChange={e => setEditDescription(e.target.value)}
+                            rows={3}
+                            className="w-full px-3 py-2.5 rounded-xl border border-gray-200 focus:border-violet-500 outline-none bg-white font-medium text-meteorite-950 resize-none"
+                        />
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div>
+                            <label className="block text-xs font-bold text-meteorite-700 mb-1">Inicio</label>
+                            <input
+                                type="date"
+                                value={editStartDate}
+                                onChange={e => setEditStartDate(e.target.value)}
+                                className="w-full px-3 py-2.5 rounded-xl border border-gray-200 outline-none bg-white font-medium text-meteorite-950"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-meteorite-700 mb-1">Deadline</label>
+                            <input
+                                type="date"
+                                value={editDeadline}
+                                onChange={e => setEditDeadline(e.target.value)}
+                                className="w-full px-3 py-2.5 rounded-xl border border-gray-200 outline-none bg-white font-medium text-meteorite-950"
+                            />
+                        </div>
+                    </div>
+
+                    <div className="flex justify-end gap-2">
+                        <button
+                            onClick={() => setShowEditProject(false)}
+                            className="px-4 py-2 text-sm font-bold text-gray-500 hover:bg-gray-50 rounded-xl"
+                        >
+                            Cancelar
+                        </button>
+                        <button
+                            onClick={handleUpdateProject}
+                            disabled={isPending || !editName.trim()}
+                            className="px-4 py-2 text-sm font-bold bg-violet-600 hover:bg-violet-700 text-white rounded-xl transition-colors disabled:opacity-50"
+                        >
+                            {isPending ? "Guardando..." : "Guardar cambios"}
+                        </button>
+                    </div>
+                </div>
+            )}
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* ── LEFT COLUMN: Tasks ── */}

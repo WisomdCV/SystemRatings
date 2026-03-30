@@ -29,6 +29,7 @@ interface Project {
     id: string;
     name: string;
     description: string | null;
+    color: string | null;
     status: string;
     priority: string;
     startDate: Date | null;
@@ -74,6 +75,7 @@ export default function ProjectsList({ projects, canCreate, currentUserId }: Pro
     const [name, setName] = useState("");
     const [description, setDescription] = useState("");
     const [priority, setPriority] = useState<string>("MEDIUM");
+    const [color, setColor] = useState("#6366f1");
     const [startDate, setStartDate] = useState("");
     const [deadline, setDeadline] = useState("");
 
@@ -92,13 +94,14 @@ export default function ProjectsList({ projects, canCreate, currentUserId }: Pro
                 name,
                 description: description || null,
                 priority: priority as any,
+                color,
                 startDate: startDate ? new Date(startDate) : null,
                 deadline: deadline ? new Date(deadline) : null,
             });
             if (res.success) {
                 showFeedback("success", res.message || "Proyecto creado.");
                 setShowCreate(false);
-                setName(""); setDescription(""); setPriority("MEDIUM"); setStartDate(""); setDeadline("");
+                setName(""); setDescription(""); setPriority("MEDIUM"); setColor("#6366f1"); setStartDate(""); setDeadline("");
                 router.refresh();
             } else {
                 showFeedback("error", res.error || "Error.");
@@ -154,7 +157,7 @@ export default function ProjectsList({ projects, canCreate, currentUserId }: Pro
             {showCreate && (
                 <div className="bg-white/80 backdrop-blur-md border border-violet-200 rounded-2xl p-5 shadow-xl space-y-4">
                     <h3 className="text-lg font-black text-meteorite-950">Crear Proyecto</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div>
                             <label className="block text-sm font-bold text-meteorite-700 mb-1">Nombre *</label>
                             <input
@@ -173,6 +176,18 @@ export default function ProjectsList({ projects, canCreate, currentUserId }: Pro
                                     <option key={p} value={p}>{PRIORITY_CONFIG[p]?.label || p}</option>
                                 ))}
                             </select>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-bold text-meteorite-700 mb-1">Color</label>
+                            <div className="h-[42px] px-3 rounded-xl border border-gray-200 bg-white flex items-center justify-between">
+                                <input
+                                    type="color"
+                                    value={color}
+                                    onChange={e => setColor(e.target.value)}
+                                    className="w-8 h-8 rounded cursor-pointer border-none bg-transparent"
+                                />
+                                <span className="text-xs font-bold text-gray-500">{color.toUpperCase()}</span>
+                            </div>
                         </div>
                     </div>
                     <div>
@@ -196,7 +211,10 @@ export default function ProjectsList({ projects, canCreate, currentUserId }: Pro
                         </div>
                     </div>
                     <div className="flex justify-end gap-3">
-                        <button onClick={() => setShowCreate(false)}
+                        <button onClick={() => {
+                            setShowCreate(false);
+                            setColor("#6366f1");
+                        }}
                             className="px-4 py-2 text-sm font-bold text-gray-500 hover:bg-gray-50 rounded-xl">
                             Cancelar
                         </button>
@@ -228,6 +246,7 @@ export default function ProjectsList({ projects, canCreate, currentUserId }: Pro
 
                         return (
                             <div key={project.id} className="group bg-white/80 backdrop-blur-md border border-gray-200 rounded-2xl overflow-hidden hover:shadow-xl hover:border-violet-300 transition-all">
+                                <div className="h-1.5 w-full" style={{ backgroundColor: project.color || "#6366f1" }} />
                                 {/* Card Header */}
                                 <div className="p-4 border-b border-gray-100">
                                     <div className="flex items-start justify-between gap-2 mb-2">

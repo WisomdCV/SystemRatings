@@ -12,6 +12,7 @@ export const CreateProjectSchema = z.object({
     name: z.string().min(2, "Nombre muy corto").max(200),
     description: z.string().max(2000).optional().nullable(),
     priority: z.enum(PROJECT_PRIORITIES).default("MEDIUM"),
+    color: z.string().regex(/^#[0-9a-fA-F]{6}$/, "Color hex inválido").optional().nullable(),
     startDate: z.date().optional().nullable(),
     deadline: z.date().optional().nullable(),
 });
@@ -20,6 +21,7 @@ export const UpdateProjectSchema = z.object({
     id: z.string().uuid(),
     name: z.string().min(2, "Nombre muy corto").max(200),
     description: z.string().max(2000).optional().nullable(),
+    color: z.string().regex(/^#[0-9a-fA-F]{6}$/, "Color hex inválido"),
     status: z.enum(PROJECT_STATUSES),
     priority: z.enum(PROJECT_PRIORITIES),
     startDate: z.date().optional().nullable(),
