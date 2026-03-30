@@ -2,7 +2,7 @@
 
 import { auth } from "@/server/auth";
 import { db } from "@/db";
-import { projects, projectMembers, projectTasks, taskAssignments, semesters } from "@/db/schema";
+import { projects, projectMembers, projectTasks, taskAssignments, semesters, projectRoles } from "@/db/schema";
 import { eq, and, asc, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { hasPermission } from "@/lib/permissions";
@@ -138,8 +138,6 @@ export async function createProjectAction(input: CreateProjectDTO) {
         });
         if (!activeSemester) return { success: false as const, error: "No hay ciclo activo." };
 
-        const { projectRoles } = await import("@/db/schema");
-
         const newProject = await db.transaction(async (tx) => {
             const [created] = await tx.insert(projects).values({
                 semesterId: activeSemester.id,
@@ -270,6 +268,22 @@ export async function addProjectMemberAction(input: AddProjectMemberDTO) {
             if (!hasProjectPermission(membership, "project:manage_members")) {
                 return { success: false as const, error: "No tienes permisos para gestionar miembros." };
             }
+
+            if (!membership) {
+                return { success: false as const, error: "No eres miembro del proyecto." };
+            }
+
+            const targetRole = await db.query.projectRoles.findFirst({
+                where: eq(projectRoles.id, validated.data.projectRoleId),
+                columns: { hierarchyLevel: true },
+            });
+            if (!targetRole) {
+                return { success: false as const, error: "Rol de proyecto no encontrado." };
+            }
+
+            if (targetRole.hierarchyLevel > membership.projectRole.hierarchyLevel) {
+                return { success: false as const, error: "No puedes asignar un rol de mayor jerarquía que el tuyo." };
+            }
         }
 
         // Check if already a member
@@ -319,9 +333,27 @@ export async function updateProjectMemberRoleAction(input: UpdateProjectMemberRo
             if (!hasProjectPermission(myMembership, "project:manage_members")) {
                 return { success: false as const, error: "No tienes permisos para gestionar miembros." };
             }
+
+            if (!myMembership) {
+                return { success: false as const, error: "No eres miembro del proyecto." };
+            }
+
             // Hierarchy guard: can't modify someone at or above your level
-            if (myMembership && targetMember.projectRole.hierarchyLevel >= myMembership.projectRole.hierarchyLevel) {
+            if (targetMember.projectRole.hierarchyLevel >= myMembership.projectRole.hierarchyLevel) {
                 return { success: false as const, error: "No puedes modificar a un miembro de igual o mayor jerarquía." };
+            }
+
+            if (validated.data.projectRoleId !== targetMember.projectRoleId) {
+                const newRole = await db.query.projectRoles.findFirst({
+                    where: eq(projectRoles.id, validated.data.projectRoleId),
+                    columns: { hierarchyLevel: true },
+                });
+                if (!newRole) {
+                    return { success: false as const, error: "El rol seleccionado no existe." };
+                }
+                if (newRole.hierarchyLevel > myMembership.projectRole.hierarchyLevel) {
+                    return { success: false as const, error: "No puedes asignar un rol de mayor jerarquía que el tuyo." };
+                }
             }
         }
 

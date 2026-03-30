@@ -284,7 +284,8 @@ export const projectRoles = sqliteTable("project_role", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
   name: text("name").notNull(),
   description: text("description"),
-  hierarchyLevel: integer("hierarchy_level").default(10).notNull(), // 100 = Coordinator, 10 = Member
+  hierarchyLevel: integer("hierarchy_level").default(10).notNull(), // Authority level: who can modify/assign whom
+  displayOrder: integer("display_order").default(0).notNull(), // Visual order only (0 = first)
   color: text("color").default("#6366f1"), // Added for UI Role badges
   isSystem: integer("is_system", { mode: "boolean" }).default(false),
 });

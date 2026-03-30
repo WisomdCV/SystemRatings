@@ -8,7 +8,7 @@ import Link from "next/link";
 import { ArrowLeft, FolderKanban } from "lucide-react";
 import { db } from "@/db";
 import { users, projectRoles, projectAreas, events, projectMembers } from "@/db/schema";
-import { eq, desc, asc, and, ne } from "drizzle-orm";
+import { eq, desc, asc } from "drizzle-orm";
 import { getCreatableProjectEventTypes } from "@/server/services/event-permissions.service";
 import { filterVisibleEvents, type VisibilityContext } from "@/server/services/event-visibility.service";
 
@@ -43,7 +43,7 @@ export default async function ProjectDetailPage(props: { params: Promise<{ id: s
 
     // Fetch dynamic project roles and areas to pass into the component
     const allRoles = await db.query.projectRoles.findMany({
-        orderBy: [desc(projectRoles.hierarchyLevel)],
+        orderBy: [asc(projectRoles.displayOrder)],
     });
 
     const allAreas = await db.query.projectAreas.findMany({
@@ -70,6 +70,7 @@ export default async function ProjectDetailPage(props: { params: Promise<{ id: s
     const currentUserMembership = projectResult.data.members.find(
         m => m.user.id === session.user!.id
     );
+    const currentUserHierarchyLevel = currentUserMembership?.projectRole?.hierarchyLevel ?? 0;
     const currentUserProjectAreaId = currentUserMembership?.projectArea?.id || null;
     const currentUserPermissions = (currentUserMembership?.projectRole?.permissions ?? []).map((p: { permission: string }) => p.permission);
 
@@ -142,6 +143,7 @@ export default async function ProjectDetailPage(props: { params: Promise<{ id: s
                         allProjectAreas={allAreas}
                         currentUserId={session.user.id!}
                         isSystemAdmin={isSystemAdmin}
+                        currentUserHierarchyLevel={currentUserHierarchyLevel}
                     />
 
                     <ProjectEventsTab

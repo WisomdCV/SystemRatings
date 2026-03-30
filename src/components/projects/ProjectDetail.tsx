@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import {
@@ -76,6 +76,7 @@ interface Props {
     allProjectAreas: ProjectArea[];
     currentUserId: string;
     isSystemAdmin: boolean;
+    currentUserHierarchyLevel: number;
 }
 
 // ─── Visual Configs ──────────────────────────────────────────────────────────
@@ -118,7 +119,7 @@ const toDateInput = (value: Date | null) => {
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
-export default function ProjectDetail({ project, eligibleUsers, allProjectRoles, allProjectAreas, currentUserId, isSystemAdmin }: Props) {
+export default function ProjectDetail({ project, eligibleUsers, allProjectRoles, allProjectAreas, currentUserId, isSystemAdmin, currentUserHierarchyLevel }: Props) {
     const router = useRouter();
     const [isPending, startTransition] = useTransition();
     const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
@@ -127,6 +128,7 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
     const [showAddMember, setShowAddMember] = useState(false);
     const [memberSearch, setMemberSearch] = useState("");
     const [selectedAreaId, setSelectedAreaId] = useState<string>("none"); // 'none' means system/sin area
+    const [selectedRoleId, setSelectedRoleId] = useState<string>("");
 
     // Task create
     const [showCreateTask, setShowCreateTask] = useState(false);
@@ -162,8 +164,23 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
     const userCanCreateTasks = isSystemAdmin || userPerms.includes("project:task_create_any") || userPerms.includes("project:task_create_own_area");
     const userProjectAreaId = userMembership?.projectArea?.id || null;
     const userProjectAreaName = userMembership?.projectArea?.name || null;
+    const assignableRoles = isSystemAdmin
+        ? allProjectRoles
+        : allProjectRoles.filter(r => r.hierarchyLevel <= currentUserHierarchyLevel);
+    const defaultAssignableRole = assignableRoles.reduce<ProjectRole | null>((lowest, role) => {
+        if (!lowest) return role;
+        return role.hierarchyLevel < lowest.hierarchyLevel ? role : lowest;
+    }, null);
+    const defaultAssignableRoleId = defaultAssignableRole?.id || "";
     // Only own-area permission = restricted to own area or general tasks
     const isAreaRestricted = !isSystemAdmin && !userPerms.includes("project:task_create_any") && userPerms.includes("project:task_create_own_area");
+
+    useEffect(() => {
+        if (!showAddMember) return;
+        if (!selectedRoleId && defaultAssignableRoleId) {
+            setSelectedRoleId(defaultAssignableRoleId);
+        }
+    }, [showAddMember, selectedRoleId, defaultAssignableRoleId]);
 
     const showFeedback = (type: "success" | "error", message: string) => {
         setFeedback({ type, message });
@@ -212,17 +229,20 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
     // ── Members ──
     const handleAddMember = (userId: string) => {
         startTransition(async () => {
-            const defaultRole = allProjectRoles[allProjectRoles.length - 1] || allProjectRoles[0];
-            if (!defaultRole) return;
+            const roleId = selectedRoleId || defaultAssignableRoleId;
+            if (!roleId) {
+                showFeedback("error", "No tienes roles asignables disponibles.");
+                return;
+            }
             const payload: any = {
                 projectId: project.id,
                 userId,
-                projectRoleId: defaultRole.id,
+                projectRoleId: roleId,
             };
             if (selectedAreaId !== "none") payload.projectAreaId = selectedAreaId;
 
             const res = await addProjectMemberAction(payload);
-            if (res.success) { showFeedback("success", res.message!); setShowAddMember(false); setMemberSearch(""); router.refresh(); }
+            if (res.success) { showFeedback("success", res.message!); setShowAddMember(false); setMemberSearch(""); setSelectedRoleId(""); router.refresh(); }
             else showFeedback("error", res.error!);
         });
     };
@@ -809,7 +829,15 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
                                 Equipo ({project.members.length})
                             </h4>
                             {canManage && (
-                                <button onClick={() => setShowAddMember(!showAddMember)} disabled={isPending}
+                                <button onClick={() => {
+                                    const next = !showAddMember;
+                                    setShowAddMember(next);
+                                    if (!next) {
+                                        setMemberSearch("");
+                                        setSelectedAreaId("none");
+                                        setSelectedRoleId("");
+                                    }
+                                }} disabled={isPending}
                                     className="p-1.5 text-violet-600 hover:bg-violet-50 rounded-lg transition-colors disabled:opacity-50">
                                     <UserPlus className="w-4 h-4" />
                                 </button>
@@ -821,6 +849,15 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
                             <div className="mb-3 bg-gray-50 border border-gray-200 rounded-xl overflow-hidden">
                                 <div className="p-2 border-b border-gray-100 flex flex-col gap-2">
                                     <div className="flex gap-2">
+                                        <select
+                                            value={selectedRoleId || defaultAssignableRoleId}
+                                            onChange={e => setSelectedRoleId(e.target.value)}
+                                            className="px-2 py-1.5 text-xs font-bold rounded-lg border border-gray-200 outline-none flex-1 text-gray-700 bg-white"
+                                        >
+                                            {assignableRoles.map(r => (
+                                                <option key={r.id} value={r.id}>{r.name} (Nv. {r.hierarchyLevel})</option>
+                                            ))}
+                                        </select>
                                         <select
                                             value={selectedAreaId}
                                             onChange={e => setSelectedAreaId(e.target.value)}
@@ -837,7 +874,10 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
                                         className="w-full px-3 py-1.5 text-xs rounded-lg border border-gray-200 outline-none" />
                                 </div>
                                 <div className="max-h-32 overflow-y-auto">
-                                    {filteredEligible.slice(0, 10).map(u => (
+                                    {assignableRoles.length === 0 && (
+                                        <div className="p-3 text-center text-xs text-gray-500">No tienes roles asignables.</div>
+                                    )}
+                                    {assignableRoles.length > 0 && filteredEligible.slice(0, 10).map(u => (
                                         <button key={u.id} onClick={() => handleAddMember(u.id)}
                                             disabled={isPending}
                                             className="w-full flex items-center gap-2 px-3 py-2 hover:bg-white text-left text-xs disabled:opacity-50 transition-colors">
@@ -901,43 +941,50 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
                                                             <p className="text-[10px] text-gray-500 truncate leading-tight mt-0.5">{m.user.email}</p>
                                                         </div>
                                                         <div className="flex flex-col items-end gap-1">
-                                                            {canManage ? (
-                                                                <>
-                                                                    <select
-                                                                        value={m.projectRole.id}
-                                                                        onChange={e => handleChangeRole(m.id, e.target.value)}
-                                                                        disabled={isPending}
-                                                                        className="text-[10px] font-bold rounded-lg px-2 py-1 border outline-none cursor-pointer bg-white text-gray-700 border-gray-200 shadow-sm focus:border-violet-500 hover:border-gray-300 transition-colors"
-                                                                    >
-                                                                        {allProjectRoles.map(r => (
-                                                                            <option key={r.id} value={r.id}>{r.name}</option>
-                                                                        ))}
-                                                                    </select>
-                                                                    <select
-                                                                        value={m.projectArea?.id || "none"}
-                                                                        onChange={e => handleChangeArea(m.id, e.target.value)}
-                                                                        disabled={isPending}
-                                                                        className="text-[10px] font-bold rounded-lg px-2 py-1 border outline-none cursor-pointer bg-white text-gray-500 border-gray-200 shadow-sm focus:border-violet-500 hover:border-gray-300 transition-colors"
-                                                                    >
-                                                                        <option value="none">Sin Área</option>
-                                                                        {allProjectAreas.map(a => (
-                                                                            <option key={a.id} value={a.id}>{a.name}</option>
-                                                                        ))}
-                                                                    </select>
-                                                                </>
-                                                            ) : (
-                                                                <>
-                                                                    <span className="text-[10px] font-bold px-2 py-1 rounded-lg border shadow-sm" style={{ backgroundColor: `${m.projectRole.color || "#e2e8f0"}15`, color: m.projectRole.color || "#64748b", borderColor: `${m.projectRole.color || "#e2e8f0"}40` }}>
-                                                                        {m.projectRole.name}
-                                                                    </span>
-                                                                    {m.projectArea && (
-                                                                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded border" style={{ backgroundColor: `${m.projectArea.color || "#e2e8f0"}10`, color: m.projectArea.color || "#64748b", borderColor: `${m.projectArea.color || "#e2e8f0"}30` }}>
-                                                                            {m.projectArea.name}
+                                                            {(() => {
+                                                                const canModifyThisMember = isSystemAdmin || m.projectRole.hierarchyLevel < currentUserHierarchyLevel;
+                                                                if (canManage && canModifyThisMember) {
+                                                                    return (
+                                                                        <>
+                                                                            <select
+                                                                                value={m.projectRole.id}
+                                                                                onChange={e => handleChangeRole(m.id, e.target.value)}
+                                                                                disabled={isPending}
+                                                                                className="text-[10px] font-bold rounded-lg px-2 py-1 border outline-none cursor-pointer bg-white text-gray-700 border-gray-200 shadow-sm focus:border-violet-500 hover:border-gray-300 transition-colors"
+                                                                            >
+                                                                                {assignableRoles.map(r => (
+                                                                                    <option key={r.id} value={r.id}>{r.name}</option>
+                                                                                ))}
+                                                                            </select>
+                                                                            <select
+                                                                                value={m.projectArea?.id || "none"}
+                                                                                onChange={e => handleChangeArea(m.id, e.target.value)}
+                                                                                disabled={isPending}
+                                                                                className="text-[10px] font-bold rounded-lg px-2 py-1 border outline-none cursor-pointer bg-white text-gray-500 border-gray-200 shadow-sm focus:border-violet-500 hover:border-gray-300 transition-colors"
+                                                                            >
+                                                                                <option value="none">Sin Área</option>
+                                                                                {allProjectAreas.map(a => (
+                                                                                    <option key={a.id} value={a.id}>{a.name}</option>
+                                                                                ))}
+                                                                            </select>
+                                                                        </>
+                                                                    );
+                                                                }
+                                                                return (
+                                                                    <>
+                                                                        <span className="text-[10px] font-bold px-2 py-1 rounded-lg border shadow-sm" style={{ backgroundColor: `${m.projectRole.color || "#e2e8f0"}15`, color: m.projectRole.color || "#64748b", borderColor: `${m.projectRole.color || "#e2e8f0"}40` }}>
+                                                                            {m.projectRole.name}
                                                                         </span>
-                                                                    )}
-                                                                </>
-                                                            )}
-                                                            {canManage && m.user.id !== currentUserId && (
+                                                                        {m.projectArea && (
+                                                                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded border" style={{ backgroundColor: `${m.projectArea.color || "#e2e8f0"}10`, color: m.projectArea.color || "#64748b", borderColor: `${m.projectArea.color || "#e2e8f0"}30` }}>
+                                                                                {m.projectArea.name}
+                                                                            </span>
+                                                                        )}
+                                                                    </>
+                                                                );
+                                                            })()}
+
+                                                            {canManage && (isSystemAdmin || m.projectRole.hierarchyLevel < currentUserHierarchyLevel) && m.user.id !== currentUserId && (
                                                                 <button onClick={() => handleRemoveMember(m.id)} disabled={isPending}
                                                                     className="text-[10px] flex items-center gap-1 text-red-400 hover:text-red-500 transition-colors disabled:opacity-50">
                                                                     Quitar

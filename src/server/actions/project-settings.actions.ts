@@ -128,7 +128,7 @@ export async function getProjectRolesAction() {
         if (!session?.user) return { success: false as const, error: "No autorizado" };
 
         const roles = await db.query.projectRoles.findMany({
-            orderBy: [desc(projectRoles.hierarchyLevel)],
+            orderBy: [asc(projectRoles.displayOrder)],
             with: { permissions: true },
         });
         return { success: true as const, data: roles };
@@ -146,7 +146,9 @@ export async function createProjectRoleAction(data: { name: string; description?
         // Auto calculate a hierarchy level: lowest existing - 10, minimum 0
         const roles = await db.query.projectRoles.findMany({ orderBy: [asc(projectRoles.hierarchyLevel)] });
         const lowestLevel = roles.length > 0 ? roles[0].hierarchyLevel : 100;
-        const newLevel = Math.max(0, lowestLevel - 10);
+        const newLevel = Math.max(1, lowestLevel - 10);
+        const highestDisplay = await db.query.projectRoles.findFirst({ orderBy: [desc(projectRoles.displayOrder)] });
+        const newDisplayOrder = (highestDisplay?.displayOrder ?? -1) + 1;
 
         const result = await db.transaction(async (tx) => {
             const [newRole] = await tx.insert(projectRoles).values({
@@ -154,6 +156,7 @@ export async function createProjectRoleAction(data: { name: string; description?
                 description: data.description?.trim() || null,
                 color: data.color,
                 hierarchyLevel: newLevel,
+                displayOrder: newDisplayOrder,
             }).returning();
 
             // Insert permissions if provided
@@ -177,10 +180,13 @@ export async function createProjectRoleAction(data: { name: string; description?
     }
 }
 
-export async function updateProjectRoleAction(id: string, data: { name: string; description?: string; color: string; permissions?: string[] }) {
+export async function updateProjectRoleAction(id: string, data: { name: string; description?: string; color: string; hierarchyLevel?: number; permissions?: string[] }) {
     try {
         if (!(await canManageProjectSettings())) return { success: false as const, error: "No autorizado." };
         if (!data.name.trim()) return { success: false as const, error: "El nombre es obligatorio." };
+        if (data.hierarchyLevel !== undefined && (data.hierarchyLevel < 1 || data.hierarchyLevel > 100)) {
+            return { success: false as const, error: "El nivel de autoridad debe estar entre 1 y 100." };
+        }
 
         const existing = await db.query.projectRoles.findFirst({ where: eq(projectRoles.id, id) });
         if (!existing) return { success: false as const, error: "Rol no encontrado." };
@@ -190,6 +196,7 @@ export async function updateProjectRoleAction(id: string, data: { name: string; 
                 name: data.name.trim(),
                 description: data.description?.trim() || null,
                 color: data.color,
+                hierarchyLevel: data.hierarchyLevel ?? existing.hierarchyLevel,
             }).where(eq(projectRoles.id, id));
 
             // Update permissions: delete all + re-insert (same pattern as IISE area permissions)
@@ -232,27 +239,49 @@ export async function deleteProjectRoleAction(id: string) {
 }
 
 /**
- * Reorders visually but translates the order into mathematical hierarchyLevels.
- * Highest item (first in array) gets `length * 10`, lowest gets `10`.
+ * Reorders role cards visually without altering authority levels.
  */
 export async function reorderProjectRolesAction(orderedIds: string[]) {
     try {
         if (!(await canManageProjectSettings())) return { success: false as const, error: "No autorizado." };
 
-        const total = orderedIds.length;
-        for (let i = 0; i < total; i++) {
-            const newHierarchyLevel = Math.max(10, 100 - (i * 10));
-
+        for (let i = 0; i < orderedIds.length; i++) {
             await db.update(projectRoles)
-                .set({ hierarchyLevel: newHierarchyLevel })
+                .set({ displayOrder: i })
                 .where(eq(projectRoles.id, orderedIds[i]));
         }
 
         revalidatePath("/admin/project-settings");
-        return { success: true as const, message: "Jerarquías actualizadas correctamente." };
+        return { success: true as const, message: "Orden visual de roles actualizado." };
     } catch (error) {
         console.error("Error reordering project roles:", error);
-        return { success: false as const, error: "Error al guardar jerarquías." };
+        return { success: false as const, error: "Error al guardar el orden visual de roles." };
+    }
+}
+
+/** Update only the authority level of a role (independent from visual order). */
+export async function updateProjectRoleHierarchyAction(roleId: string, hierarchyLevel: number) {
+    try {
+        if (!(await canManageProjectSettings())) {
+            return { success: false as const, error: "No autorizado." };
+        }
+
+        if (hierarchyLevel < 1 || hierarchyLevel > 100) {
+            return { success: false as const, error: "El nivel debe estar entre 1 y 100." };
+        }
+
+        const existing = await db.query.projectRoles.findFirst({ where: eq(projectRoles.id, roleId) });
+        if (!existing) return { success: false as const, error: "Rol no encontrado." };
+
+        await db.update(projectRoles)
+            .set({ hierarchyLevel })
+            .where(eq(projectRoles.id, roleId));
+
+        revalidatePath("/admin/project-settings");
+        return { success: true as const, message: "Nivel de autoridad actualizado." };
+    } catch (error) {
+        console.error("Error updating role hierarchy:", error);
+        return { success: false as const, error: "Error al actualizar el nivel de autoridad." };
     }
 }
 

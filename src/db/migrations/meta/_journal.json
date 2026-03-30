@@ -43,6 +43,13 @@
       "when": 1774835620349,
       "tag": "0005_secret_stingray",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1774837109231,
+      "tag": "0006_oval_nebula",
+      "breakpoints": true
     }
   ]
 }

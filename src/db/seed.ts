@@ -206,12 +206,12 @@ async function main() {
     const existingRoles = await db.query.projectRoles.findMany();
     if (existingRoles.length === 0) {
         const insertedRoles = await db.insert(projectRoles).values([
-            { name: "Coordinador / Project Management", hierarchyLevel: 100, isSystem: true },
-            { name: "Director de proyecto", hierarchyLevel: 90, isSystem: true },
-            { name: "Subdirector de proyecto", hierarchyLevel: 80, isSystem: true },
-            { name: "Tesorero de proyecto", hierarchyLevel: 70, isSystem: true },
-            { name: "Director de Área", hierarchyLevel: 60, isSystem: true },
-            { name: "Miembro de Área", hierarchyLevel: 50, isSystem: true },
+            { name: "Coordinador / Project Management", hierarchyLevel: 100, displayOrder: 0, isSystem: true },
+            { name: "Director de proyecto", hierarchyLevel: 90, displayOrder: 1, isSystem: true },
+            { name: "Subdirector de proyecto", hierarchyLevel: 80, displayOrder: 2, isSystem: true },
+            { name: "Tesorero de proyecto", hierarchyLevel: 70, displayOrder: 3, isSystem: true },
+            { name: "Director de Área", hierarchyLevel: 60, displayOrder: 4, isSystem: true },
+            { name: "Miembro de Área", hierarchyLevel: 50, displayOrder: 5, isSystem: true },
         ]).returning();
         console.log("   ✅ Roles insertados.");
 

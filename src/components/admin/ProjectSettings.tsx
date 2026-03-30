@@ -33,6 +33,7 @@ interface Role {
     name: string;
     description: string | null;
     hierarchyLevel: number;
+    displayOrder?: number;
     color: string | null;
     isSystem: boolean | null;
     permissions: RolePermission[];
@@ -213,6 +214,7 @@ export default function ProjectSettings({ initialAreas, initialRoles }: Props) {
                 name: editingRole.name,
                 description: editingRole.description || undefined,
                 color: editingRole.color || "#6366f1",
+                hierarchyLevel: editingRole.hierarchyLevel,
                 permissions: editingPermissions,
             };
             const res = await updateProjectRoleAction(editingRole.id, payload);
@@ -302,8 +304,8 @@ export default function ProjectSettings({ initialAreas, initialRoles }: Props) {
                         <div>
                             <h3 className="text-xl font-black text-meteorite-950">Jerarquía de Roles</h3>
                             <p className="text-sm text-meteorite-500">
-                                Arrastra y suelta para ordenar la jerarquia de los roles.
-                                <strong className="text-meteorite-700 block mt-0.5">Arriba = Mayor jerarquia | Abajo = Menor jerarquia</strong>
+                                Arrastra y suelta para ordenar visualmente los roles.
+                                <strong className="text-meteorite-700 block mt-0.5">El orden visual no cambia la autoridad. El campo "Autoridad" sí la cambia.</strong>
                             </p>
                         </div>
                         <button onClick={() => setIsCreatingRole(true)} disabled={isPending}
@@ -356,6 +358,18 @@ export default function ProjectSettings({ initialAreas, initialRoles }: Props) {
                                                                     className="flex-1 px-3 py-1.5 rounded-lg border border-gray-200 text-sm text-meteorite-950" />
                                                                 <input type="color" value={editingRole.color || "#6366f1"} onChange={e => setEditingRole({ ...editingRole, color: e.target.value })}
                                                                     className="w-8 h-8 rounded cursor-pointer border-none bg-transparent self-center shrink-0" />
+                                                            </div>
+                                                            <div className="flex items-center gap-2">
+                                                                <label className="text-[10px] uppercase font-bold text-meteorite-400">Nivel de autoridad:</label>
+                                                                <input
+                                                                    type="number"
+                                                                    min={1}
+                                                                    max={100}
+                                                                    value={editingRole.hierarchyLevel}
+                                                                    onChange={e => setEditingRole({ ...editingRole, hierarchyLevel: Number.parseInt(e.target.value, 10) || 10 })}
+                                                                    className="w-20 px-2 py-1 rounded-lg border border-gray-200 text-sm font-bold text-meteorite-950 text-center"
+                                                                />
+                                                                <span className="text-[10px] text-meteorite-400">(1-100, mayor = más autoridad)</span>
                                                             </div>
                                                             {/* Permission checkboxes grouped */}
                                                             <div className="border rounded-xl p-3 bg-gray-50/50 space-y-3">
@@ -414,7 +428,10 @@ export default function ProjectSettings({ initialAreas, initialRoles }: Props) {
                                                                     </span>
                                                                 )}
                                                                 <span className="bg-gray-100 text-gray-600 font-bold text-[10px] px-1.5 py-0.5 rounded">
-                                                                    LVL: {role.hierarchyLevel}
+                                                                    Autoridad: {role.hierarchyLevel}
+                                                                </span>
+                                                                <span className="bg-violet-50 text-violet-700 font-bold text-[10px] px-1.5 py-0.5 rounded">
+                                                                    Visual: #{index + 1}
                                                                 </span>
                                                             </div>
                                                             {role.description && (
