@@ -2,7 +2,7 @@
 
 import { auth } from "@/server/auth";
 import { db } from "@/db";
-import { projects, projectMembers, projectTasks, taskAssignments, semesters, projectRoles } from "@/db/schema";
+import { projects, projectMembers, projectTasks, taskAssignments, semesters, projectRoles, taskComments } from "@/db/schema";
 import { eq, and, asc, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { hasPermission } from "@/lib/permissions";
@@ -107,13 +107,25 @@ export async function getProjectByIdAction(projectId: string) {
                         assignments: {
                             with: { user: { columns: { id: true, name: true, image: true } } },
                         },
+                        comments: {
+                            columns: { id: true },
+                        },
                     },
                 },
             },
         });
 
         if (!project) return { success: false as const, error: "Proyecto no encontrado." };
-        return { success: true as const, data: project };
+
+        const projectWithCommentCount = {
+            ...project,
+            tasks: project.tasks.map((task) => ({
+                ...task,
+                _commentCount: task.comments?.length ?? 0,
+            })),
+        };
+
+        return { success: true as const, data: projectWithCommentCount };
     } catch (error) {
         console.error("Error fetching project:", error);
         return { success: false as const, error: "Error al cargar proyecto." };
@@ -412,6 +424,7 @@ export async function createTaskAction(input: CreateTaskDTO) {
             title: validated.data.title,
             description: validated.data.description || null,
             priority: validated.data.priority,
+            startDate: validated.data.startDate || null,
             dueDate: validated.data.dueDate || null,
             createdById: session.user.id,
             position: (lastTask?.position ?? 0) + 1,
@@ -461,6 +474,7 @@ export async function updateTaskAction(input: UpdateTaskDTO) {
             description: validated.data.description || null,
             status: validated.data.status,
             priority: validated.data.priority,
+            startDate: validated.data.startDate || null,
             dueDate: validated.data.dueDate || null,
             completedAt: validated.data.status === "DONE" ? new Date() : null,
             updatedAt: new Date(),
@@ -512,6 +526,55 @@ export async function updateTaskStatusAction(input: UpdateTaskStatusDTO) {
     } catch (error) {
         console.error("Error updating task status:", error);
         return { success: false as const, error: "Error al actualizar estado." };
+    }
+}
+
+/** Reorder tasks within/between columns (Kanban/list drag-and-drop) */
+export async function reorderTasksAction(input: {
+    projectId: string;
+    updates: { taskId: string; position: number; status?: string }[];
+}) {
+    try {
+        const session = await auth();
+        if (!session?.user?.id) return { success: false as const, error: "No autorizado" };
+
+        if (!input.projectId || !Array.isArray(input.updates) || input.updates.length === 0) {
+            return { success: false as const, error: "Payload de reordenamiento inválido." };
+        }
+
+        const iiseBypass = canBypassProjectPerms(session.user.role || "", session.user.customPermissions);
+        if (!iiseBypass) {
+            const membership = await getProjectMembershipWithPerms(session.user.id, input.projectId);
+            if (!hasProjectPermission(membership, "project:task_manage_any")
+                && !hasProjectPermission(membership, "project:task_update_status")) {
+                return { success: false as const, error: "Sin permisos para reordenar tareas." };
+            }
+        }
+
+        for (const update of input.updates) {
+            const setData: Record<string, any> = {
+                position: update.position,
+                updatedAt: new Date(),
+            };
+            if (update.status) {
+                setData.status = update.status;
+                setData.completedAt = update.status === "DONE" ? new Date() : null;
+            }
+
+            await db.update(projectTasks)
+                .set(setData)
+                .where(and(
+                    eq(projectTasks.id, update.taskId),
+                    eq(projectTasks.projectId, input.projectId),
+                ));
+        }
+
+        revalidateProjects();
+        revalidatePath(`/dashboard/projects/${input.projectId}`);
+        return { success: true as const, message: "Tareas reordenadas." };
+    } catch (error) {
+        console.error("Error reordering tasks:", error);
+        return { success: false as const, error: "Error al reordenar tareas." };
     }
 }
 

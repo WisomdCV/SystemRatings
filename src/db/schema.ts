@@ -335,6 +335,7 @@ export const projectTasks = sqliteTable("project_task", {
   // LOW | MEDIUM | HIGH
   priority: text("priority").default("MEDIUM").notNull(),
   createdById: text("created_by_id").references(() => users.id).notNull(),
+  startDate: integer("start_date", { mode: "timestamp" }),
   dueDate: integer("due_date", { mode: "timestamp" }),
   completedAt: integer("completed_at", { mode: "timestamp" }),
   position: integer("position").default(0),
@@ -347,6 +348,17 @@ export const taskAssignments = sqliteTable("task_assignment", {
   taskId: text("task_id").references(() => projectTasks.id, { onDelete: "cascade" }).notNull(),
   userId: text("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
   assignedAt: integer("assigned_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
+});
+
+export const taskComments = sqliteTable("task_comment", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  taskId: text("task_id").references(() => projectTasks.id, { onDelete: "cascade" }).notNull(),
+  userId: text("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  content: text("content").notNull(),
+  parentId: text("parent_id"),
+  isEdited: integer("is_edited", { mode: "boolean" }).default(false),
+  createdAt: integer("created_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
 });
 
 export const projectRolePermissions = sqliteTable("project_role_permission", {
@@ -452,6 +464,7 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   sentProjectInvitations: many(projectInvitations, { relationName: "inviter" }),
   createdProjects: many(projects, { relationName: "projectCreator" }),
   taskAssignments: many(taskAssignments),
+  taskComments: many(taskComments, { relationName: "taskCommenter" }),
   createdResources: many(projectResources, { relationName: "resourceCreator" }),
   uploadedResourceLinks: many(projectResourceLinks, { relationName: "resourceLinkUploader" }),
   customRoles: many(userCustomRoles, { relationName: "userCustomRoles" }),
@@ -577,12 +590,24 @@ export const projectTasksRelations = relations(projectTasks, ({ one, many }) => 
   projectArea: one(projectAreas, { fields: [projectTasks.projectAreaId], references: [projectAreas.id] }),
   createdBy: one(users, { fields: [projectTasks.createdById], references: [users.id] }),
   assignments: many(taskAssignments),
+  comments: many(taskComments),
   resources: many(projectResources),
 }));
 
 export const taskAssignmentsRelations = relations(taskAssignments, ({ one }) => ({
   task: one(projectTasks, { fields: [taskAssignments.taskId], references: [projectTasks.id] }),
   user: one(users, { fields: [taskAssignments.userId], references: [users.id] }),
+}));
+
+export const taskCommentsRelations = relations(taskComments, ({ one, many }) => ({
+  task: one(projectTasks, { fields: [taskComments.taskId], references: [projectTasks.id] }),
+  user: one(users, { fields: [taskComments.userId], references: [users.id], relationName: "taskCommenter" }),
+  parent: one(taskComments, {
+    fields: [taskComments.parentId],
+    references: [taskComments.id],
+    relationName: "commentReplies",
+  }),
+  replies: many(taskComments, { relationName: "commentReplies" }),
 }));
 
 // --- Project Resources ---

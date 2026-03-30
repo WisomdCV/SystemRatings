@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import {
     updateProjectAction, removeProjectMemberAction,
     updateProjectMemberRoleAction, createTaskAction, updateTaskStatusAction,
-    deleteTaskAction, assignTaskAction, unassignTaskAction,
+    deleteTaskAction, assignTaskAction, unassignTaskAction, reorderTasksAction,
 } from "@/server/actions/project.actions";
 import { createProjectInvitationAction, cancelProjectInvitationAction } from "@/server/actions/project-invitations.actions";
 import { PROJECT_STATUSES, PROJECT_PRIORITIES, TASK_STATUSES, TASK_PRIORITIES } from "@/lib/validators/project";
@@ -16,6 +16,17 @@ import {
     ChevronDown, Zap, Flame, Minus, Pause, X, Eye, UserMinus, Shield
 } from "lucide-react";
 import ProjectResourcesPanel from "@/components/projects/ProjectResourcesPanel";
+import TaskKanbanView from "@/components/projects/TaskKanbanView";
+import TaskDetailPanel from "@/components/projects/TaskDetailPanel";
+import {
+    DEFAULT_TASK_FILTERS,
+    getAgingConfig,
+    getTaskAgingLevel,
+    getTaskDuration,
+    getTaskTimeProgress,
+    loadTaskFilters,
+    saveTaskFilters,
+} from "@/lib/task-utils";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -31,11 +42,15 @@ interface Task {
     status: string;
     priority: string;
     createdAt: Date | null;
+    updatedAt: Date | null;
+    startDate: Date | null;
     dueDate: Date | null;
+    completedAt: Date | null;
     position: number | null;
     projectArea: { id: string; name: string; color: string | null } | null;
     createdBy: { id: string; name: string | null; image: string | null };
     assignments: TaskAssignment[];
+    _commentCount?: number;
 }
 
 interface Member {
@@ -187,6 +202,7 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
     const [taskTitle, setTaskTitle] = useState("");
     const [taskDescription, setTaskDescription] = useState("");
     const [taskPriority, setTaskPriority] = useState("MEDIUM");
+    const [taskStart, setTaskStart] = useState("");
     const [taskDue, setTaskDue] = useState("");
     const [taskAreaId, setTaskAreaId] = useState<string>("none");
 
@@ -205,8 +221,14 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
     const [editDeadline, setEditDeadline] = useState(toDateInput(project.deadline));
 
     // Task filter
-    const [statusFilter, setStatusFilter] = useState<string>("ALL");
-    const [areaFilter, setAreaFilter] = useState<string>("ALL");
+    const [statusFilter, setStatusFilter] = useState<string>(DEFAULT_TASK_FILTERS.statusFilter);
+    const [areaFilter, setAreaFilter] = useState<string>(DEFAULT_TASK_FILTERS.areaFilter);
+    const [priorityFilter, setPriorityFilter] = useState<string>(DEFAULT_TASK_FILTERS.priorityFilter);
+    const [assigneeFilter, setAssigneeFilter] = useState<string>(DEFAULT_TASK_FILTERS.assigneeFilter);
+    const [agingFilter, setAgingFilter] = useState<string>(DEFAULT_TASK_FILTERS.agingFilter);
+    const [viewMode, setViewMode] = useState<"list" | "kanban">(DEFAULT_TASK_FILTERS.viewMode);
+    const [sortBy, setSortBy] = useState<"position" | "priority" | "dueDate" | "aging" | "createdAt">(DEFAULT_TASK_FILTERS.sortBy);
+    const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
 
     const userMembership = project.members.find(m => m.user.id === currentUserId);
     const userProjectRole = userMembership?.projectRole;
@@ -215,6 +237,7 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
     const canManageMembers = isSystemAdmin || userPerms.includes("project:manage_members");
     const canChangeStatus = isSystemAdmin || userPerms.includes("project:manage_status");
     const userCanCreateTasks = isSystemAdmin || userPerms.includes("project:task_create_any") || userPerms.includes("project:task_create_own_area");
+    const canReorderTasks = isSystemAdmin || userPerms.includes("project:task_manage_any") || userPerms.includes("project:task_update_status");
     const userProjectAreaId = userMembership?.projectArea?.id || null;
     const userProjectAreaName = userMembership?.projectArea?.name || null;
     const assignableRoles = isSystemAdmin
@@ -234,6 +257,30 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
             setSelectedRoleId(defaultAssignableRoleId);
         }
     }, [showAddMember, selectedRoleId, defaultAssignableRoleId]);
+
+    useEffect(() => {
+        const saved = loadTaskFilters(project.id);
+        if (!saved) return;
+        setAreaFilter(saved.areaFilter);
+        setStatusFilter(saved.statusFilter);
+        setPriorityFilter(saved.priorityFilter);
+        setAssigneeFilter(saved.assigneeFilter);
+        setAgingFilter(saved.agingFilter);
+        setViewMode(saved.viewMode);
+        setSortBy(saved.sortBy);
+    }, [project.id]);
+
+    useEffect(() => {
+        saveTaskFilters(project.id, {
+            areaFilter,
+            statusFilter,
+            priorityFilter,
+            assigneeFilter,
+            agingFilter,
+            viewMode,
+            sortBy,
+        });
+    }, [project.id, areaFilter, statusFilter, priorityFilter, assigneeFilter, agingFilter, viewMode, sortBy]);
 
     const showFeedback = (type: "success" | "error", message: string) => {
         setFeedback({ type, message });
@@ -356,14 +403,27 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
                 title: taskTitle,
                 description: taskDescription || null,
                 priority: taskPriority as any,
+                startDate: taskStart ? new Date(taskStart) : null,
                 dueDate: taskDue ? new Date(taskDue) : null,
                 projectAreaId: taskAreaId !== "none" ? taskAreaId : undefined,
             });
             if (res.success) {
                 showFeedback("success", res.message!);
-                setShowCreateTask(false); setTaskTitle(""); setTaskDescription(""); setTaskPriority("MEDIUM"); setTaskDue(""); setTaskAreaId("none");
+                setShowCreateTask(false); setTaskTitle(""); setTaskDescription(""); setTaskPriority("MEDIUM"); setTaskStart(""); setTaskDue(""); setTaskAreaId("none");
                 router.refresh();
             } else showFeedback("error", res.error!);
+        });
+    };
+
+    const handleReorderTasks = (updates: { taskId: string; position: number; status?: string }[]) => {
+        startTransition(async () => {
+            const res = await reorderTasksAction({ projectId: project.id, updates });
+            if (res.success) {
+                showFeedback("success", res.message || "Tareas reordenadas.");
+                router.refresh();
+            } else {
+                showFeedback("error", res.error || "No se pudo reordenar.");
+            }
         });
     };
 
@@ -399,12 +459,63 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
         });
     };
 
-    // Filters
-    const filteredTasks = project.tasks.filter(t => {
-        const matchStatus = statusFilter === "ALL" || t.status === statusFilter;
-        const matchArea = areaFilter === "ALL" || (areaFilter === "GENERAL" ? !t.projectArea : t.projectArea?.id === areaFilter);
-        return matchStatus && matchArea;
-    });
+    const filteredTasks = useMemo(() => {
+        let result = [...project.tasks];
+
+        if (areaFilter === "GENERAL") {
+            result = result.filter((t) => !t.projectArea);
+        } else if (areaFilter !== "ALL") {
+            result = result.filter((t) => t.projectArea?.id === areaFilter);
+        }
+
+        if (statusFilter !== "ALL") {
+            result = result.filter((t) => t.status === statusFilter);
+        }
+
+        if (priorityFilter !== "ALL") {
+            result = result.filter((t) => t.priority === priorityFilter);
+        }
+
+        if (assigneeFilter === "UNASSIGNED") {
+            result = result.filter((t) => t.assignments.length === 0);
+        } else if (assigneeFilter !== "ALL") {
+            result = result.filter((t) => t.assignments.some((a) => a.user.id === assigneeFilter));
+        }
+
+        if (agingFilter !== "ALL") {
+            result = result.filter((t) => {
+                const level = getTaskAgingLevel(t.status, t.updatedAt);
+                if (agingFilter === "WARNING") return level !== "NONE";
+                if (agingFilter === "DANGER") return level === "DANGER" || level === "CRITICAL";
+                if (agingFilter === "CRITICAL") return level === "CRITICAL";
+                return true;
+            });
+        }
+
+        result.sort((a, b) => {
+            switch (sortBy) {
+                case "priority": {
+                    const order = { HIGH: 0, MEDIUM: 1, LOW: 2 } as Record<string, number>;
+                    return (order[a.priority] ?? 1) - (order[b.priority] ?? 1);
+                }
+                case "dueDate":
+                    return (a.dueDate ? new Date(a.dueDate).getTime() : Number.POSITIVE_INFINITY)
+                        - (b.dueDate ? new Date(b.dueDate).getTime() : Number.POSITIVE_INFINITY);
+                case "aging": {
+                    const agingOrder = { CRITICAL: 0, DANGER: 1, WARNING: 2, NONE: 3 } as Record<string, number>;
+                    const aLevel = getTaskAgingLevel(a.status, a.updatedAt);
+                    const bLevel = getTaskAgingLevel(b.status, b.updatedAt);
+                    return (agingOrder[aLevel] ?? 3) - (agingOrder[bLevel] ?? 3);
+                }
+                case "createdAt":
+                    return (b.createdAt ? new Date(b.createdAt).getTime() : 0) - (a.createdAt ? new Date(a.createdAt).getTime() : 0);
+                default:
+                    return (a.position ?? 0) - (b.position ?? 0);
+            }
+        });
+
+        return result;
+    }, [project.tasks, areaFilter, statusFilter, priorityFilter, assigneeFilter, agingFilter, sortBy]);
 
     const filteredEligible = eligibleUsers.filter(u => {
         if (!memberSearch) return true;
@@ -427,6 +538,25 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
         inProgress: project.tasks.filter(t => t.status === "IN_PROGRESS").length,
         blocked: project.tasks.filter(t => t.status === "BLOCKED").length,
     };
+    const progressPercent = taskStats.total > 0 ? Math.round((taskStats.done / taskStats.total) * 100) : 0;
+    const selectedTask = project.tasks.find((task) => task.id === selectedTaskId) || null;
+    const canReorderInCurrentView = canReorderTasks
+        && viewMode === "kanban"
+        && sortBy === "position"
+        && areaFilter === "ALL"
+        && statusFilter === "ALL"
+        && priorityFilter === "ALL"
+        && assigneeFilter === "ALL"
+        && agingFilter === "ALL";
+    const selectedTaskResources = selectedTask
+        ? projectResources
+            .filter((resource) => resource.taskId === selectedTask.id)
+            .map((resource) => ({
+                id: resource.id,
+                name: resource.name,
+                links: resource.links.map((link) => ({ id: link.id, url: link.url, label: link.label })),
+            }))
+        : [];
 
     return (
         <div className="space-y-6">
@@ -672,6 +802,8 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
                                         </>
                                     )}
                                 </select>
+                                <input type="date" value={taskStart} onChange={e => setTaskStart(e.target.value)}
+                                    className="px-3 py-2 rounded-xl border border-gray-200 outline-none bg-white text-meteorite-950 text-sm" />
                                 <input type="date" value={taskDue} onChange={e => setTaskDue(e.target.value)}
                                     className="px-3 py-2 rounded-xl border border-gray-200 outline-none bg-white text-meteorite-950 text-sm" />
                                 <div className="ml-auto flex gap-2">
@@ -684,6 +816,72 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
                             </div>
                         </div>
                     )}
+
+                    <div className="bg-white/80 backdrop-blur-md border border-gray-200 rounded-2xl p-3 space-y-3">
+                        <div className="flex flex-wrap gap-2 items-center">
+                            <div className="inline-flex rounded-lg border border-gray-200 overflow-hidden">
+                                <button
+                                    type="button"
+                                    onClick={() => setViewMode("list")}
+                                    className={`px-3 py-1.5 text-xs font-bold ${viewMode === "list" ? "bg-violet-100 text-violet-700" : "bg-white text-gray-500"}`}
+                                >
+                                    Lista
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setViewMode("kanban")}
+                                    className={`px-3 py-1.5 text-xs font-bold border-l border-gray-200 ${viewMode === "kanban" ? "bg-violet-100 text-violet-700" : "bg-white text-gray-500"}`}
+                                >
+                                    Kanban
+                                </button>
+                            </div>
+
+                            <select value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)} className="px-2.5 py-1.5 rounded-lg border border-gray-200 text-xs font-bold text-gray-600">
+                                <option value="ALL">Prioridad: Todas</option>
+                                {TASK_PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
+                            </select>
+
+                            <select value={assigneeFilter} onChange={(e) => setAssigneeFilter(e.target.value)} className="px-2.5 py-1.5 rounded-lg border border-gray-200 text-xs font-bold text-gray-600">
+                                <option value="ALL">Asignado: Todos</option>
+                                <option value="UNASSIGNED">Sin asignar</option>
+                                {project.members.map((member) => (
+                                    <option key={member.user.id} value={member.user.id}>{member.user.name || member.user.email}</option>
+                                ))}
+                            </select>
+
+                            <select value={agingFilter} onChange={(e) => setAgingFilter(e.target.value)} className="px-2.5 py-1.5 rounded-lg border border-gray-200 text-xs font-bold text-gray-600">
+                                <option value="ALL">Aging: Todos</option>
+                                <option value="WARNING">3+ dias</option>
+                                <option value="DANGER">7+ dias</option>
+                                <option value="CRITICAL">14+ dias</option>
+                            </select>
+
+                            <select value={sortBy} onChange={(e) => setSortBy(e.target.value as any)} className="px-2.5 py-1.5 rounded-lg border border-gray-200 text-xs font-bold text-gray-600">
+                                <option value="position">Orden: Posicion</option>
+                                <option value="priority">Orden: Prioridad</option>
+                                <option value="dueDate">Orden: Fecha limite</option>
+                                <option value="aging">Orden: Aging</option>
+                                <option value="createdAt">Orden: Creacion</option>
+                            </select>
+                        </div>
+
+                        <div className="space-y-1">
+                            <div className="flex items-center gap-3">
+                                <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                                    <div
+                                        className="h-full bg-gradient-to-r from-emerald-400 to-emerald-600 rounded-full transition-all duration-500"
+                                        style={{ width: `${progressPercent}%` }}
+                                    />
+                                </div>
+                                <span className="text-[11px] font-bold text-gray-500">
+                                    {taskStats.done}/{taskStats.total} ({progressPercent}%)
+                                </span>
+                            </div>
+                            <div className="text-[10px] text-gray-500 font-medium">
+                                TODO {project.tasks.filter((task) => task.status === "TODO").length} · En progreso {taskStats.inProgress} · Revision {project.tasks.filter((task) => task.status === "REVIEW").length} · Hecho {taskStats.done} · Bloqueado {taskStats.blocked}
+                            </div>
+                        </div>
+                    </div>
 
                     {/* Area Filter */}
                     <div className="flex gap-1.5 flex-wrap">
@@ -722,22 +920,32 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
                         })}
                     </div>
 
-                    {/* Task List */}
+                    {/* Task List / Kanban */}
                     {filteredTasks.length === 0 ? (
                         <div className="bg-white/60 border border-gray-100 rounded-2xl p-8 text-center">
                             <ListChecks className="w-10 h-10 text-gray-300 mx-auto mb-2" />
-                            <p className="text-sm text-gray-400 font-bold">Sin tareas{statusFilter !== "ALL" ? " en este filtro" : ""}</p>
+                            <p className="text-sm text-gray-400 font-bold">Sin tareas en este filtro</p>
                         </div>
+                    ) : viewMode === "kanban" ? (
+                        <TaskKanbanView
+                            tasks={filteredTasks as any}
+                            canReorder={canReorderInCurrentView}
+                            onReorder={handleReorderTasks}
+                            onOpenTaskDetail={(taskId) => setSelectedTaskId(taskId)}
+                        />
                     ) : (
                         <div className="space-y-2">
                             {filteredTasks.map(task => {
                                 const statusCfg = TASK_STATUS_ICON[task.status] || TASK_STATUS_ICON.TODO;
-                                const StatusIcon = statusCfg.icon;
                                 const bgClass = TASK_BG_COLORS[task.status] || TASK_BG_COLORS.TODO;
+                                const aging = getTaskAgingLevel(task.status, task.updatedAt);
+                                const agingCfg = getAgingConfig(aging);
+                                const duration = getTaskDuration(task.startDate, task.dueDate);
+                                const timeProgress = getTaskTimeProgress(task.startDate, task.dueDate);
+
                                 return (
-                                    <div key={task.id} className={`border rounded-xl p-3 hover:shadow-md transition-all ${bgClass}`}>
+                                    <div key={task.id} className={`border rounded-xl p-3 hover:shadow-md transition-all border-l-4 ${agingCfg.borderColor} ${bgClass}`}>
                                         <div className="flex items-start gap-3">
-                                            {/* Status toggle */}
                                             <div className="mt-0.5">
                                                 <select
                                                     value={task.status}
@@ -752,13 +960,19 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
                                             </div>
 
                                             <div className="flex-1 min-w-0">
-                                                <div className="flex items-start justify-between">
-                                                    <div>
+                                                <div className="flex items-start justify-between gap-2">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setSelectedTaskId(task.id)}
+                                                        className="text-left"
+                                                    >
                                                         <p className={`font-bold text-sm leading-tight flex items-center gap-1.5 ${task.status === "DONE" ? "line-through text-gray-400" : "text-meteorite-950"}`}>
-                                                            {task.priority === "CRITICAL" && <span className="inline-block shrink-0 w-2 h-2 rounded-full bg-red-500 animate-pulse shadow-[0_0_5px_rgba(239,68,68,0.5)]" title="Prioridad Crítica" />}
+                                                            {task.priority === "CRITICAL" && <span className="inline-block shrink-0 w-2 h-2 rounded-full bg-red-500 animate-pulse shadow-[0_0_5px_rgba(239,68,68,0.5)]" title="Prioridad Critica" />}
                                                             {task.priority === "HIGH" && <span className="inline-block shrink-0 w-2 h-2 rounded-full bg-orange-500" title="Prioridad Alta" />}
                                                             {task.title}
+                                                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">💬 {task._commentCount ?? 0}</span>
                                                         </p>
+
                                                         <div className="flex items-center gap-2 mt-1 mb-1.5">
                                                             {task.projectArea ? (
                                                                 <span className="text-[9px] font-black px-1.5 py-0.5 rounded border" style={{ backgroundColor: `${task.projectArea.color || "#e2e8f0"}15`, color: task.projectArea.color || "#64748b", borderColor: `${task.projectArea.color || "#e2e8f0"}40` }}>
@@ -769,59 +983,46 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
                                                                     General
                                                                 </span>
                                                             )}
-                                                            <span className="text-[10px] text-gray-400 flex items-center gap-1 font-medium">
-                                                                Por:
-                                                                {task.createdBy?.image ? (
-                                                                    <UserAvatar src={task.createdBy.image} name={task.createdBy.name} className="w-3.5 h-3.5 rounded-full inline-block" />
-                                                                ) : (
-                                                                    <div className="w-3.5 h-3.5 rounded-full bg-gray-200 flex items-center justify-center text-[7px] font-bold text-gray-500 shrink-0">
-                                                                        {task.createdBy?.name?.charAt(0) || "?"}
-                                                                    </div>
-                                                                )}
-                                                                <strong className="text-gray-600 truncate max-w-[80px]">{task.createdBy?.name?.split(" ")[0]}</strong>
-                                                            </span>
                                                         </div>
                                                         {task.description && (
                                                             <p className="text-xs text-gray-500 line-clamp-2 mt-0.5 leading-snug">{task.description}</p>
                                                         )}
-                                                    </div>
+                                                    </button>
 
-                                                    {/* Task actions (Delete) */}
-                                                    <div className="flex items-center gap-1 shrink-0 ml-2">
-                                                        {canManage && (
-                                                            <button onClick={() => handleDeleteTask(task.id)} disabled={isPending}
-                                                                className="p-1.5 text-gray-300 hover:bg-red-50 hover:text-red-500 rounded-lg transition-colors disabled:opacity-50">
-                                                                <Trash2 className="w-3.5 h-3.5" />
-                                                            </button>
-                                                        )}
-                                                    </div>
+                                                    {canManage && (
+                                                        <button onClick={() => handleDeleteTask(task.id)} disabled={isPending}
+                                                            className="p-1.5 text-gray-300 hover:bg-red-50 hover:text-red-500 rounded-lg transition-colors disabled:opacity-50 shrink-0">
+                                                            <Trash2 className="w-3.5 h-3.5" />
+                                                        </button>
+                                                    )}
                                                 </div>
 
-                                                {/* Meta details (Dates + Assignments) */}
-                                                <div className="flex flex-col sm:flex-row sm:items-center gap-3 mt-3">
+                                                <div className="mt-2 space-y-2">
+                                                    {(task.startDate || task.dueDate) && (
+                                                        <div className="text-[10px] text-gray-500 font-medium flex items-center gap-2 flex-wrap">
+                                                            {task.startDate && <span>{new Date(task.startDate).toLocaleDateString("es", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" })}</span>}
+                                                            {(task.startDate && task.dueDate) && <span>→</span>}
+                                                            {task.dueDate && <span>{new Date(task.dueDate).toLocaleDateString("es", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" })}</span>}
+                                                            {duration !== null && <span>({duration}d)</span>}
+                                                        </div>
+                                                    )}
 
-                                                    {/* Dates */}
-                                                    <div className="flex items-center gap-2 text-[10px] font-medium text-gray-400 shrink-0">
-                                                        <span className="flex items-center gap-1 px-1.5 py-0.5 bg-gray-50 rounded border border-gray-100" title="Fecha de creación">
-                                                            <Plus className="w-3 h-3 text-gray-400" />
-                                                            {new Date(task.createdAt || new Date()).toLocaleDateString("es", { day: "2-digit", month: "short", year: "numeric" })}
+                                                    {timeProgress !== null && (
+                                                        <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                                                            <div
+                                                                className="h-full bg-gradient-to-r from-violet-400 to-violet-600 rounded-full"
+                                                                style={{ width: `${timeProgress}%` }}
+                                                            />
+                                                        </div>
+                                                    )}
+
+                                                    {aging !== "NONE" && (
+                                                        <span className={`inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded-full ${agingCfg.bgTint}`}>
+                                                            <span className={`w-1.5 h-1.5 rounded-full ${agingCfg.dotColor} ${agingCfg.animate ? "animate-pulse" : ""}`} />
+                                                            {agingCfg.label}
                                                         </span>
+                                                    )}
 
-                                                        {task.dueDate && (
-                                                            <>
-                                                                <span className="text-gray-300">→</span>
-                                                                <span className={`flex items-center gap-1 px-1.5 py-0.5 rounded border ${new Date(task.dueDate) < new Date() && task.status !== 'DONE'
-                                                                    ? "bg-red-50 text-red-600 border-red-100"
-                                                                    : "bg-orange-50 text-orange-600 border-orange-100"
-                                                                    }`} title="Fecha límite">
-                                                                    <ListChecks className="w-3 h-3" />
-                                                                    {new Date(task.dueDate).toLocaleDateString("es", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" })}
-                                                                </span>
-                                                            </>
-                                                        )}
-                                                    </div>
-
-                                                    {/* Assignments list */}
                                                     <div className="flex flex-wrap items-center gap-1">
                                                         {task.assignments.map(a => (
                                                             <div key={a.id} className="group relative flex items-center">
@@ -830,7 +1031,7 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
                                                                 </span>
                                                                 {canManage && (
                                                                     <button onClick={() => handleUnassign(a.id)} disabled={isPending}
-                                                                        className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-red-500 text-white rounded-full items-center justify-center text-[8px] z-20 opacity-0 group-hover:opacity-100 transition-opacity shadow-sm  disabled:opacity-50 flex">
+                                                                        className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-red-500 text-white rounded-full items-center justify-center text-[8px] z-20 opacity-0 group-hover:opacity-100 transition-opacity shadow-sm disabled:opacity-50 flex">
                                                                         <X className="w-2.5 h-2.5" />
                                                                     </button>
                                                                 )}
@@ -844,13 +1045,11 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
                                                                     className="flex items-center justify-center w-6 h-6 rounded-full border border-dashed border-gray-300 text-gray-400 hover:text-violet-600 hover:border-violet-300 hover:bg-violet-50 transition-colors disabled:opacity-50 ml-1">
                                                                     <Plus className="w-3.5 h-3.5" />
                                                                 </button>
-
-                                                                {/* Assign dropdown inline */}
                                                                 {assigningTaskId === task.id && (
                                                                     <div className="absolute top-8 left-0 z-50 bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden min-w-48 w-max">
                                                                         <div className="p-2 border-b border-gray-100 bg-gray-50/50">
                                                                             <input type="text" value={assignSearch} onChange={e => setAssignSearch(e.target.value)}
-                                                                                placeholder="Buscar miembro…" autoFocus
+                                                                                placeholder="Buscar miembro..." autoFocus
                                                                                 className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-gray-200 outline-none focus:border-violet-500 transition-colors bg-white shadow-sm" />
                                                                         </div>
                                                                         <div className="max-h-32 overflow-y-auto p-1">
@@ -1155,6 +1354,21 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
                     </div>
                 </div>
             </div>
+            <TaskDetailPanel
+                task={selectedTask as any}
+                isOpen={Boolean(selectedTask)}
+                onClose={() => setSelectedTaskId(null)}
+                currentUserId={currentUserId}
+                canManage={canManage}
+                members={project.members.map((member) => ({
+                    id: member.user.id,
+                    name: member.user.name,
+                    email: member.user.email,
+                }))}
+                resources={selectedTaskResources}
+                onAssign={handleAssignTask}
+                onUnassign={handleUnassign}
+            />
         </div>
     );
 }

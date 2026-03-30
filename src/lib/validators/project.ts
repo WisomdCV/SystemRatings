@@ -132,8 +132,17 @@ export const CreateTaskSchema = z.object({
     title: z.string().min(1, "Título requerido").max(300),
     description: z.string().max(2000).optional().nullable(),
     priority: z.enum(TASK_PRIORITIES).default("MEDIUM"),
+    startDate: z.date().optional().nullable(),
     dueDate: z.date().optional().nullable(),
-});
+}).refine(
+    (data) => {
+        if (data.startDate && data.dueDate) {
+            return data.startDate <= data.dueDate;
+        }
+        return true;
+    },
+    { message: "La fecha de inicio no puede ser posterior a la fecha límite.", path: ["startDate"] }
+);
 
 export const UpdateTaskSchema = z.object({
     id: z.string().uuid(),
@@ -141,8 +150,17 @@ export const UpdateTaskSchema = z.object({
     description: z.string().max(2000).optional().nullable(),
     status: z.enum(TASK_STATUSES),
     priority: z.enum(TASK_PRIORITIES),
+    startDate: z.date().optional().nullable(),
     dueDate: z.date().optional().nullable(),
-});
+}).refine(
+    (data) => {
+        if (data.startDate && data.dueDate) {
+            return data.startDate <= data.dueDate;
+        }
+        return true;
+    },
+    { message: "La fecha de inicio no puede ser posterior a la fecha límite.", path: ["startDate"] }
+);
 
 export const UpdateTaskStatusSchema = z.object({
     id: z.string().uuid(),
@@ -152,6 +170,23 @@ export const UpdateTaskStatusSchema = z.object({
 export const AssignTaskSchema = z.object({
     taskId: z.string().uuid(),
     userId: z.string().uuid(),
+});
+
+// ─── Task Comment Schemas ───────────────────────────────────────────────────
+
+export const CreateTaskCommentSchema = z.object({
+    taskId: z.string().uuid(),
+    content: z.string().min(1, "Comentario vacío").max(2000),
+    parentId: z.string().uuid().optional().nullable(),
+});
+
+export const UpdateTaskCommentSchema = z.object({
+    commentId: z.string().uuid(),
+    content: z.string().min(1, "Comentario vacío").max(2000),
+});
+
+export const DeleteTaskCommentSchema = z.object({
+    commentId: z.string().uuid(),
 });
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -174,3 +209,6 @@ export type CreateTaskDTO = z.infer<typeof CreateTaskSchema>;
 export type UpdateTaskDTO = z.infer<typeof UpdateTaskSchema>;
 export type UpdateTaskStatusDTO = z.infer<typeof UpdateTaskStatusSchema>;
 export type AssignTaskDTO = z.infer<typeof AssignTaskSchema>;
+export type CreateTaskCommentDTO = z.infer<typeof CreateTaskCommentSchema>;
+export type UpdateTaskCommentDTO = z.infer<typeof UpdateTaskCommentSchema>;
+export type DeleteTaskCommentDTO = z.infer<typeof DeleteTaskCommentSchema>;
