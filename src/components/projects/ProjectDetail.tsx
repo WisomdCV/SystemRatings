@@ -15,6 +15,7 @@ import {
     CheckCircle2, XCircle, Circle, Clock, AlertTriangle, Search,
     ChevronDown, Zap, Flame, Minus, Pause, X, Eye, UserMinus, Shield
 } from "lucide-react";
+import ProjectResourcesPanel from "@/components/projects/ProjectResourcesPanel";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -82,6 +83,40 @@ interface ProjectInvitation {
     projectArea: { id: string; name: string } | null;
 }
 
+interface ResourceCategory {
+    id: string;
+    name: string;
+    color: string | null;
+    icon: string | null;
+    projectId: string | null;
+}
+
+interface ResourceLink {
+    id: string;
+    url: string;
+    previewUrl: string | null;
+    label: string | null;
+    domain: string | null;
+    linkStatus: string;
+    addedById: string;
+    addedBy: { id: string; name: string | null; image: string | null } | null;
+}
+
+interface ProjectResource {
+    id: string;
+    name: string;
+    description: string | null;
+    projectAreaId: string | null;
+    taskId: string | null;
+    createdById: string;
+    createdAt: Date | null;
+    category: { id: string; name: string; color: string | null; icon: string | null } | null;
+    projectArea: { id: string; name: string; color: string | null } | null;
+    task: { id: string; title: string } | null;
+    createdBy: { id: string; name: string | null; image: string | null } | null;
+    links: ResourceLink[];
+}
+
 interface Props {
     project: Project;
     eligibleUsers: EligibleUser[];
@@ -91,6 +126,8 @@ interface Props {
     isSystemAdmin: boolean;
     currentUserHierarchyLevel: number;
     projectInvitations: ProjectInvitation[];
+    resourceCategories: ResourceCategory[];
+    projectResources: ProjectResource[];
 }
 
 // ─── Visual Configs ──────────────────────────────────────────────────────────
@@ -133,7 +170,7 @@ const toDateInput = (value: Date | null) => {
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
-export default function ProjectDetail({ project, eligibleUsers, allProjectRoles, allProjectAreas, currentUserId, isSystemAdmin, currentUserHierarchyLevel, projectInvitations }: Props) {
+export default function ProjectDetail({ project, eligibleUsers, allProjectRoles, allProjectAreas, currentUserId, isSystemAdmin, currentUserHierarchyLevel, projectInvitations, resourceCategories, projectResources }: Props) {
     const router = useRouter();
     const [isPending, startTransition] = useTransition();
     const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
@@ -848,6 +885,17 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
                             })}
                         </div>
                     )}
+
+                    <ProjectResourcesPanel
+                        projectId={project.id}
+                        currentUserId={currentUserId}
+                        isSystemAdmin={isSystemAdmin}
+                        userPermissions={userPerms}
+                        categories={resourceCategories}
+                        resources={projectResources}
+                        tasks={project.tasks.map((task) => ({ id: task.id, title: task.title }))}
+                        areas={allProjectAreas.map((area) => ({ id: area.id, name: area.name, color: area.color || null }))}
+                    />
                 </div>
 
                 {/* ── RIGHT COLUMN: Members + Info ── */}

@@ -8,8 +8,8 @@ import ProjectEventsTab from "@/components/projects/ProjectEventsTab";
 import Link from "next/link";
 import { ArrowLeft, FolderKanban } from "lucide-react";
 import { db } from "@/db";
-import { users, projectRoles, projectAreas, events, projectMembers } from "@/db/schema";
-import { eq, desc, asc } from "drizzle-orm";
+import { users, projectRoles, projectAreas, events, projectMembers, projectResourceCategories, projectResources } from "@/db/schema";
+import { eq, desc, asc, isNull, or } from "drizzle-orm";
 import { getCreatableProjectEventTypes } from "@/server/services/event-permissions.service";
 import { filterVisibleEvents, type VisibilityContext } from "@/server/services/event-visibility.service";
 
@@ -79,6 +79,44 @@ export default async function ProjectDetailPage(props: { params: Promise<{ id: s
     const currentUserHierarchyLevel = currentUserMembership?.projectRole?.hierarchyLevel ?? 0;
     const currentUserProjectAreaId = currentUserMembership?.projectArea?.id || null;
     const currentUserPermissions = (currentUserMembership?.projectRole?.permissions ?? []).map((p: { permission: string }) => p.permission);
+    const isSystemAdmin = hasPermission(session.user.role, "project:manage");
+
+    // ── Project Resources ──────────────────────────────────────────────────
+    const categories = await db.query.projectResourceCategories.findMany({
+        where: or(
+            isNull(projectResourceCategories.projectId),
+            eq(projectResourceCategories.projectId, params.id),
+        ),
+        orderBy: [asc(projectResourceCategories.position)],
+    });
+
+    const allResources = await db.query.projectResources.findMany({
+        where: eq(projectResources.projectId, params.id),
+        with: {
+            links: {
+                with: {
+                    addedBy: { columns: { id: true, name: true, image: true } },
+                },
+            },
+            category: { columns: { id: true, name: true, color: true, icon: true } },
+            projectArea: { columns: { id: true, name: true, color: true } },
+            task: { columns: { id: true, title: true } },
+            createdBy: { columns: { id: true, name: true, image: true } },
+        },
+        orderBy: [desc(projectResources.createdAt)],
+    });
+
+    const canViewAllResources = isSystemAdmin
+        || currentUserPermissions.includes("project:resource_view_all")
+        || currentUserPermissions.includes("project:view_all_areas");
+
+    const resources = isSystemAdmin
+        ? allResources
+        : (!currentUserMembership
+            ? []
+            : (canViewAllResources
+                ? allResources
+                : allResources.filter((resource) => !resource.projectAreaId || resource.projectAreaId === currentUserProjectAreaId)));
 
     // Centralized visibility filter (uses project permission strings)
     const visibilityCtx: VisibilityContext = {
@@ -95,8 +133,6 @@ export default async function ProjectDetailPage(props: { params: Promise<{ id: s
     const projectEvents = filterVisibleEvents(allProjectEvents, visibilityCtx);
 
     // Determine creatable event types via centralized permission engine
-    const isSystemAdmin = hasPermission(session.user.role, "project:manage");
-
     const creatableProjectTypes = await getCreatableProjectEventTypes({
         userRole: session.user.role,
         userAreaId: session.user.currentAreaId,
@@ -151,6 +187,8 @@ export default async function ProjectDetailPage(props: { params: Promise<{ id: s
                         isSystemAdmin={isSystemAdmin}
                         currentUserHierarchyLevel={currentUserHierarchyLevel}
                         projectInvitations={projectInvitations}
+                        resourceCategories={categories}
+                        projectResources={resources}
                     />
 
                     <ProjectEventsTab

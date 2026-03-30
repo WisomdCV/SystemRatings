@@ -355,6 +355,57 @@ export const projectRolePermissions = sqliteTable("project_role_permission", {
   permission: text("permission").notNull(),
 });
 
+// ─── Project Resource Categories (Hybrid: Global + Per-Project) ─────────────
+export const projectResourceCategories = sqliteTable("project_resource_category", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  name: text("name").notNull(),
+  description: text("description"),
+  icon: text("icon"),
+  color: text("color").default("#6366f1"),
+  position: integer("position").default(0),
+
+  // NULL = global category; set = project custom category
+  projectId: text("project_id").references(() => projects.id, { onDelete: "cascade" }),
+
+  isSystem: integer("is_system", { mode: "boolean" }).default(false),
+  createdAt: integer("created_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
+});
+
+// ─── Project Resources (Link-only resources) ───────────────────────────────
+export const projectResources = sqliteTable("project_resource", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+
+  projectId: text("project_id").references(() => projects.id, { onDelete: "cascade" }).notNull(),
+  projectAreaId: text("project_area_id").references(() => projectAreas.id, { onDelete: "set null" }),
+  taskId: text("task_id").references(() => projectTasks.id, { onDelete: "cascade" }),
+  categoryId: text("category_id").references(() => projectResourceCategories.id, { onDelete: "set null" }),
+
+  name: text("name").notNull(),
+  description: text("description"),
+
+  createdById: text("created_by_id").references(() => users.id).notNull(),
+  createdAt: integer("created_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
+});
+
+// ─── Project Resource Links (children of a resource) ───────────────────────
+export const projectResourceLinks = sqliteTable("project_resource_link", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  resourceId: text("resource_id").references(() => projectResources.id, { onDelete: "cascade" }).notNull(),
+
+  url: text("url").notNull(),
+  previewUrl: text("preview_url"),
+  label: text("label"),
+  domain: text("domain"),
+
+  // ACTIVE | INACCESSIBLE | RESTRICTED | UNKNOWN
+  linkStatus: text("link_status").default("UNKNOWN").notNull(),
+  lastCheckedAt: integer("last_checked_at", { mode: "timestamp" }),
+
+  addedById: text("added_by_id").references(() => users.id).notNull(),
+  createdAt: integer("created_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
+});
+
 // =============================================================================
 // 7. ROLES PERSONALIZABLES (CUSTOM ROLES)
 // =============================================================================
@@ -401,6 +452,8 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   sentProjectInvitations: many(projectInvitations, { relationName: "inviter" }),
   createdProjects: many(projects, { relationName: "projectCreator" }),
   taskAssignments: many(taskAssignments),
+  createdResources: many(projectResources, { relationName: "resourceCreator" }),
+  uploadedResourceLinks: many(projectResourceLinks, { relationName: "resourceLinkUploader" }),
   customRoles: many(userCustomRoles, { relationName: "userCustomRoles" }),
   assignedCustomRoles: many(userCustomRoles, { relationName: "roleAssigner" }),
 }));
@@ -482,12 +535,15 @@ export const projectsRelations = relations(projects, ({ one, many }) => ({
   members: many(projectMembers),
   invitations: many(projectInvitations),
   tasks: many(projectTasks),
+  resources: many(projectResources),
+  resourceCategories: many(projectResourceCategories),
   events: many(events, { relationName: "projectEvents" }),
 }));
 
 export const projectAreasRelations = relations(projectAreas, ({ many }) => ({
   members: many(projectMembers),
   invitations: many(projectInvitations),
+  resources: many(projectResources),
   events: many(events),
 }));
 
@@ -521,11 +577,33 @@ export const projectTasksRelations = relations(projectTasks, ({ one, many }) => 
   projectArea: one(projectAreas, { fields: [projectTasks.projectAreaId], references: [projectAreas.id] }),
   createdBy: one(users, { fields: [projectTasks.createdById], references: [users.id] }),
   assignments: many(taskAssignments),
+  resources: many(projectResources),
 }));
 
 export const taskAssignmentsRelations = relations(taskAssignments, ({ one }) => ({
   task: one(projectTasks, { fields: [taskAssignments.taskId], references: [projectTasks.id] }),
   user: one(users, { fields: [taskAssignments.userId], references: [users.id] }),
+}));
+
+// --- Project Resources ---
+
+export const projectResourceCategoriesRelations = relations(projectResourceCategories, ({ one, many }) => ({
+  project: one(projects, { fields: [projectResourceCategories.projectId], references: [projects.id] }),
+  resources: many(projectResources),
+}));
+
+export const projectResourcesRelations = relations(projectResources, ({ one, many }) => ({
+  project: one(projects, { fields: [projectResources.projectId], references: [projects.id] }),
+  projectArea: one(projectAreas, { fields: [projectResources.projectAreaId], references: [projectAreas.id] }),
+  task: one(projectTasks, { fields: [projectResources.taskId], references: [projectTasks.id] }),
+  category: one(projectResourceCategories, { fields: [projectResources.categoryId], references: [projectResourceCategories.id] }),
+  createdBy: one(users, { fields: [projectResources.createdById], references: [users.id], relationName: "resourceCreator" }),
+  links: many(projectResourceLinks),
+}));
+
+export const projectResourceLinksRelations = relations(projectResourceLinks, ({ one }) => ({
+  resource: one(projectResources, { fields: [projectResourceLinks.resourceId], references: [projectResources.id] }),
+  addedBy: one(users, { fields: [projectResourceLinks.addedById], references: [users.id], relationName: "resourceLinkUploader" }),
 }));
 
 // --- Event Invitees ---

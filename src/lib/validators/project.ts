@@ -65,6 +65,65 @@ export const CancelInvitationSchema = z.object({
     invitationId: z.string().uuid(),
 });
 
+// ─── Resource Category Schemas ─────────────────────────────────────────────
+
+export const CreateResourceCategorySchema = z.object({
+    name: z.string().min(1, "Nombre requerido").max(100),
+    description: z.string().max(500).optional().nullable(),
+    icon: z.string().max(50).optional().nullable(),
+    color: z.string().regex(/^#[0-9a-fA-F]{6}$/, "Color hex inválido").optional().nullable(),
+    projectId: z.string().uuid().optional().nullable(),
+});
+
+export const UpdateResourceCategorySchema = z.object({
+    id: z.string().uuid(),
+    name: z.string().min(1, "Nombre requerido").max(100),
+    description: z.string().max(500).optional().nullable(),
+    icon: z.string().max(50).optional().nullable(),
+    color: z.string().regex(/^#[0-9a-fA-F]{6}$/, "Color hex inválido").optional().nullable(),
+});
+
+// ─── Resource Schemas ──────────────────────────────────────────────────────
+
+export const CreateResourceSchema = z.object({
+    projectId: z.string().uuid(),
+    projectAreaId: z.string().uuid().optional().nullable(),
+    taskId: z.string().uuid().optional().nullable(),
+    categoryId: z.string().uuid().optional().nullable(),
+    name: z.string().min(1, "Nombre requerido").max(300),
+    description: z.string().max(2000).optional().nullable(),
+    links: z.array(z.object({
+        url: z.string().url("URL inválida").max(2000),
+        label: z.string().max(200).optional().nullable(),
+    })).min(1, "Se requiere al menos un link"),
+});
+
+export const UpdateResourceSchema = z.object({
+    id: z.string().uuid(),
+    name: z.string().min(1, "Nombre requerido").max(300),
+    description: z.string().max(2000).optional().nullable(),
+    categoryId: z.string().uuid().optional().nullable(),
+    projectAreaId: z.string().uuid().optional().nullable(),
+});
+
+// ─── Resource Link Schemas ─────────────────────────────────────────────────
+
+export const AddResourceLinkSchema = z.object({
+    resourceId: z.string().uuid(),
+    url: z.string().url("URL inválida").max(2000),
+    label: z.string().max(200).optional().nullable(),
+});
+
+export const UpdateResourceLinkSchema = z.object({
+    linkId: z.string().uuid(),
+    url: z.string().url("URL inválida").max(2000).optional(),
+    label: z.string().max(200).optional().nullable(),
+});
+
+export const DeleteResourceLinkSchema = z.object({
+    linkId: z.string().uuid(),
+});
+
 // ─── Task Schemas ────────────────────────────────────────────────────────────
 
 export const CreateTaskSchema = z.object({
@@ -104,6 +163,13 @@ export type UpdateProjectMemberRoleDTO = z.infer<typeof UpdateProjectMemberRoleS
 export type CreateProjectInvitationDTO = z.infer<typeof CreateProjectInvitationSchema>;
 export type RespondInvitationDTO = z.infer<typeof RespondInvitationSchema>;
 export type CancelInvitationDTO = z.infer<typeof CancelInvitationSchema>;
+export type CreateResourceCategoryDTO = z.infer<typeof CreateResourceCategorySchema>;
+export type UpdateResourceCategoryDTO = z.infer<typeof UpdateResourceCategorySchema>;
+export type CreateResourceDTO = z.infer<typeof CreateResourceSchema>;
+export type UpdateResourceDTO = z.infer<typeof UpdateResourceSchema>;
+export type AddResourceLinkDTO = z.infer<typeof AddResourceLinkSchema>;
+export type UpdateResourceLinkDTO = z.infer<typeof UpdateResourceLinkSchema>;
+export type DeleteResourceLinkDTO = z.infer<typeof DeleteResourceLinkSchema>;
 export type CreateTaskDTO = z.infer<typeof CreateTaskSchema>;
 export type UpdateTaskDTO = z.infer<typeof UpdateTaskSchema>;
 export type UpdateTaskStatusDTO = z.infer<typeof UpdateTaskStatusSchema>;

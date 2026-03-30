@@ -15,7 +15,7 @@
 import { hasPermission } from "@/lib/permissions";
 
 // =============================================================================
-// Permission Registry (16 strings)
+// Permission Registry (22 strings)
 // =============================================================================
 
 export const PROJECT_PERMISSIONS = [
@@ -32,6 +32,13 @@ export const PROJECT_PERMISSIONS = [
   "project:task_manage_own",
   "project:task_assign",
   "project:task_update_status",
+  // Resources
+  "project:resource_create",
+  "project:resource_edit_own",
+  "project:resource_edit_any",
+  "project:resource_delete_own",
+  "project:resource_delete_any",
+  "project:resource_view_all",
   // Management
   "project:manage_settings",
   "project:manage_members",
@@ -114,6 +121,12 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, ProjectPermission[]> = {
     "project:task_manage_own",
     "project:task_assign",
     "project:task_update_status",
+    "project:resource_create",
+    "project:resource_edit_own",
+    "project:resource_edit_any",
+    "project:resource_delete_own",
+    "project:resource_delete_any",
+    "project:resource_view_all",
     "project:manage_settings",
     "project:manage_members",
     "project:manage_status",
@@ -132,6 +145,12 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, ProjectPermission[]> = {
     "project:task_manage_own",
     "project:task_assign",
     "project:task_update_status",
+    "project:resource_create",
+    "project:resource_edit_own",
+    "project:resource_edit_any",
+    "project:resource_delete_own",
+    "project:resource_delete_any",
+    "project:resource_view_all",
     "project:manage_settings",
     "project:manage_members",
     "project:manage_status",
@@ -149,6 +168,12 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, ProjectPermission[]> = {
     "project:task_manage_own",
     "project:task_assign",
     "project:task_update_status",
+    "project:resource_create",
+    "project:resource_edit_own",
+    "project:resource_edit_any",
+    "project:resource_delete_own",
+    "project:resource_delete_any",
+    "project:resource_view_all",
     "project:manage_settings",
     "project:manage_members",
     "project:view_all_areas",
@@ -161,6 +186,9 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, ProjectPermission[]> = {
     "project:task_create_own_area",
     "project:task_manage_own",
     "project:task_update_status",
+    "project:resource_create",
+    "project:resource_edit_own",
+    "project:resource_delete_own",
   ],
   "Director de Área": [
     "project:event_create_own_area",
@@ -168,6 +196,9 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, ProjectPermission[]> = {
     "project:task_create_own_area",
     "project:task_manage_own",
     "project:task_update_status",
+    "project:resource_create",
+    "project:resource_edit_own",
+    "project:resource_delete_own",
   ],
   "Miembro de Área": [
   ],

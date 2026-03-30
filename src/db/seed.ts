@@ -1,8 +1,20 @@
 // src/db/seed.ts
 import "dotenv/config";
 import { db } from "./index";
-import { areas, areaPermissions, semesters, users, gradeDefinitions, customRoles, customRolePermissions, projectAreas, projectRoles, projectRolePermissions } from "./schema";
-import { eq, sql } from "drizzle-orm";
+import {
+    areas,
+    areaPermissions,
+    semesters,
+    users,
+    gradeDefinitions,
+    customRoles,
+    customRolePermissions,
+    projectAreas,
+    projectRoles,
+    projectRolePermissions,
+    projectResourceCategories,
+} from "./schema";
+import { eq, isNull, sql } from "drizzle-orm";
 
 async function main() {
     console.log("🌱 Iniciando Seed...");
@@ -231,6 +243,36 @@ async function main() {
         console.log(`   ✅ ${permissionRows.length} permisos de proyecto insertados.`);
     } else {
         console.log("   ⏭️ Roles ya existían, omitiendo.");
+    }
+
+    // 7. Seed global project resource categories (Fase 4)
+    console.log("📚 Sincronizando categorías globales de recursos...");
+    const globalResourceCategories = await db.query.projectResourceCategories.findMany({
+        where: isNull(projectResourceCategories.projectId),
+    });
+
+    const existingNames = new Set(globalResourceCategories.map((cat) => cat.name.toLowerCase()));
+    const defaultCategories = [
+        { name: "Documentación", description: "Actas, reportes y documentos de referencia.", icon: "file-text", color: "#2563eb", position: 0 },
+        { name: "Diseño", description: "Prototipos, mockups y recursos visuales.", icon: "palette", color: "#db2777", position: 1 },
+        { name: "Código fuente", description: "Repositorios y snippets técnicos.", icon: "github", color: "#0f172a", position: 2 },
+        { name: "Multimedia", description: "Videos, grabaciones y material audiovisual.", icon: "video", color: "#ea580c", position: 3 },
+        { name: "Referencias", description: "Artículos, benchmarks y fuentes externas.", icon: "link", color: "#16a34a", position: 4 },
+        { name: "Entregables", description: "Versiones finales y material aprobado.", icon: "package", color: "#7c3aed", position: 5 },
+    ];
+
+    const missingCategories = defaultCategories.filter((cat) => !existingNames.has(cat.name.toLowerCase()));
+    if (missingCategories.length > 0) {
+        await db.insert(projectResourceCategories).values(
+            missingCategories.map((cat) => ({
+                ...cat,
+                projectId: null,
+                isSystem: true,
+            })),
+        );
+        console.log(`   ✅ ${missingCategories.length} categorías globales insertadas.`);
+    } else {
+        console.log("   ⏭️ Categorías globales ya existían, omitiendo.");
     }
 
     console.log("✅ Seed completado con éxito.");
