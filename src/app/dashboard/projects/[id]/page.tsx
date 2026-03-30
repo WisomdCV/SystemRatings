@@ -12,11 +12,42 @@ import { users, projectRoles, projectAreas, events, projectMembers, projectResou
 import { eq, desc, asc, isNull, or } from "drizzle-orm";
 import { getCreatableProjectEventTypes } from "@/server/services/event-permissions.service";
 import { filterVisibleEvents, type VisibilityContext } from "@/server/services/event-visibility.service";
+import {
+    canAccessProject,
+    filterVisibleResources,
+    filterVisibleInvitations,
+    filterMemberFields,
+    getMemberProfileLevel,
+    type MembershipContext,
+    type ProjectVisibilityContext,
+} from "@/server/services/project-visibility.service";
 
 export default async function ProjectDetailPage(props: { params: Promise<{ id: string }> }) {
     const params = await props.params;
     const session = await authFresh();
     if (!session?.user) redirect("/login");
+
+    const projectVisCtx: ProjectVisibilityContext = {
+        userId: session.user.id,
+        userRole: session.user.role || "",
+        userAreaId: session.user.currentAreaId,
+        customPermissions: session.user.customPermissions,
+    };
+
+    const accessDecision = await canAccessProject(params.id, projectVisCtx);
+    if (!accessDecision.visible) {
+        return (
+            <div className="min-h-screen bg-meteorite-50 flex items-center justify-center">
+                <div className="text-center">
+                    <FolderKanban className="w-16 h-16 text-meteorite-300 mx-auto mb-4" />
+                    <h2 className="text-2xl font-black text-meteorite-950 mb-2">Proyecto no encontrado</h2>
+                    <Link href="/dashboard/projects" className="text-meteorite-600 hover:text-meteorite-700 font-bold">
+                        ← Volver a Proyectos
+                    </Link>
+                </div>
+            </div>
+        );
+    }
 
     const projectResult = await getProjectByIdAction(params.id);
 
@@ -80,6 +111,14 @@ export default async function ProjectDetailPage(props: { params: Promise<{ id: s
     const currentUserProjectAreaId = currentUserMembership?.projectArea?.id || null;
     const currentUserPermissions = (currentUserMembership?.projectRole?.permissions ?? []).map((p: { permission: string }) => p.permission);
     const isSystemAdmin = hasPermission(session.user.role, "project:manage");
+    const isAdminAccess = hasPermission(session.user.role, "admin:access", session.user.customPermissions);
+    const canManageMembers = isSystemAdmin || currentUserPermissions.includes("project:manage_members");
+    const memberCtx: MembershipContext | null = currentUserMembership
+        ? {
+            projectAreaId: currentUserProjectAreaId,
+            projectPermissions: currentUserPermissions,
+        }
+        : null;
 
     // ── Project Resources ──────────────────────────────────────────────────
     const categories = await db.query.projectResourceCategories.findMany({
@@ -106,17 +145,42 @@ export default async function ProjectDetailPage(props: { params: Promise<{ id: s
         orderBy: [desc(projectResources.createdAt)],
     });
 
-    const canViewAllResources = isSystemAdmin
-        || currentUserPermissions.includes("project:resource_view_all")
-        || currentUserPermissions.includes("project:view_all_areas");
+    const visibleTaskIds = new Set(projectResult.data.tasks.map((task) => task.id));
+    const resources = filterVisibleResources(
+        allResources,
+        session.user.id,
+        memberCtx,
+        isSystemAdmin,
+        visibleTaskIds,
+    ).map(({ _visibilityRule, ...resource }) => resource);
 
-    const resources = isSystemAdmin
-        ? allResources
-        : (!currentUserMembership
-            ? []
-            : (canViewAllResources
-                ? allResources
-                : allResources.filter((resource) => !resource.projectAreaId || resource.projectAreaId === currentUserProjectAreaId)));
+    const visibleInvitations = filterVisibleInvitations(
+        projectInvitations,
+        session.user.id,
+        memberCtx,
+        isSystemAdmin,
+    ).map(({ _visibilityRule, ...invitation }) => invitation);
+
+    const membersForClient = projectResult.data.members.map((member) => {
+        const level = getMemberProfileLevel(
+            {
+                userId: session.user.id,
+                isBypass: isSystemAdmin,
+                isAdminAccess,
+                membership: memberCtx,
+            },
+            {
+                userId: member.user.id,
+                projectAreaId: member.projectArea?.id || null,
+            },
+        );
+        return filterMemberFields(member, level);
+    });
+
+    const projectForClient = {
+        ...projectResult.data,
+        members: membersForClient,
+    };
 
     // Centralized visibility filter (uses project permission strings)
     const visibilityCtx: VisibilityContext = {
@@ -179,14 +243,14 @@ export default async function ProjectDetailPage(props: { params: Promise<{ id: s
 
                 <div className="space-y-6">
                     <ProjectDetail
-                        project={projectResult.data}
-                        eligibleUsers={eligibleUsers}
+                        project={projectForClient}
+                        eligibleUsers={canManageMembers ? eligibleUsers : []}
                         allProjectRoles={allRoles}
                         allProjectAreas={allAreas}
                         currentUserId={session.user.id!}
                         isSystemAdmin={isSystemAdmin}
                         currentUserHierarchyLevel={currentUserHierarchyLevel}
-                        projectInvitations={projectInvitations}
+                        projectInvitations={visibleInvitations}
                         resourceCategories={categories}
                         projectResources={resources}
                     />

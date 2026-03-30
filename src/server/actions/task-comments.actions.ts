@@ -2,7 +2,7 @@
 
 import { auth } from "@/server/auth";
 import { db } from "@/db";
-import { taskComments, projectTasks, taskAssignments, projectMembers } from "@/db/schema";
+import { taskComments, projectTasks, projectMembers } from "@/db/schema";
 import { and, asc, desc, eq, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import {
@@ -12,6 +12,7 @@ import {
   type UpdateTaskCommentDTO,
 } from "@/lib/validators/project";
 import { hasProjectPermission, canBypassProjectPerms } from "@/lib/project-permissions";
+import { filterVisibleTasks, type MembershipContext } from "@/server/services/project-visibility.service";
 
 async function getProjectMembershipWithPerms(userId: string, projectId: string) {
   const membership = await db.query.projectMembers.findFirst({
@@ -25,6 +26,31 @@ async function getProjectMembershipWithPerms(userId: string, projectId: string) 
     },
   });
   return membership ?? null;
+}
+
+async function canUserViewTask(
+  user: { id: string; role?: string | null; customPermissions?: string[] },
+  task: {
+    id: string;
+    projectId: string;
+    projectAreaId: string | null;
+    createdById: string;
+    assignments: { user: { id: string } }[];
+  },
+) {
+  const iiseBypass = canBypassProjectPerms(user.role || "", user.customPermissions);
+  if (iiseBypass) return true;
+
+  const membership = await getProjectMembershipWithPerms(user.id, task.projectId);
+  const membershipCtx: MembershipContext | null = membership
+    ? {
+      projectAreaId: membership.projectAreaId,
+      projectPermissions: membership.projectRole.permissions.map((permission) => permission.permission),
+    }
+    : null;
+
+  const visible = filterVisibleTasks([task], user.id, membershipCtx, false);
+  return visible.length > 0;
 }
 
 export async function createTaskCommentAction(input: CreateTaskCommentDTO) {
@@ -41,29 +67,25 @@ export async function createTaskCommentAction(input: CreateTaskCommentDTO) {
 
     const task = await db.query.projectTasks.findFirst({
       where: eq(projectTasks.id, taskId),
-      columns: { id: true, projectId: true, createdById: true },
+      columns: { id: true, projectId: true, projectAreaId: true, createdById: true },
+      with: {
+        assignments: {
+          with: { user: { columns: { id: true } } },
+        },
+      },
     });
     if (!task) return { success: false as const, error: "Tarea no encontrada." };
 
-    const iiseBypass = canBypassProjectPerms(session.user.role || "", session.user.customPermissions);
-    if (!iiseBypass) {
-      const isCreator = task.createdById === session.user.id;
-      const isAssigned = await db.query.taskAssignments.findFirst({
-        where: and(
-          eq(taskAssignments.taskId, taskId),
-          eq(taskAssignments.userId, session.user.id),
-        ),
-        columns: { id: true },
-      });
-
-      if (!isCreator && !isAssigned) {
-        const membership = await getProjectMembershipWithPerms(session.user.id, task.projectId);
-        const canManage = hasProjectPermission(membership, "project:task_manage_any")
-          || hasProjectPermission(membership, "project:task_manage_own");
-        if (!canManage) {
-          return { success: false as const, error: "No tienes permisos para comentar en esta tarea." };
-        }
-      }
+    const canViewTask = await canUserViewTask(
+      {
+        id: session.user.id,
+        role: session.user.role,
+        customPermissions: session.user.customPermissions,
+      },
+      task,
+    );
+    if (!canViewTask) {
+      return { success: false as const, error: "No tienes acceso a esta tarea." };
     }
 
     if (parentId) {
@@ -102,16 +124,25 @@ export async function getTaskCommentsAction(taskId: string) {
 
     const task = await db.query.projectTasks.findFirst({
       where: eq(projectTasks.id, taskId),
-      columns: { id: true, projectId: true },
+      columns: { id: true, projectId: true, projectAreaId: true, createdById: true },
+      with: {
+        assignments: {
+          with: { user: { columns: { id: true } } },
+        },
+      },
     });
     if (!task) return { success: false as const, error: "Tarea no encontrada." };
 
-    const iiseBypass = canBypassProjectPerms(session.user.role || "", session.user.customPermissions);
-    if (!iiseBypass) {
-      const membership = await getProjectMembershipWithPerms(session.user.id, task.projectId);
-      if (!membership) {
-        return { success: false as const, error: "No eres miembro del proyecto." };
-      }
+    const canViewTask = await canUserViewTask(
+      {
+        id: session.user.id,
+        role: session.user.role,
+        customPermissions: session.user.customPermissions,
+      },
+      task,
+    );
+    if (!canViewTask) {
+      return { success: false as const, error: "No tienes acceso a esta tarea." };
     }
 
     const comments = await db.query.taskComments.findMany({

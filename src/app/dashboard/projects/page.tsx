@@ -1,4 +1,4 @@
-import { auth } from "@/server/auth";
+import { authFresh } from "@/server/auth-fresh";
 import { redirect } from "next/navigation";
 import { getProjectsAction } from "@/server/actions/project.actions";
 import { hasPermission } from "@/lib/permissions";
@@ -7,7 +7,7 @@ import Link from "next/link";
 import { FolderKanban, ArrowLeft } from "lucide-react";
 
 export default async function ProjectsPage() {
-    const session = await auth();
+    const session = await authFresh();
     if (!session?.user) redirect("/login");
 
     const projectsResult = await getProjectsAction();
@@ -48,6 +48,7 @@ export default async function ProjectsPage() {
                     projects={projectsResult.success && projectsResult.data ? projectsResult.data : []}
                     canCreate={hasPermission(session.user.role, "project:create", session.user.customPermissions)}
                     currentUserId={session.user.id!}
+                    canViewAny={hasPermission(session.user.role, "project:view_any", session.user.customPermissions)}
                 />
             </div>
         </div>

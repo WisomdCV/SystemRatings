@@ -107,10 +107,28 @@ interface DashboardViewProps {
         expiresAt: Date | null;
     }>;
     roleChanged?: boolean;
+    myProjects?: Array<{
+        id: string;
+        name: string;
+        color: string | null;
+        status: string;
+        members?: Array<{ user: { id: string; name: string | null; image: string | null } }>;
+        tasks?: Array<{ id: string; status: string }>;
+    }>;
+    allVisibleProjects?: Array<{
+        id: string;
+        name: string;
+        color: string | null;
+        status: string;
+        members?: Array<{ user: { id: string; name: string | null; image: string | null } }>;
+        tasks?: Array<{ id: string; status: string }>;
+    }>;
+    canViewAnyProjects?: boolean;
 }
 
-export default function DashboardView({ user, upcomingEvents = [], pendingJustifications = [], attendanceHistory = [], currentSemester, dashboardData, pendingApprovalUsers = [], pendingProjectInvitations = [], roleChanged = false }: DashboardViewProps) {
+export default function DashboardView({ user, upcomingEvents = [], pendingJustifications = [], attendanceHistory = [], currentSemester, dashboardData, pendingApprovalUsers = [], pendingProjectInvitations = [], roleChanged = false, myProjects = [], allVisibleProjects = [], canViewAnyProjects = false }: DashboardViewProps) {
     const [chartView, setChartView] = useState<"monthly" | "semester">("monthly");
+    const [projectViewMode, setProjectViewMode] = useState<"mine" | "all">("mine");
     const [isSidebarExpanded, setIsSidebarExpanded] = useState(true);
 
     // Carousel References and State
@@ -195,6 +213,8 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
                 : "bg-orange-100/50 text-orange-700 border-orange-200"
         }
     ];
+
+    const displayedProjects = projectViewMode === "mine" ? myProjects : allVisibleProjects;
 
     // Only truly pending justifications (action required by the user).
     const actionableJustificationsCount = pendingJustifications.filter((item: any) =>
@@ -713,6 +733,65 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
                     </div>
 
                     {/* A. KPI CARDS */}
+                    <div className="card-glass p-4 lg:p-5 rounded-2xl mb-6 lg:mb-8">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+                            <div className="flex items-center gap-2">
+                                <FolderKanban className="w-4 h-4 text-meteorite-600" />
+                                <h3 className="font-bold text-meteorite-950">Proyectos</h3>
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-meteorite-100 text-meteorite-600">
+                                    {displayedProjects.length}
+                                </span>
+                            </div>
+                            {canViewAnyProjects && (
+                                <div className="bg-meteorite-100 p-1 rounded-xl flex border border-meteorite-200 self-start sm:self-auto">
+                                    <button
+                                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${projectViewMode === "mine" ? "tab-active" : "text-meteorite-500 hover:bg-white/50"}`}
+                                        onClick={() => setProjectViewMode("mine")}
+                                    >
+                                        Mis proyectos
+                                    </button>
+                                    <button
+                                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${projectViewMode === "all" ? "tab-active" : "text-meteorite-500 hover:bg-white/50"}`}
+                                        onClick={() => setProjectViewMode("all")}
+                                    >
+                                        Todos
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+
+                        {displayedProjects.length === 0 ? (
+                            <p className="text-xs text-meteorite-500">No hay proyectos para este alcance.</p>
+                        ) : (
+                            <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+                                {displayedProjects.slice(0, 6).map((project) => {
+                                    const totalTasks = project.tasks?.length || 0;
+                                    const doneTasks = project.tasks?.filter((task) => task.status === "DONE").length || 0;
+                                    const progress = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0;
+
+                                    return (
+                                        <Link key={project.id} href={`/dashboard/projects/${project.id}`} className="block rounded-xl border border-meteorite-100 bg-white/70 p-3 hover:border-meteorite-300 hover:shadow-sm transition-all">
+                                            <div className="flex items-center justify-between gap-2">
+                                                <div className="flex items-center gap-2 min-w-0">
+                                                    <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: project.color || "#6366f1" }} />
+                                                    <p className="text-sm font-bold text-meteorite-900 truncate">{project.name}</p>
+                                                </div>
+                                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-meteorite-100 text-meteorite-600">{project.status}</span>
+                                            </div>
+
+                                            <div className="mt-2 h-1.5 w-full rounded-full bg-meteorite-100 overflow-hidden">
+                                                <div className="h-full rounded-full bg-gradient-to-r from-violet-500 to-indigo-500" style={{ width: `${progress}%` }} />
+                                            </div>
+                                            <div className="mt-1 text-[11px] text-meteorite-500 font-medium">
+                                                {doneTasks}/{totalTasks} tareas completadas ({progress}%)
+                                            </div>
+                                        </Link>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+
                     <div className="flex lg:grid lg:grid-cols-4 gap-4 lg:gap-6 mb-6 lg:mb-8 overflow-x-auto hide-scroll snap-x py-2">
 
                         {/* KPI Total */}

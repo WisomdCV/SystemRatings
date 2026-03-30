@@ -7,6 +7,7 @@ import { asc, eq, and, or, isNull, isNotNull, gte, inArray } from "drizzle-orm";
 import { getPendingJustificationsAction, getMyAttendanceHistoryAction } from "@/server/actions/attendance.actions";
 import { getMyDashboardDataAction } from "@/server/actions/dashboard.actions";
 import { getPendingInvitationsForUserAction } from "@/server/actions/project-invitations.actions";
+import { getProjectsAction } from "@/server/actions/project.actions";
 import { hasPermission } from "@/lib/permissions";
 import { prepareEventsForClient, type VisibilityContext, type ProjectMembershipContext } from "@/server/services/event-visibility.service";
 
@@ -169,6 +170,12 @@ export default async function DashboardPage() {
     const { data: pendingJustifications } = await getPendingJustificationsAction();
     const { data: attendanceHistory } = await getMyAttendanceHistoryAction();
     const { data: pendingProjectInvitations } = await getPendingInvitationsForUserAction();
+    const projectsResult = await getProjectsAction();
+    const allVisibleProjects = projectsResult.success && projectsResult.data ? projectsResult.data : [];
+    const myProjects = allVisibleProjects.filter((project: any) =>
+        project.members?.some((member: any) => member.user.id === session.user.id),
+    );
+    const canViewAnyProjects = hasPermission(role, "project:view_any", session.user.customPermissions);
 
     // 3. Fetch Dashboard KPI & Grades Data
     const { data: dashboardData } = await getMyDashboardDataAction();
@@ -202,6 +209,9 @@ export default async function DashboardPage() {
         pendingApprovalUsers={pendingApprovalUsers}
         pendingProjectInvitations={pendingProjectInvitations || []}
         roleChanged={session.user.roleChanged === true}
+        myProjects={myProjects}
+        allVisibleProjects={allVisibleProjects}
+        canViewAnyProjects={canViewAnyProjects}
     />;
 }
 

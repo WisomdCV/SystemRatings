@@ -11,6 +11,13 @@ import {
     hasProjectPermission, hasAnyProjectPermission, canBypassProjectPerms,
 } from "@/lib/project-permissions";
 import {
+    canAccessProject,
+    filterVisibleProjects,
+    filterVisibleTasks,
+    type MembershipContext,
+    type ProjectVisibilityContext,
+} from "@/server/services/project-visibility.service";
+import {
     CreateProjectSchema, UpdateProjectSchema,
     AddProjectMemberSchema, UpdateProjectMemberRoleSchema,
     CreateTaskSchema, UpdateTaskSchema, UpdateTaskStatusSchema, AssignTaskSchema,
@@ -65,7 +72,7 @@ export async function getProjectsAction() {
                 createdBy: { columns: { id: true, name: true, image: true } },
                 members: {
                     with: {
-                        user: { columns: { id: true, name: true, image: true, role: true } },
+                        user: { columns: { id: true, name: true, image: true, role: true, currentAreaId: true } },
                         projectRole: true,
                         projectArea: true,
                     },
@@ -74,7 +81,20 @@ export async function getProjectsAction() {
             },
         });
 
-        return { success: true as const, data: allProjects };
+        const visCtx: ProjectVisibilityContext = {
+            userId: session.user.id!,
+            userRole: session.user.role || "",
+            userAreaId: session.user.currentAreaId,
+            customPermissions: session.user.customPermissions,
+        };
+
+        const visibleProjects = filterVisibleProjects(allProjects, visCtx);
+        const isAuditAdmin = hasPermission(session.user.role, "admin:audit", session.user.customPermissions);
+        const data = isAuditAdmin
+            ? visibleProjects
+            : visibleProjects.map(({ _visibilityRule, ...project }) => project);
+
+        return { success: true as const, data };
     } catch (error) {
         console.error("Error fetching projects:", error);
         return { success: false as const, error: "Error al cargar proyectos." };
@@ -86,6 +106,17 @@ export async function getProjectByIdAction(projectId: string) {
     try {
         const session = await auth();
         if (!session?.user) return { success: false as const, error: "No autorizado" };
+
+        const visCtx: ProjectVisibilityContext = {
+            userId: session.user.id!,
+            userRole: session.user.role || "",
+            userAreaId: session.user.currentAreaId,
+            customPermissions: session.user.customPermissions,
+        };
+        const projectAccess = await canAccessProject(projectId, visCtx);
+        if (!projectAccess.visible) {
+            return { success: false as const, error: "Proyecto no encontrado." };
+        }
 
         const project = await db.query.projects.findFirst({
             where: eq(projects.id, projectId),
@@ -117,9 +148,28 @@ export async function getProjectByIdAction(projectId: string) {
 
         if (!project) return { success: false as const, error: "Proyecto no encontrado." };
 
+        const iiseBypass = canBypassProjectPerms(session.user.role || "", session.user.customPermissions);
+        const membership = project.members.find((member) => member.user.id === session.user.id) || null;
+
+        const membershipCtx: MembershipContext | null = membership
+            ? {
+                projectAreaId: membership.projectArea?.id || null,
+                projectPermissions: (membership.projectRole.permissions ?? []).map((permission) => permission.permission),
+            }
+            : null;
+
+        const visibleTasks = iiseBypass
+            ? project.tasks
+            : filterVisibleTasks(
+                project.tasks,
+                session.user.id!,
+                membershipCtx,
+                iiseBypass,
+            ).map(({ _visibilityRule, ...task }) => task);
+
         const projectWithCommentCount = {
             ...project,
-            tasks: project.tasks.map((task) => ({
+            tasks: visibleTasks.map((task) => ({
                 ...task,
                 _commentCount: task.comments?.length ?? 0,
             })),
@@ -503,10 +553,36 @@ export async function updateTaskStatusAction(input: UpdateTaskStatusDTO) {
         });
         if (!task) return { success: false as const, error: "Tarea no encontrada." };
 
+        const iiseBypass = canBypassProjectPerms(session.user.role || "", session.user.customPermissions);
+        if (!iiseBypass) {
+            const membership = await getProjectMembershipWithPerms(session.user.id, task.projectId);
+            const membershipCtx: MembershipContext | null = membership
+                ? {
+                    projectAreaId: membership.projectAreaId,
+                    projectPermissions: membership.projectRole.permissions.map((permission) => permission.permission),
+                }
+                : null;
+
+            const visibleTask = filterVisibleTasks(
+                [{
+                    id: task.id,
+                    projectAreaId: task.projectAreaId,
+                    createdById: task.createdById,
+                    assignments: task.assignments.map((assignment) => ({ user: { id: assignment.userId } })),
+                }],
+                session.user.id,
+                membershipCtx,
+                false,
+            );
+
+            if (visibleTask.length === 0) {
+                return { success: false as const, error: "No tienes acceso a esta tarea." };
+            }
+        }
+
         // Allow: assigned user, IISE bypass, or user with task_update_status
         const isAssigned = task.assignments.some(a => a.userId === session.user.id);
         if (!isAssigned) {
-            const iiseBypass = canBypassProjectPerms(session.user.role || "", session.user.customPermissions);
             if (!iiseBypass) {
                 const membership = await getProjectMembershipWithPerms(session.user.id, task.projectId);
                 if (!hasProjectPermission(membership, "project:task_update_status")) {

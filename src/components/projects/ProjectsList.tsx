@@ -44,6 +44,7 @@ interface Props {
     projects: Project[];
     canCreate: boolean;
     currentUserId: string;
+    canViewAny?: boolean;
 }
 
 // ─── Status/Priority Visual Configs ──────────────────────────────────────────
@@ -65,7 +66,7 @@ const PRIORITY_CONFIG: Record<string, { label: string; color: string; icon: Reac
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
-export default function ProjectsList({ projects, canCreate, currentUserId }: Props) {
+export default function ProjectsList({ projects, canCreate, currentUserId, canViewAny = false }: Props) {
     const router = useRouter();
     const [isPending, startTransition] = useTransition();
     const [showCreate, setShowCreate] = useState(false);
@@ -228,6 +229,15 @@ export default function ProjectsList({ projects, canCreate, currentUserId }: Pro
             )}
 
             {/* Projects Grid */}
+            <div className="flex items-center justify-between">
+                <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                    {canViewAny ? "Vista completa de proyectos" : "Tus proyectos visibles"}
+                </p>
+                <span className="text-[11px] font-bold px-2 py-1 rounded-lg bg-gray-100 text-gray-600">
+                    {projects.length} proyecto{projects.length === 1 ? "" : "s"}
+                </span>
+            </div>
+
             {projects.length === 0 ? (
                 <div className="bg-white/60 border border-meteorite-100 rounded-2xl p-12 text-center">
                     <FolderKanban className="w-16 h-16 text-meteorite-300 mx-auto mb-4" />

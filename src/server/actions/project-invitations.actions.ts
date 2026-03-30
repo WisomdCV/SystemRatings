@@ -22,6 +22,8 @@ import {
   type CancelInvitationDTO,
 } from "@/lib/validators/project";
 import { canBypassProjectPerms, hasProjectPermission } from "@/lib/project-permissions";
+import { hasPermission } from "@/lib/permissions";
+import { filterVisibleInvitations, type MembershipContext } from "@/server/services/project-visibility.service";
 
 async function getProjectMembershipWithPerms(userId: string, projectId: string) {
   const membership = await db.query.projectMembers.findFirst({
@@ -356,12 +358,7 @@ export async function getProjectInvitationsAction(projectId: string) {
     if (!session?.user?.id) return { success: false as const, error: "No autorizado" };
 
     const iiseBypass = canBypassProjectPerms(session.user.role || "", session.user.customPermissions);
-    if (!iiseBypass) {
-      const membership = await getProjectMembershipWithPerms(session.user.id, projectId);
-      if (!hasProjectPermission(membership, "project:manage_members")) {
-        return { success: false as const, error: "No tienes permisos para ver invitaciones." };
-      }
-    }
+    const membership = iiseBypass ? null : await getProjectMembershipWithPerms(session.user.id, projectId);
 
     const invitations = await db.query.projectInvitations.findMany({
       where: eq(projectInvitations.projectId, projectId),
@@ -374,7 +371,26 @@ export async function getProjectInvitationsAction(projectId: string) {
       orderBy: [desc(projectInvitations.createdAt)],
     });
 
-    return { success: true as const, data: invitations };
+    const membershipCtx: MembershipContext | null = membership
+      ? {
+        projectAreaId: membership.projectAreaId,
+        projectPermissions: membership.projectRole.permissions.map((permission) => permission.permission),
+      }
+      : null;
+
+    const visibleInvitations = filterVisibleInvitations(
+      invitations,
+      session.user.id,
+      membershipCtx,
+      iiseBypass,
+    );
+
+    const isAuditAdmin = hasPermission(session.user.role, "admin:audit", session.user.customPermissions);
+    const data = isAuditAdmin
+      ? visibleInvitations
+      : visibleInvitations.map(({ _visibilityRule, ...invitation }) => invitation);
+
+    return { success: true as const, data };
   } catch (error) {
     console.error("Error fetching project invitations:", error);
     return { success: false as const, error: "Error al obtener invitaciones del proyecto." };

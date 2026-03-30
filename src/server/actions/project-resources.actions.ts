@@ -29,6 +29,12 @@ import {
   type DeleteResourceLinkDTO,
 } from "@/lib/validators/project";
 import { canBypassProjectPerms, hasProjectPermission } from "@/lib/project-permissions";
+import { hasPermission } from "@/lib/permissions";
+import {
+  filterVisibleResources,
+  filterVisibleTasks,
+  type MembershipContext,
+} from "@/server/services/project-visibility.service";
 import {
   validateResourceUrl,
   isWhitelistedDomain,
@@ -390,6 +396,33 @@ export async function getProjectResourcesAction(params: {
       if (!membership) return { success: false as const, error: "No eres miembro del proyecto." };
     }
 
+    const membershipCtx: MembershipContext | null = membership
+      ? {
+        projectAreaId: membership.projectAreaId,
+        projectPermissions: membership.projectRole.permissions.map((permission) => permission.permission),
+      }
+      : null;
+
+    let visibleTaskIds: Set<string> | undefined;
+    if (!iiseBypass && membershipCtx) {
+      const projectTasksForVisibility = await db.query.projectTasks.findMany({
+        where: eq(projectTasks.projectId, projectId),
+        with: {
+          assignments: {
+            with: { user: { columns: { id: true } } },
+          },
+        },
+      });
+
+      const visibleTasks = filterVisibleTasks(
+        projectTasksForVisibility,
+        session.user.id,
+        membershipCtx,
+        false,
+      );
+      visibleTaskIds = new Set(visibleTasks.map((task) => task.id));
+    }
+
     const conditions = [eq(projectResources.projectId, projectId)];
     if (categoryId) conditions.push(eq(projectResources.categoryId, categoryId));
     if (projectAreaId) conditions.push(eq(projectResources.projectAreaId, projectAreaId));
@@ -415,9 +448,17 @@ export async function getProjectResourcesAction(params: {
       orderBy: [desc(projectResources.createdAt)],
     });
 
-    let filtered = resources;
-    if (membership && !canViewCrossArea(membership)) {
-      filtered = resources.filter((resource) => !resource.projectAreaId || resource.projectAreaId === membership?.projectAreaId);
+    let filtered = filterVisibleResources(
+      resources,
+      session.user.id,
+      membershipCtx,
+      iiseBypass,
+      visibleTaskIds,
+    );
+
+    const isAuditAdmin = hasPermission(session.user.role, "admin:audit", session.user.customPermissions);
+    if (!isAuditAdmin) {
+      filtered = filtered.map(({ _visibilityRule, ...resource }) => resource as any);
     }
 
     if (search && search.trim()) {
