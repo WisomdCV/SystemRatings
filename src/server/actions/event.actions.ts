@@ -61,6 +61,12 @@ export async function createEventAction(input: CreateEventDTO) {
         const eventScope = data.eventScope as EventScope;
         const eventType = data.eventType as EventType;
 
+        // General events are never area-targeted.
+        if (eventType === "GENERAL") {
+            data.targetAreaId = null;
+            data.targetProjectAreaId = null;
+        }
+
         // Invitee-based events are not area-target driven.
         // Normalize hidden form leftovers so visibility is consistent for invitees.
         if (eventType === "INDIVIDUAL_GROUP" || eventType === "TREASURY_SPECIAL") {
@@ -254,7 +260,21 @@ export async function updateEventAction(eventId: string, input: UpdateEventDTO) 
         const data = validated.data;
 
         const effectiveEventType = (data.eventType ?? event.eventType) as EventType;
+        const effectiveEventScope = (data.eventScope ?? event.eventScope) as EventScope;
         const effectiveProjectId = data.projectId ?? event.projectId;
+
+        // Keep scope/type target fields consistent even if the client sends stale hidden values.
+        if (effectiveEventType === "GENERAL") {
+            data.targetAreaId = null;
+            data.targetProjectAreaId = null;
+        } else if (effectiveEventType === "AREA") {
+            if (effectiveEventScope === "IISE") {
+                data.targetProjectAreaId = null;
+            }
+            if (effectiveEventScope === "PROJECT") {
+                data.targetAreaId = null;
+            }
+        }
 
         // Keep invitee-based target fields normalized when editing.
         if (effectiveEventType === "INDIVIDUAL_GROUP" || effectiveEventType === "TREASURY_SPECIAL") {

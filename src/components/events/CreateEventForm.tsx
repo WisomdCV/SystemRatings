@@ -144,6 +144,9 @@ export default function CreateEventForm({
         if (watchScope === "IISE" && watchType === "AREA" && !canSelectArea) {
             form.setValue("targetAreaId", userAreaId || "", { shouldValidate: false });
         }
+        if (watchScope === "IISE" && watchType === "GENERAL") {
+            form.setValue("targetAreaId", "", { shouldValidate: false });
+        }
         if (watchType === "INDIVIDUAL_GROUP" || watchType === "TREASURY_SPECIAL") {
             form.setValue("targetAreaId", "", { shouldValidate: false });
             form.setValue("targetProjectAreaId", "", { shouldValidate: false });
@@ -380,8 +383,8 @@ export default function CreateEventForm({
                 )}
             </div>
 
-            {/* Conditional: Area Target (IISE + AREA or IISE + GENERAL) */}
-            {watchScope === "IISE" && watchType !== "INDIVIDUAL_GROUP" && watchType !== "TREASURY_SPECIAL" && (
+            {/* Conditional: Area Target (only IISE + AREA) */}
+            {watchScope === "IISE" && watchType === "AREA" && (
                 <div>
                     <label className="block text-sm font-bold text-gray-700 mb-1.5 ml-1">
                         Área Destino
