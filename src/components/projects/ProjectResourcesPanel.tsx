@@ -301,7 +301,7 @@ export default function ProjectResourcesPanel({
               placeholder="Nombre de categoría"
               value={categoryName}
               onChange={(e) => setCategoryName(e.target.value)}
-              className="md:col-span-2 px-3 py-2 text-xs rounded-lg border border-gray-200 bg-white outline-none"
+              className="md:col-span-2 px-3 py-2 text-xs rounded-lg border border-gray-200 bg-white outline-none text-meteorite-950 placeholder:text-gray-400"
             />
             <input
               type="color"
@@ -339,21 +339,21 @@ export default function ProjectResourcesPanel({
             placeholder="Nombre del recurso *"
             value={resourceName}
             onChange={(e) => setResourceName(e.target.value)}
-            className="w-full px-3 py-2 text-sm rounded-lg border border-gray-200 bg-white outline-none"
+            className="w-full px-3 py-2 text-sm rounded-lg border border-gray-200 bg-white outline-none text-meteorite-950 placeholder:text-gray-400"
           />
           <textarea
             placeholder="Descripción (opcional)"
             rows={2}
             value={resourceDescription}
             onChange={(e) => setResourceDescription(e.target.value)}
-            className="w-full px-3 py-2 text-sm rounded-lg border border-gray-200 bg-white outline-none resize-none"
+            className="w-full px-3 py-2 text-sm rounded-lg border border-gray-200 bg-white outline-none resize-none text-meteorite-950 placeholder:text-gray-400"
           />
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
             <select
               value={resourceCategoryId}
               onChange={(e) => setResourceCategoryId(e.target.value)}
-              className="px-3 py-2 text-xs rounded-lg border border-gray-200 bg-white outline-none"
+              className="px-3 py-2 text-xs rounded-lg border border-gray-200 bg-white outline-none text-meteorite-950"
             >
               <option value="none">Sin categoría</option>
               {categories.map((category) => (
@@ -364,7 +364,7 @@ export default function ProjectResourcesPanel({
             <select
               value={resourceAreaId}
               onChange={(e) => setResourceAreaId(e.target.value)}
-              className="px-3 py-2 text-xs rounded-lg border border-gray-200 bg-white outline-none"
+              className="px-3 py-2 text-xs rounded-lg border border-gray-200 bg-white outline-none text-meteorite-950"
             >
               <option value="none">Área general</option>
               {areas.map((area) => (
@@ -375,7 +375,7 @@ export default function ProjectResourcesPanel({
             <select
               value={resourceTaskId}
               onChange={(e) => setResourceTaskId(e.target.value)}
-              className="px-3 py-2 text-xs rounded-lg border border-gray-200 bg-white outline-none"
+              className="px-3 py-2 text-xs rounded-lg border border-gray-200 bg-white outline-none text-meteorite-950"
             >
               <option value="none">No vincular a tarea</option>
               {tasks.map((task) => (
@@ -390,14 +390,14 @@ export default function ProjectResourcesPanel({
               placeholder="https://... *"
               value={linkUrl}
               onChange={(e) => setLinkUrl(e.target.value)}
-              className="md:col-span-2 px-3 py-2 text-xs rounded-lg border border-gray-200 bg-white outline-none"
+              className="md:col-span-2 px-3 py-2 text-xs rounded-lg border border-gray-200 bg-white outline-none text-meteorite-950 placeholder:text-gray-400"
             />
             <input
               type="text"
               placeholder="Etiqueta (opcional)"
               value={linkLabel}
               onChange={(e) => setLinkLabel(e.target.value)}
-              className="px-3 py-2 text-xs rounded-lg border border-gray-200 bg-white outline-none"
+              className="px-3 py-2 text-xs rounded-lg border border-gray-200 bg-white outline-none text-meteorite-950 placeholder:text-gray-400"
             />
           </div>
 
@@ -549,14 +549,14 @@ export default function ProjectResourcesPanel({
                           placeholder="https://..."
                           value={newLinkUrl}
                           onChange={(e) => setNewLinkUrl(e.target.value)}
-                          className="md:col-span-2 px-2.5 py-1.5 text-xs rounded-lg border border-gray-200 bg-white outline-none"
+                          className="md:col-span-2 px-2.5 py-1.5 text-xs rounded-lg border border-gray-200 bg-white outline-none text-meteorite-950 placeholder:text-gray-400"
                         />
                         <input
                           type="text"
                           placeholder="Etiqueta"
                           value={newLinkLabel}
                           onChange={(e) => setNewLinkLabel(e.target.value)}
-                          className="px-2.5 py-1.5 text-xs rounded-lg border border-gray-200 bg-white outline-none"
+                          className="px-2.5 py-1.5 text-xs rounded-lg border border-gray-200 bg-white outline-none text-meteorite-950 placeholder:text-gray-400"
                         />
                         <div className="flex gap-1">
                           <button

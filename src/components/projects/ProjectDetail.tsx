@@ -697,22 +697,10 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
                     }}
                 />
 
-                {canManage && (
-                    <button
-                        onClick={() => showEditProject ? setShowEditProject(false) : openEditProject()}
-                        disabled={isPending}
-                        className="absolute top-4 right-4 z-10 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-white/80 bg-white/85 text-meteorite-700 hover:text-violet-700 hover:bg-white font-bold text-xs shadow-sm transition-colors disabled:opacity-50"
-                        title="Editar proyecto"
-                    >
-                        <Settings className="w-3.5 h-3.5" />
-                        Editar
-                    </button>
-                )}
-
                 <div className="p-5 md:p-6">
                     <div className="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-5">
                         <div className="min-w-0 space-y-3">
-                            <div className="flex items-center gap-2 flex-wrap pr-16 md:pr-0">
+                            <div className="flex items-center gap-2 flex-wrap">
                                 <span className="px-2.5 py-1 rounded-lg text-[10px] font-black tracking-wider uppercase bg-white/90 border border-white/80 text-meteorite-700">
                                     COD {projectCode}
                                 </span>
@@ -803,6 +791,17 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
                                         className="px-3 py-1.5 text-xs font-bold rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition-colors disabled:opacity-50"
                                     >
                                         Extender ciclo activo
+                                    </button>
+                                )}
+                                {canManage && (
+                                    <button
+                                        onClick={() => showEditProject ? setShowEditProject(false) : openEditProject()}
+                                        disabled={isPending}
+                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg border border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100 transition-colors disabled:opacity-50"
+                                        title="Editar proyecto"
+                                    >
+                                        <Settings className="w-3.5 h-3.5" />
+                                        Editar proyecto
                                     </button>
                                 )}
                                 <span className="ml-auto text-[11px] text-gray-500 font-medium self-center">
@@ -1133,12 +1132,12 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
                         {showTaskFilters && (
                             <>
                                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-2">
-                                    <select value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)} className="px-2.5 py-1.5 rounded-lg border border-gray-200 text-xs font-bold text-gray-600">
+                                    <select value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)} className="px-2.5 py-1.5 rounded-lg border border-gray-200 bg-white text-xs font-bold text-meteorite-900">
                                         <option value="ALL">Prioridad: Todas</option>
                                         {TASK_PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
                                     </select>
 
-                                    <select value={assigneeFilter} onChange={(e) => setAssigneeFilter(e.target.value)} className="px-2.5 py-1.5 rounded-lg border border-gray-200 text-xs font-bold text-gray-600">
+                                    <select value={assigneeFilter} onChange={(e) => setAssigneeFilter(e.target.value)} className="px-2.5 py-1.5 rounded-lg border border-gray-200 bg-white text-xs font-bold text-meteorite-900">
                                         <option value="ALL">Asignado: Todos</option>
                                         <option value="UNASSIGNED">Sin asignar</option>
                                         {project.members.map((member) => (
@@ -1146,14 +1145,14 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
                                         ))}
                                     </select>
 
-                                    <select value={agingFilter} onChange={(e) => setAgingFilter(e.target.value)} className="px-2.5 py-1.5 rounded-lg border border-gray-200 text-xs font-bold text-gray-600">
+                                    <select value={agingFilter} onChange={(e) => setAgingFilter(e.target.value)} className="px-2.5 py-1.5 rounded-lg border border-gray-200 bg-white text-xs font-bold text-meteorite-900">
                                         <option value="ALL">Aging: Todos</option>
                                         <option value="WARNING">3+ días</option>
                                         <option value="DANGER">7+ días</option>
                                         <option value="CRITICAL">14+ días</option>
                                     </select>
 
-                                    <select value={sortBy} onChange={(e) => setSortBy(e.target.value as any)} className="px-2.5 py-1.5 rounded-lg border border-gray-200 text-xs font-bold text-gray-600">
+                                    <select value={sortBy} onChange={(e) => setSortBy(e.target.value as any)} className="px-2.5 py-1.5 rounded-lg border border-gray-200 bg-white text-xs font-bold text-meteorite-900">
                                         <option value="position">Orden: Posición</option>
                                         <option value="priority">Orden: Prioridad</option>
                                         <option value="dueDate">Orden: Fecha límite</option>
@@ -1332,7 +1331,7 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
                                                                         <div className="p-2 border-b border-gray-100 bg-gray-50/50">
                                                                             <input type="text" value={assignSearch} onChange={e => setAssignSearch(e.target.value)}
                                                                                 placeholder="Buscar miembro..." autoFocus
-                                                                                className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-gray-200 outline-none focus:border-violet-500 transition-colors bg-white shadow-sm" />
+                                                                                className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-gray-200 outline-none focus:border-violet-500 transition-colors bg-white shadow-sm text-meteorite-950 placeholder:text-gray-400" />
                                                                         </div>
                                                                         <div className="max-h-32 overflow-y-auto p-1">
                                                                             {filteredAssignUsers.length === 0 ? (
@@ -1415,7 +1414,7 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
                                         <select
                                             value={selectedRoleId || defaultAssignableRoleId}
                                             onChange={e => setSelectedRoleId(e.target.value)}
-                                            className="px-2 py-1.5 text-xs font-bold rounded-lg border border-gray-200 outline-none flex-1 text-gray-700 bg-white"
+                                            className="px-2 py-1.5 text-xs font-bold rounded-lg border border-gray-200 outline-none flex-1 text-meteorite-900 bg-white"
                                         >
                                             {assignableRoles.map(r => (
                                                 <option key={r.id} value={r.id}>{r.name} (Nv. {r.hierarchyLevel})</option>
@@ -1424,7 +1423,7 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
                                         <select
                                             value={selectedAreaId}
                                             onChange={e => setSelectedAreaId(e.target.value)}
-                                            className="px-2 py-1.5 text-xs font-bold rounded-lg border border-gray-200 outline-none flex-1 text-gray-700 bg-white"
+                                            className="px-2 py-1.5 text-xs font-bold rounded-lg border border-gray-200 outline-none flex-1 text-meteorite-900 bg-white"
                                         >
                                             <option value="none">Sin Área Específica</option>
                                             {allProjectAreas.map(a => (
@@ -1437,11 +1436,11 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
                                         onChange={e => setInvitationMessage(e.target.value)}
                                         rows={2}
                                         placeholder="Mensaje opcional para la invitación..."
-                                        className="w-full px-3 py-1.5 text-xs rounded-lg border border-gray-200 outline-none resize-none"
+                                        className="w-full px-3 py-1.5 text-xs rounded-lg border border-gray-200 outline-none resize-none text-meteorite-950 placeholder:text-gray-400"
                                     />
                                     <input type="text" value={memberSearch} onChange={e => setMemberSearch(e.target.value)}
                                         placeholder="Buscar usuario…" autoFocus
-                                        className="w-full px-3 py-1.5 text-xs rounded-lg border border-gray-200 outline-none" />
+                                        className="w-full px-3 py-1.5 text-xs rounded-lg border border-gray-200 outline-none text-meteorite-950 placeholder:text-gray-400" />
                                 </div>
                                 <div className="max-h-32 overflow-y-auto">
                                     {assignableRoles.length === 0 && (
@@ -1508,7 +1507,7 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
                                 value={teamSearch}
                                 onChange={(e) => setTeamSearch(e.target.value)}
                                 placeholder="Buscar miembro, rol o área..."
-                                className="w-full px-3 py-2 text-xs font-medium rounded-xl border border-gray-200 outline-none focus:border-violet-500"
+                                    className="w-full px-3 py-2 text-xs font-medium rounded-xl border border-gray-200 outline-none focus:border-violet-500 text-meteorite-950 placeholder:text-gray-400"
                             />
                         </div>
 
