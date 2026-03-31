@@ -10,6 +10,8 @@ import {
     customRoles,
     customRolePermissions,
     projectAreas,
+    projectCycles,
+    projects,
     projectRoles,
     projectRolePermissions,
     projectResourceCategories,
@@ -243,6 +245,32 @@ async function main() {
         console.log(`   ✅ ${permissionRows.length} permisos de proyecto insertados.`);
     } else {
         console.log("   ⏭️ Roles ya existían, omitiendo.");
+    }
+
+    // 6.1 Ensure each project has at least one project_cycle row
+    console.log("🔁 Verificando ciclos de proyecto...");
+    const allProjects = await db.query.projects.findMany({
+        columns: { id: true, semesterId: true, status: true, createdAt: true },
+    });
+    const existingCycles = await db.query.projectCycles.findMany({
+        columns: { projectId: true, semesterId: true },
+    });
+    const existingCycleKeys = new Set(existingCycles.map((cycle) => `${cycle.projectId}:${cycle.semesterId}`));
+
+    const missingCycles = allProjects
+        .filter((project) => !existingCycleKeys.has(`${project.id}:${project.semesterId}`))
+        .map((project) => ({
+            projectId: project.id,
+            semesterId: project.semesterId,
+            status: (project.status === "COMPLETED" || project.status === "CANCELLED") ? "ARCHIVED" : "ACTIVE",
+            startedAt: project.createdAt,
+        }));
+
+    if (missingCycles.length > 0) {
+        await db.insert(projectCycles).values(missingCycles);
+        console.log(`   ✅ ${missingCycles.length} ciclos de proyecto insertados.`);
+    } else {
+        console.log("   ⏭️ Ciclos de proyecto ya sincronizados.");
     }
 
     // 7. Seed global project resource categories (Fase 4)

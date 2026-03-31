@@ -1,7 +1,7 @@
 import { db } from "@/db";
-import { events, semesters, eventInvitees } from "@/db/schema";
+import { events, semesters, eventInvitees, projectCycles } from "@/db/schema";
 import { CreateEventDTO } from "@/lib/validators/event";
-import { eq, and } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 
 export async function createEventDAO(
     userId: string,
@@ -20,6 +20,23 @@ export async function createEventDAO(
 
     // 2. Insert Event + Invitees in a single transaction
     return await db.transaction(async (tx) => {
+        let projectCycleId: string | null = null;
+        if (data.projectId) {
+            const activeProjectCycle = await tx.query.projectCycles.findFirst({
+                where: and(
+                    eq(projectCycles.projectId, data.projectId),
+                    eq(projectCycles.status, "ACTIVE"),
+                ),
+                orderBy: [desc(projectCycles.startedAt)],
+            });
+
+            if (!activeProjectCycle) {
+                throw new Error("Este proyecto está en modo solo lectura para este ciclo.");
+            }
+
+            projectCycleId = activeProjectCycle.id;
+        }
+
         const [newEvent] = await tx.insert(events).values({
             semesterId: activeSemester.id,
             createdById: userId,
@@ -36,6 +53,7 @@ export async function createEventDAO(
 
             // PROJECT target
             projectId: data.projectId,
+            projectCycleId,
             targetProjectAreaId: data.targetProjectAreaId,
 
             date: data.date,
@@ -102,6 +120,25 @@ export async function getEventByIdDAO(eventId: string) {
 
 export async function updateEventDAO(eventId: string, data: Partial<CreateEventDTO>) {
     return await db.transaction(async (tx) => {
+        let nextProjectCycleId: string | null | undefined = undefined;
+        if (data.projectId !== undefined) {
+            if (!data.projectId) {
+                nextProjectCycleId = null;
+            } else {
+                const activeProjectCycle = await tx.query.projectCycles.findFirst({
+                    where: and(
+                        eq(projectCycles.projectId, data.projectId),
+                        eq(projectCycles.status, "ACTIVE"),
+                    ),
+                    orderBy: [desc(projectCycles.startedAt)],
+                });
+                if (!activeProjectCycle) {
+                    throw new Error("Este proyecto está en modo solo lectura para este ciclo.");
+                }
+                nextProjectCycleId = activeProjectCycle.id;
+            }
+        }
+
         // 1. Update core event fields + v2 fields
         const result = await tx.update(events).set({
             title: data.title,
@@ -115,6 +152,7 @@ export async function updateEventDAO(eventId: string, data: Partial<CreateEventD
             eventScope: data.eventScope,
             eventType: data.eventType,
             projectId: data.projectId,
+            projectCycleId: nextProjectCycleId,
             targetProjectAreaId: data.targetProjectAreaId,
             updatedAt: new Date()
         }).where(eq(events.id, eventId)).returning();

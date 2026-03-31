@@ -7,6 +7,7 @@ import {
     updateProjectAction, removeProjectMemberAction,
     updateProjectMemberRoleAction, createTaskAction, updateTaskStatusAction,
     deleteTaskAction, assignTaskAction, unassignTaskAction, reorderTasksAction,
+    extendProjectCycleAction, archiveProjectCycleAction,
 } from "@/server/actions/project.actions";
 import { createProjectInvitationAction, cancelProjectInvitationAction } from "@/server/actions/project-invitations.actions";
 import { PROJECT_STATUSES, PROJECT_PRIORITIES, TASK_STATUSES, TASK_PRIORITIES } from "@/lib/validators/project";
@@ -74,6 +75,8 @@ interface Project {
     deadline: Date | null;
     createdBy: { id: string; name: string | null; image: string | null; email: string };
     semester: { id: string; name: string };
+    isWritable?: boolean;
+    cycles?: { id: string; status: string; semesterId: string; semester?: { id: string; name: string } }[];
     members: Member[];
     tasks: Task[];
 }
@@ -233,11 +236,15 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
     const userMembership = project.members.find(m => m.user.id === currentUserId);
     const userProjectRole = userMembership?.projectRole;
     const userPerms = (userProjectRole?.permissions ?? []).map(p => p.permission);
+    const projectWritable = project.isWritable ?? true;
+    const hasCycleStatusPerm = isSystemAdmin || userPerms.includes("project:manage_status");
     const canManage = isSystemAdmin || userPerms.includes("project:manage_settings");
-    const canManageMembers = isSystemAdmin || userPerms.includes("project:manage_members");
+    const canManageMembers = (isSystemAdmin || userPerms.includes("project:manage_members")) && projectWritable;
     const canChangeStatus = isSystemAdmin || userPerms.includes("project:manage_status");
-    const userCanCreateTasks = isSystemAdmin || userPerms.includes("project:task_create_any") || userPerms.includes("project:task_create_own_area");
-    const canReorderTasks = isSystemAdmin || userPerms.includes("project:task_manage_any") || userPerms.includes("project:task_update_status");
+    const userCanCreateTasks = (isSystemAdmin || userPerms.includes("project:task_create_any") || userPerms.includes("project:task_create_own_area")) && projectWritable;
+    const canReorderTasks = (isSystemAdmin || userPerms.includes("project:task_manage_any") || userPerms.includes("project:task_update_status")) && projectWritable;
+    const canArchiveCycle = hasCycleStatusPerm && projectWritable;
+    const canExtendCycle = hasCycleStatusPerm && !projectWritable && ["ACTIVE", "PAUSED", "PLANNING"].includes(project.status);
     const userProjectAreaId = userMembership?.projectArea?.id || null;
     const userProjectAreaName = userMembership?.projectArea?.name || null;
     const assignableRoles = isSystemAdmin
@@ -322,6 +329,30 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
                 router.refresh();
             } else {
                 showFeedback("error", res.error || "Error al actualizar proyecto.");
+            }
+        });
+    };
+
+    const handleArchiveCycle = () => {
+        startTransition(async () => {
+            const res = await archiveProjectCycleAction(project.id);
+            if (res.success) {
+                showFeedback("success", res.message || "Ciclo archivado.");
+                router.refresh();
+            } else {
+                showFeedback("error", res.error || "No se pudo archivar el ciclo.");
+            }
+        });
+    };
+
+    const handleExtendCycle = () => {
+        startTransition(async () => {
+            const res = await extendProjectCycleAction(project.id);
+            if (res.success) {
+                showFeedback("success", res.message || "Proyecto extendido al ciclo activo.");
+                router.refresh();
+            } else {
+                showFeedback("error", res.error || "No se pudo extender el proyecto.");
             }
         });
     };
@@ -594,6 +625,24 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
                         <span className="text-gray-600"><Users className="w-3.5 h-3.5 inline mr-1" />{project.members.length}</span>
                         <span className="text-emerald-600"><CheckCircle2 className="w-3.5 h-3.5 inline mr-1" />{taskStats.done}/{taskStats.total}</span>
                         {taskStats.blocked > 0 && <span className="text-red-500"><X className="w-3.5 h-3.5 inline mr-1" />{taskStats.blocked} bloq.</span>}
+                        {canArchiveCycle && (
+                            <button
+                                onClick={handleArchiveCycle}
+                                disabled={isPending}
+                                className="px-3 py-1.5 text-xs font-bold rounded-lg bg-amber-50 text-amber-700 hover:bg-amber-100 transition-colors disabled:opacity-50"
+                            >
+                                Archivar ciclo
+                            </button>
+                        )}
+                        {canExtendCycle && (
+                            <button
+                                onClick={handleExtendCycle}
+                                disabled={isPending}
+                                className="px-3 py-1.5 text-xs font-bold rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors disabled:opacity-50"
+                            >
+                                Extender al ciclo activo
+                            </button>
+                        )}
                         {canManage && (
                             <button
                                 onClick={() => showEditProject ? setShowEditProject(false) : openEditProject()}
@@ -606,6 +655,12 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
                     </div>
                 </div>
             </div>
+
+            {!projectWritable && (
+                <div className="bg-rose-50 border border-rose-200 rounded-2xl px-4 py-3 text-sm text-rose-700 font-semibold">
+                    Este proyecto está en modo solo lectura para este ciclo. No se permiten altas ni cambios operativos.
+                </div>
+            )}
 
             {showEditProject && canManage && (
                 <div className="bg-white/80 backdrop-blur-md border border-violet-200 rounded-2xl p-4 space-y-4">

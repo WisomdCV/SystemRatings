@@ -58,12 +58,27 @@ export default async function DashboardPage() {
         const memberships = await db.query.projectMembers.findMany({
             where: eq(projectMembers.userId, userId),
             with: {
-                project: { columns: { id: true, semesterId: true } },
+                project: {
+                    columns: { id: true, semesterId: true },
+                    with: {
+                        cycles: { columns: { semesterId: true, status: true } },
+                    },
+                },
                 projectRole: { with: { permissions: true } },
             }
         });
 
-        const activeMemberships = memberships.filter(m => m.project?.semesterId === activeSemester.id);
+        const activeMemberships = memberships.filter((membership) => {
+            const project = membership.project;
+            if (!project) return false;
+
+            if (project.cycles.length > 0) {
+                return project.cycles.some((cycle) => cycle.semesterId === activeSemester.id && cycle.status === "ACTIVE");
+            }
+
+            // Backward-compatible fallback for legacy rows without project_cycle records.
+            return project.semesterId === activeSemester.id;
+        });
         projectIds = activeMemberships.map(m => m.project!.id);
         userProjectMemberships = activeMemberships.map(m => ({
             projectId: m.project!.id,

@@ -2,7 +2,7 @@
 
 import { auth } from "@/server/auth";
 import { db } from "@/db";
-import { projects, projectMembers, projectTasks, taskAssignments, semesters, projectRoles, taskComments } from "@/db/schema";
+import { projects, projectMembers, projectTasks, taskAssignments, projectRoles, taskComments, projectCycles } from "@/db/schema";
 import { eq, and, asc, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { hasPermission } from "@/lib/permissions";
@@ -17,6 +17,12 @@ import {
     type MembershipContext,
     type ProjectVisibilityContext,
 } from "@/server/services/project-visibility.service";
+import {
+    getActiveSemester,
+    getProjectCycleInSemester,
+    isProjectWritable,
+    normalizeProjectCycleFilter,
+} from "@/server/services/project-cycle.service";
 import {
     CreateProjectSchema, UpdateProjectSchema,
     AddProjectMemberSchema, UpdateProjectMemberRoleSchema,
@@ -54,22 +60,24 @@ const revalidateProjects = () => {
 // =============================================================================
 
 /** Get all projects for the active semester (any authenticated user can view) */
-export async function getProjectsAction() {
+export async function getProjectsAction(cycleFilterInput?: string) {
     try {
         const session = await auth();
         if (!session?.user) return { success: false as const, error: "No autorizado" };
 
-        // TODO(multi-cycle): stop hard-filtering by active semester when projects become cross-cycle.
-        const activeSemester = await db.query.semesters.findFirst({
-            where: eq(semesters.isActive, true),
-        });
-        if (!activeSemester) return { success: false as const, error: "No hay ciclo activo." };
+        const cycleFilter = normalizeProjectCycleFilter(cycleFilterInput);
+        const activeSemester = await getActiveSemester();
 
         const allProjects = await db.query.projects.findMany({
-            where: eq(projects.semesterId, activeSemester.id),
             orderBy: [desc(projects.createdAt)],
             with: {
                 createdBy: { columns: { id: true, name: true, image: true } },
+                cycles: {
+                    with: {
+                        semester: { columns: { id: true, name: true } },
+                    },
+                    orderBy: [desc(projectCycles.startedAt)],
+                },
                 members: {
                     with: {
                         user: { columns: { id: true, name: true, image: true, role: true, currentAreaId: true } },
@@ -81,6 +89,18 @@ export async function getProjectsAction() {
             },
         });
 
+        let cycleFilteredProjects = allProjects;
+        if (cycleFilter === "active") {
+            if (!activeSemester) return { success: false as const, error: "No hay ciclo activo." };
+            cycleFilteredProjects = allProjects.filter((project) =>
+                project.cycles.some((cycle) => cycle.semesterId === activeSemester.id && cycle.status === "ACTIVE"),
+            );
+        } else if (cycleFilter === "history") {
+            cycleFilteredProjects = allProjects.filter((project) =>
+                project.cycles.some((cycle) => cycle.status === "ARCHIVED" || cycle.status === "EXTENDED"),
+            );
+        }
+
         const visCtx: ProjectVisibilityContext = {
             userId: session.user.id!,
             userRole: session.user.role || "",
@@ -88,13 +108,18 @@ export async function getProjectsAction() {
             customPermissions: session.user.customPermissions,
         };
 
-        const visibleProjects = filterVisibleProjects(allProjects, visCtx);
+        const visibleProjects = filterVisibleProjects(cycleFilteredProjects, visCtx);
         const isAuditAdmin = hasPermission(session.user.role, "admin:audit", session.user.customPermissions);
         const data = isAuditAdmin
             ? visibleProjects
             : visibleProjects.map(({ _visibilityRule, ...project }) => project);
 
-        return { success: true as const, data };
+        return {
+            success: true as const,
+            data,
+            cycleFilter,
+            activeSemester: activeSemester ? { id: activeSemester.id, name: activeSemester.name } : null,
+        };
     } catch (error) {
         console.error("Error fetching projects:", error);
         return { success: false as const, error: "Error al cargar proyectos." };
@@ -123,6 +148,12 @@ export async function getProjectByIdAction(projectId: string) {
             with: {
                 createdBy: { columns: { id: true, name: true, image: true, email: true } },
                 semester: { columns: { id: true, name: true } },
+                cycles: {
+                    with: {
+                        semester: { columns: { id: true, name: true } },
+                    },
+                    orderBy: [desc(projectCycles.startedAt)],
+                },
                 members: {
                     with: {
                         user: { columns: { id: true, name: true, image: true, email: true, role: true } },
@@ -169,6 +200,7 @@ export async function getProjectByIdAction(projectId: string) {
 
         const projectWithCommentCount = {
             ...project,
+            isWritable: project.cycles.some((cycle) => cycle.status === "ACTIVE"),
             tasks: visibleTasks.map((task) => ({
                 ...task,
                 _commentCount: task.comments?.length ?? 0,
@@ -195,10 +227,7 @@ export async function createProjectAction(input: CreateProjectDTO) {
         const validated = CreateProjectSchema.safeParse(input);
         if (!validated.success) return { success: false as const, error: validated.error.issues[0].message };
 
-        // TODO(multi-cycle): semester should become optional metadata in a future phase.
-        const activeSemester = await db.query.semesters.findFirst({
-            where: eq(semesters.isActive, true),
-        });
+        const activeSemester = await getActiveSemester();
         if (!activeSemester) return { success: false as const, error: "No hay ciclo activo." };
 
         const newProject = await db.transaction(async (tx) => {
@@ -212,6 +241,12 @@ export async function createProjectAction(input: CreateProjectDTO) {
                 deadline: validated.data.deadline || null,
                 createdById: session.user.id,
             }).returning();
+
+            await tx.insert(projectCycles).values({
+                projectId: created.id,
+                semesterId: activeSemester.id,
+                status: "ACTIVE",
+            });
 
             // Auto-add creator as Coordinador (highest hierarchy) or find the highest available
             const coordinatorRole = await tx.query.projectRoles.findFirst({
@@ -255,6 +290,11 @@ export async function updateProjectAction(input: UpdateProjectDTO) {
         // IISE bypass OR project:manage_settings (+ project:manage_status if status changes)
         const iiseBypass = canBypassProjectPerms(session.user.role || "", session.user.customPermissions);
         if (!iiseBypass) {
+            const writable = await isProjectWritable(validated.data.id);
+            if (!writable) {
+                return { success: false as const, error: "Este proyecto está en modo solo lectura para este ciclo." };
+            }
+
             const membership = await getProjectMembershipWithPerms(session.user.id, validated.data.id);
             if (!hasProjectPermission(membership, "project:manage_settings")) {
                 return { success: false as const, error: "No tienes permisos para editar este proyecto." };
@@ -311,6 +351,111 @@ export async function deleteProjectAction(projectId: string) {
     }
 }
 
+/** Extend a project to the current active semester */
+export async function extendProjectCycleAction(projectId: string) {
+    try {
+        const session = await auth();
+        if (!session?.user?.id) return { success: false as const, error: "No autorizado" };
+
+        const project = await db.query.projects.findFirst({
+            where: eq(projects.id, projectId),
+            columns: { id: true, status: true },
+        });
+        if (!project) return { success: false as const, error: "Proyecto no encontrado." };
+
+        if (!["ACTIVE", "PAUSED", "PLANNING"].includes(project.status)) {
+            return { success: false as const, error: "Solo se pueden extender proyectos en estado ACTIVO, PAUSADO o PLANIFICACIÓN." };
+        }
+
+        const iiseBypass = canBypassProjectPerms(session.user.role || "", session.user.customPermissions);
+        if (!iiseBypass) {
+            const membership = await getProjectMembershipWithPerms(session.user.id, projectId);
+            if (!hasProjectPermission(membership, "project:manage_status")) {
+                return { success: false as const, error: "No tienes permisos para extender este proyecto." };
+            }
+        }
+
+        const activeSemester = await getActiveSemester();
+        if (!activeSemester) return { success: false as const, error: "No hay ciclo activo." };
+
+        const existingCurrentCycle = await getProjectCycleInSemester(projectId, activeSemester.id);
+        if (existingCurrentCycle) {
+            return { success: false as const, error: "Este proyecto ya está vinculado al ciclo activo." };
+        }
+
+        await db.transaction(async (tx) => {
+            const previousActive = await tx.query.projectCycles.findFirst({
+                where: and(
+                    eq(projectCycles.projectId, projectId),
+                    eq(projectCycles.status, "ACTIVE"),
+                ),
+                orderBy: [desc(projectCycles.startedAt)],
+            });
+
+            if (previousActive) {
+                await tx.update(projectCycles).set({
+                    status: "EXTENDED",
+                    endedAt: new Date(),
+                }).where(eq(projectCycles.id, previousActive.id));
+            }
+
+            await tx.insert(projectCycles).values({
+                projectId,
+                semesterId: activeSemester.id,
+                status: "ACTIVE",
+                extendedFromCycleId: previousActive?.id ?? null,
+                extendedById: session.user.id,
+            });
+        });
+
+        revalidateProjects();
+        revalidatePath(`/dashboard/projects/${projectId}`);
+        return { success: true as const, message: "Proyecto extendido al ciclo activo." };
+    } catch (error) {
+        console.error("Error extending project cycle:", error);
+        return { success: false as const, error: "Error al extender proyecto de ciclo." };
+    }
+}
+
+/** Archive the currently active cycle for a project */
+export async function archiveProjectCycleAction(projectId: string) {
+    try {
+        const session = await auth();
+        if (!session?.user?.id) return { success: false as const, error: "No autorizado" };
+
+        const iiseBypass = canBypassProjectPerms(session.user.role || "", session.user.customPermissions);
+        if (!iiseBypass) {
+            const membership = await getProjectMembershipWithPerms(session.user.id, projectId);
+            if (!hasProjectPermission(membership, "project:manage_status")) {
+                return { success: false as const, error: "No tienes permisos para archivar este ciclo de proyecto." };
+            }
+        }
+
+        const activeCycle = await db.query.projectCycles.findFirst({
+            where: and(
+                eq(projectCycles.projectId, projectId),
+                eq(projectCycles.status, "ACTIVE"),
+            ),
+            orderBy: [desc(projectCycles.startedAt)],
+        });
+        if (!activeCycle) {
+            return { success: false as const, error: "El proyecto no tiene un ciclo activo para archivar." };
+        }
+
+        await db.update(projectCycles).set({
+            status: "ARCHIVED",
+            endedAt: new Date(),
+        }).where(eq(projectCycles.id, activeCycle.id));
+
+        revalidateProjects();
+        revalidatePath(`/dashboard/projects/${projectId}`);
+        return { success: true as const, message: "Ciclo de proyecto archivado." };
+    } catch (error) {
+        console.error("Error archiving project cycle:", error);
+        return { success: false as const, error: "Error al archivar ciclo de proyecto." };
+    }
+}
+
 // =============================================================================
 // PROJECT MEMBERS
 // =============================================================================
@@ -346,6 +491,11 @@ export async function updateProjectMemberRoleAction(input: UpdateProjectMemberRo
             with: { projectRole: true },
         });
         if (!targetMember) return { success: false as const, error: "Miembro no encontrado." };
+
+        const writable = await isProjectWritable(targetMember.projectId);
+        if (!writable) {
+            return { success: false as const, error: "Este proyecto está en modo solo lectura para este ciclo." };
+        }
 
         // IISE bypass OR project:manage_members + hierarchy guard
         const iiseBypass = canBypassProjectPerms(session.user.role || "", session.user.customPermissions);
@@ -403,6 +553,11 @@ export async function removeProjectMemberAction(memberId: string) {
         });
         if (!member) return { success: false as const, error: "Miembro no encontrado." };
 
+        const writable = await isProjectWritable(member.projectId);
+        if (!writable) {
+            return { success: false as const, error: "Este proyecto está en modo solo lectura para este ciclo." };
+        }
+
         // IISE bypass OR project:manage_members + hierarchy guard
         const iiseBypass = canBypassProjectPerms(session.user.role || "", session.user.customPermissions);
         if (!iiseBypass) {
@@ -437,6 +592,11 @@ export async function createTaskAction(input: CreateTaskDTO) {
 
         const validated = CreateTaskSchema.safeParse(input);
         if (!validated.success) return { success: false as const, error: validated.error.issues[0].message };
+
+        const writable = await isProjectWritable(validated.data.projectId);
+        if (!writable) {
+            return { success: false as const, error: "Este proyecto está en modo solo lectura para este ciclo." };
+        }
 
         const iiseBypass = canBypassProjectPerms(session.user.role || "", session.user.customPermissions);
 
@@ -502,6 +662,11 @@ export async function updateTaskAction(input: UpdateTaskDTO) {
         });
         if (!task) return { success: false as const, error: "Tarea no encontrada." };
 
+        const writable = await isProjectWritable(task.projectId);
+        if (!writable) {
+            return { success: false as const, error: "Este proyecto está en modo solo lectura para este ciclo." };
+        }
+
         // IISE bypass OR task_manage_any OR (task_manage_own + ownership/area)
         const iiseBypass = canBypassProjectPerms(session.user.role || "", session.user.customPermissions);
         if (!iiseBypass) {
@@ -552,6 +717,11 @@ export async function updateTaskStatusAction(input: UpdateTaskStatusDTO) {
             with: { assignments: true },
         });
         if (!task) return { success: false as const, error: "Tarea no encontrada." };
+
+        const writable = await isProjectWritable(task.projectId);
+        if (!writable) {
+            return { success: false as const, error: "Este proyecto está en modo solo lectura para este ciclo." };
+        }
 
         const iiseBypass = canBypassProjectPerms(session.user.role || "", session.user.customPermissions);
         if (!iiseBypass) {
@@ -618,6 +788,11 @@ export async function reorderTasksAction(input: {
             return { success: false as const, error: "Payload de reordenamiento inválido." };
         }
 
+        const writable = await isProjectWritable(input.projectId);
+        if (!writable) {
+            return { success: false as const, error: "Este proyecto está en modo solo lectura para este ciclo." };
+        }
+
         const iiseBypass = canBypassProjectPerms(session.user.role || "", session.user.customPermissions);
         if (!iiseBypass) {
             const membership = await getProjectMembershipWithPerms(session.user.id, input.projectId);
@@ -665,6 +840,11 @@ export async function deleteTaskAction(taskId: string) {
         });
         if (!task) return { success: false as const, error: "Tarea no encontrada." };
 
+        const writable = await isProjectWritable(task.projectId);
+        if (!writable) {
+            return { success: false as const, error: "Este proyecto está en modo solo lectura para este ciclo." };
+        }
+
         // IISE bypass OR task_manage_any OR (task_manage_own + ownership/area)
         const iiseBypass = canBypassProjectPerms(session.user.role || "", session.user.customPermissions);
         if (!iiseBypass) {
@@ -708,6 +888,11 @@ export async function assignTaskAction(input: AssignTaskDTO) {
         });
         if (!task) return { success: false as const, error: "Tarea no encontrada." };
 
+        const writable = await isProjectWritable(task.projectId);
+        if (!writable) {
+            return { success: false as const, error: "Este proyecto está en modo solo lectura para este ciclo." };
+        }
+
         // IISE bypass OR project:task_assign
         const iiseBypass = canBypassProjectPerms(session.user.role || "", session.user.customPermissions);
         if (!iiseBypass) {
@@ -750,6 +935,11 @@ export async function unassignTaskAction(assignmentId: string) {
             with: { task: true },
         });
         if (!assignment) return { success: false as const, error: "Asignación no encontrada." };
+
+        const writable = await isProjectWritable(assignment.task.projectId);
+        if (!writable) {
+            return { success: false as const, error: "Este proyecto está en modo solo lectura para este ciclo." };
+        }
 
         // IISE bypass OR project:task_assign
         const iiseBypass = canBypassProjectPerms(session.user.role || "", session.user.customPermissions);

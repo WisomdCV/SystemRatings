@@ -24,6 +24,7 @@ import {
 import { canBypassProjectPerms, hasProjectPermission } from "@/lib/project-permissions";
 import { hasPermission } from "@/lib/permissions";
 import { filterVisibleInvitations, type MembershipContext } from "@/server/services/project-visibility.service";
+import { isProjectWritable } from "@/server/services/project-cycle.service";
 
 async function getProjectMembershipWithPerms(userId: string, projectId: string) {
   const membership = await db.query.projectMembers.findFirst({
@@ -82,6 +83,11 @@ export async function createProjectInvitationAction(input: CreateProjectInvitati
 
     const iiseBypass = canBypassProjectPerms(session.user.role || "", session.user.customPermissions);
     let inviterHierarchy = Number.POSITIVE_INFINITY;
+
+    const writable = await isProjectWritable(projectId);
+    if (!writable) {
+      return { success: false as const, error: "Este proyecto está en modo solo lectura para este ciclo." };
+    }
 
     if (!iiseBypass) {
       const membership = await getProjectMembershipWithPerms(session.user.id, projectId);
@@ -196,6 +202,11 @@ export async function respondToInvitationAction(input: RespondInvitationDTO) {
     }
 
     if (action === "ACCEPT") {
+      const writable = await isProjectWritable(invitation.projectId);
+      if (!writable) {
+        return { success: false as const, error: "Este proyecto está en modo solo lectura para este ciclo." };
+      }
+
       const role = await db.query.projectRoles.findFirst({
         where: eq(projectRoles.id, invitation.projectRoleId),
         columns: { id: true },

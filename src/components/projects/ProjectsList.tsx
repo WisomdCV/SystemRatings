@@ -38,6 +38,12 @@ interface Project {
     createdBy: { id: string; name: string | null; image: string | null };
     members: ProjectMember[];
     tasks: ProjectTask[];
+    cycles?: {
+        id: string;
+        status: string;
+        semesterId: string;
+        semester?: { id: string; name: string };
+    }[];
 }
 
 interface Props {
@@ -253,6 +259,10 @@ export default function ProjectsList({ projects, canCreate, currentUserId, canVi
                         const StatusIcon = status.icon;
                         const PrioIcon = prioConfig.icon;
                         const isMember = project.members.some(m => m.user.id === currentUserId);
+                        const isMultiCycle = (project.cycles?.length ?? 0) > 1;
+                        const isReadOnly = (project.cycles?.length ?? 0) > 0
+                            ? !project.cycles!.some((cycle) => cycle.status === "ACTIVE")
+                            : false;
 
                         return (
                             <div key={project.id} className="group bg-white/80 backdrop-blur-md border border-gray-200 rounded-2xl overflow-hidden hover:shadow-xl hover:border-violet-300 transition-all">
@@ -268,6 +278,18 @@ export default function ProjectsList({ projects, canCreate, currentUserId, canVi
                                             <StatusIcon className="w-3 h-3" />
                                             {status.label}
                                         </span>
+                                    </div>
+                                    <div className="flex flex-wrap items-center gap-1.5 mb-2">
+                                        {isMultiCycle && (
+                                            <span className="px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-indigo-100 text-indigo-700">
+                                                Multi-ciclo
+                                            </span>
+                                        )}
+                                        {isReadOnly && (
+                                            <span className="px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-rose-100 text-rose-700">
+                                                Solo lectura
+                                            </span>
+                                        )}
                                     </div>
                                     {project.description && (
                                         <p className="text-xs text-gray-500 line-clamp-2">{project.description}</p>

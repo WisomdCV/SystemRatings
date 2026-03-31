@@ -6,11 +6,28 @@ import ProjectsList from "@/components/projects/ProjectsList";
 import Link from "next/link";
 import { FolderKanban, ArrowLeft } from "lucide-react";
 
-export default async function ProjectsPage() {
+const CYCLE_FILTERS = [
+    { value: "active", label: "Ciclo actual" },
+    { value: "history", label: "Historial" },
+    { value: "all", label: "Todos" },
+] as const;
+
+export default async function ProjectsPage({ searchParams }: { searchParams?: Promise<{ cycle?: string }> }) {
     const session = await authFresh();
     if (!session?.user) redirect("/login");
 
-    const projectsResult = await getProjectsAction();
+    const resolvedSearchParams = searchParams ? await searchParams : undefined;
+    const cycleParam = resolvedSearchParams?.cycle;
+    const cycleFilter = cycleParam === "history" || cycleParam === "all"
+        ? cycleParam
+        : "active";
+    const projectsResult = await getProjectsAction(cycleFilter);
+
+    const subtitleByFilter: Record<string, string> = {
+        active: "Gestiona los proyectos activos del ciclo actual",
+        history: "Consulta proyectos extendidos o archivados",
+        all: "Vista completa de todos los proyectos",
+    };
 
     return (
         <div className="min-h-screen bg-meteorite-50 relative overflow-hidden p-4 md:p-6 2xl:p-10">
@@ -36,10 +53,28 @@ export default async function ProjectsPage() {
                             <div>
                                 <h2 className="text-3xl font-black text-meteorite-950">Proyectos</h2>
                                 <p className="text-meteorite-500 text-sm font-medium">
-                                    Gestiona los proyectos del ciclo actual
+                                    {subtitleByFilter[cycleFilter]}
                                 </p>
                             </div>
                         </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 rounded-xl border border-meteorite-200 bg-white/90 p-1">
+                        {CYCLE_FILTERS.map((filter) => {
+                            const active = filter.value === cycleFilter;
+                            return (
+                                <Link
+                                    key={filter.value}
+                                    href={filter.value === "active" ? "/dashboard/projects" : `/dashboard/projects?cycle=${filter.value}`}
+                                    className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-colors ${active
+                                        ? "bg-meteorite-900 text-white"
+                                        : "text-meteorite-600 hover:bg-meteorite-100"
+                                        }`}
+                                >
+                                    {filter.label}
+                                </Link>
+                            );
+                        })}
                     </div>
                 </div>
 

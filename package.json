@@ -11,6 +11,8 @@
     "db:seed": "node --import tsx src/db/seed.ts",
     "db:migrate:project-treasury-events": "node --import tsx src/scripts/migrate-project-treasury-event-permissions.ts",
     "db:migrate:project-treasury-events:apply": "node --import tsx src/scripts/migrate-project-treasury-event-permissions.ts --apply",
+    "db:migrate:project-cycles": "node --import tsx src/scripts/migrate-project-cycles.ts",
+    "db:migrate:project-cycles:apply": "node --import tsx src/scripts/migrate-project-cycles.ts --apply",
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {

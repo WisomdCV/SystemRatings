@@ -141,6 +141,8 @@ export const events = sqliteTable("event", {
 
   // PROJECT target
   projectId: text("project_id").references(() => projects.id),
+  // Explicit project-cycle linkage for cross-cycle traceability
+  projectCycleId: text("project_cycle_id").references(() => projectCycles.id),
   targetProjectAreaId: text("target_project_area_id").references(() => projectAreas.id),
 
   date: integer("date", { mode: "timestamp" }).notNull(),
@@ -255,7 +257,7 @@ export const areaKpiSummaries = sqliteTable("area_kpi_summary", {
 
 export const projects = sqliteTable("project", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-  semesterId: text("semester_id").references(() => semesters.id).notNull(), // TODO: make nullable for multi-cycle persistence in a future phase.
+  semesterId: text("semester_id").references(() => semesters.id).notNull(), // Origin cycle (kept for backward compatibility).
   name: text("name").notNull(),
   description: text("description"),
   color: text("color").default("#6366f1").notNull(),
@@ -270,6 +272,22 @@ export const projects = sqliteTable("project", {
   createdAt: integer("created_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
   updatedAt: integer("updated_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
 });
+
+export const projectCycles = sqliteTable("project_cycle", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  projectId: text("project_id").references(() => projects.id, { onDelete: "cascade" }).notNull(),
+  semesterId: text("semester_id").references(() => semesters.id).notNull(),
+  // ACTIVE | EXTENDED | ARCHIVED
+  status: text("status").default("ACTIVE").notNull(),
+  startedAt: integer("started_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
+  endedAt: integer("ended_at", { mode: "timestamp" }),
+  // Self-reference kept at relation level to avoid TS self-initializer inference issues.
+  extendedFromCycleId: text("extended_from_cycle_id"),
+  extendedById: text("extended_by_id").references(() => users.id),
+  notes: text("notes"),
+}, (table) => ({
+  uniqueProjectSemester: unique().on(table.projectId, table.semesterId),
+}));
 
 export const projectAreas = sqliteTable("project_area", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
@@ -467,6 +485,7 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   taskComments: many(taskComments, { relationName: "taskCommenter" }),
   createdResources: many(projectResources, { relationName: "resourceCreator" }),
   uploadedResourceLinks: many(projectResourceLinks, { relationName: "resourceLinkUploader" }),
+  extendedProjectCycles: many(projectCycles, { relationName: "cycleExtender" }),
   customRoles: many(userCustomRoles, { relationName: "userCustomRoles" }),
   assignedCustomRoles: many(userCustomRoles, { relationName: "roleAssigner" }),
 }));
@@ -489,6 +508,7 @@ export const semestersRelations = relations(semesters, ({ many }) => ({
   kpiSummaries: many(kpiMonthlySummaries),
   semesterAreas: many(semesterAreas),
   projects: many(projects),
+  projectCycles: many(projectCycles),
 }));
 
 export const semesterAreasRelations = relations(semesterAreas, ({ one }) => ({
@@ -500,6 +520,7 @@ export const eventsRelations = relations(events, ({ one, many }) => ({
   semester: one(semesters, { fields: [events.semesterId], references: [semesters.id] }),
   targetArea: one(areas, { fields: [events.targetAreaId], references: [areas.id] }),
   project: one(projects, { fields: [events.projectId], references: [projects.id], relationName: "projectEvents" }),
+  projectCycle: one(projectCycles, { fields: [events.projectCycleId], references: [projectCycles.id] }),
   targetProjectArea: one(projectAreas, { fields: [events.targetProjectAreaId], references: [projectAreas.id] }),
   createdBy: one(users, { fields: [events.createdById], references: [users.id], relationName: "creator" }),
   attendanceRecords: many(attendanceRecords),
@@ -545,12 +566,30 @@ export const positionHistoryRelations = relations(positionHistory, ({ one }) => 
 export const projectsRelations = relations(projects, ({ one, many }) => ({
   semester: one(semesters, { fields: [projects.semesterId], references: [semesters.id] }),
   createdBy: one(users, { fields: [projects.createdById], references: [users.id], relationName: "projectCreator" }),
+  cycles: many(projectCycles),
   members: many(projectMembers),
   invitations: many(projectInvitations),
   tasks: many(projectTasks),
   resources: many(projectResources),
   resourceCategories: many(projectResourceCategories),
   events: many(events, { relationName: "projectEvents" }),
+}));
+
+export const projectCyclesRelations = relations(projectCycles, ({ one, many }) => ({
+  project: one(projects, { fields: [projectCycles.projectId], references: [projects.id] }),
+  semester: one(semesters, { fields: [projectCycles.semesterId], references: [semesters.id] }),
+  extendedFromCycle: one(projectCycles, {
+    fields: [projectCycles.extendedFromCycleId],
+    references: [projectCycles.id],
+    relationName: "projectCycleLineage",
+  }),
+  extensions: many(projectCycles, { relationName: "projectCycleLineage" }),
+  extendedBy: one(users, {
+    fields: [projectCycles.extendedById],
+    references: [users.id],
+    relationName: "cycleExtender",
+  }),
+  events: many(events),
 }));
 
 export const projectAreasRelations = relations(projectAreas, ({ many }) => ({
