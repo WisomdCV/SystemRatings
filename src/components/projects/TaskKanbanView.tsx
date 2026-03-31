@@ -117,18 +117,20 @@ export default function TaskKanbanView({
 
   return (
     <div className="space-y-3">
-      <div className="text-[11px] text-gray-500 font-medium">
-        Arrastra tareas entre columnas para cambiar estado y prioridad visual.
+      <div className="text-[11px] text-gray-500 font-medium rounded-lg border border-gray-200 bg-white px-3 py-2">
+        {canReorder
+          ? "Arrastra tareas entre columnas para cambiar estado y posición."
+          : "Vista de tablero activa. Cambia a orden por posición y filtros globales para habilitar drag & drop."}
       </div>
 
       <DragDropContext onDragEnd={handleDragEnd}>
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-3">
+        <div className="flex gap-3 overflow-x-auto pb-2 md:grid md:grid-cols-2 xl:grid-cols-5 md:overflow-visible md:pb-0">
           {TASK_STATUSES.map((status) => {
             const columnTasks = baseColumns[status] || [];
 
             return (
-              <div key={status} className="rounded-xl border border-gray-200 bg-white min-h-[240px] flex flex-col">
-                <div className="px-3 py-2 border-b border-gray-100 bg-gray-50 rounded-t-xl flex items-center justify-between">
+              <div key={status} className="min-w-[240px] md:min-w-0 rounded-xl border border-gray-200 bg-white min-h-[240px] flex flex-col">
+                <div className="px-3 py-2 border-b border-gray-100 bg-gray-50 rounded-t-xl flex items-center justify-between sticky top-0 z-10">
                   <span className="text-[11px] font-black text-gray-700 uppercase tracking-wide">
                     {STATUS_LABELS[status] || status}
                   </span>

@@ -14,7 +14,8 @@ import { PROJECT_STATUSES, PROJECT_PRIORITIES, TASK_STATUSES, TASK_PRIORITIES } 
 import {
     Users, ListChecks, Plus, Loader2, Trash2, Crown, UserPlus,
     CheckCircle2, XCircle, Circle, Clock, AlertTriangle, Search,
-    ChevronDown, Zap, Flame, Minus, Pause, X, Eye, UserMinus, Shield
+    ChevronDown, Zap, Flame, Minus, Pause, X, Eye, UserMinus, Shield,
+    Settings, CalendarDays, Timer, Sparkles, Filter
 } from "lucide-react";
 import ProjectResourcesPanel from "@/components/projects/ProjectResourcesPanel";
 import TaskKanbanView from "@/components/projects/TaskKanbanView";
@@ -181,9 +182,44 @@ const PRIORITY_LABEL: Record<string, string> = {
     CRITICAL: "Crítica",
 };
 
+const PRIORITY_TONE: Record<string, string> = {
+    LOW: "bg-slate-100 text-slate-700 border-slate-200",
+    MEDIUM: "bg-amber-100 text-amber-700 border-amber-200",
+    HIGH: "bg-orange-100 text-orange-700 border-orange-200",
+    CRITICAL: "bg-red-100 text-red-700 border-red-200",
+};
+
+const HEX_COLOR_REGEX = /^#([0-9a-fA-F]{6})$/;
+
 const toDateInput = (value: Date | null) => {
     if (!value) return "";
     return new Date(value).toISOString().split("T")[0];
+};
+
+const normalizeHexColor = (value: string) => {
+    const text = value.trim().toUpperCase();
+    if (!text) return null;
+    const withHash = text.startsWith("#") ? text : `#${text}`;
+    return HEX_COLOR_REGEX.test(withHash) ? withHash : null;
+};
+
+const colorToRgba = (hex: string | null | undefined, alpha: number) => {
+    const normalized = normalizeHexColor(hex || "") || "#6366F1";
+    const clean = normalized.slice(1);
+    const r = Number.parseInt(clean.slice(0, 2), 16);
+    const g = Number.parseInt(clean.slice(2, 4), 16);
+    const b = Number.parseInt(clean.slice(4, 6), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+};
+
+const formatShortDate = (value: Date | null) => {
+    if (!value) return "-";
+    return new Date(value).toLocaleDateString("es", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        timeZone: "UTC",
+    });
 };
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -218,6 +254,7 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
     const [editName, setEditName] = useState(project.name);
     const [editDescription, setEditDescription] = useState(project.description || "");
     const [editColor, setEditColor] = useState(project.color || "#6366f1");
+    const [editColorText, setEditColorText] = useState((project.color || "#6366f1").toUpperCase());
     const [editPriority, setEditPriority] = useState(project.priority);
     const [editStatus, setEditStatus] = useState(project.status);
     const [editStartDate, setEditStartDate] = useState(toDateInput(project.startDate));
@@ -231,7 +268,11 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
     const [agingFilter, setAgingFilter] = useState<string>(DEFAULT_TASK_FILTERS.agingFilter);
     const [viewMode, setViewMode] = useState<"list" | "kanban">(DEFAULT_TASK_FILTERS.viewMode);
     const [sortBy, setSortBy] = useState<"position" | "priority" | "dueDate" | "aging" | "createdAt">(DEFAULT_TASK_FILTERS.sortBy);
+    const [showTaskFilters, setShowTaskFilters] = useState(true);
     const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+    const [teamSearch, setTeamSearch] = useState("");
+    const [collapsedAreaGroups, setCollapsedAreaGroups] = useState<Record<string, boolean>>({});
+    const [expandedAreaGroups, setExpandedAreaGroups] = useState<Record<string, boolean>>({});
 
     const userMembership = project.members.find(m => m.user.id === currentUserId);
     const userProjectRole = userMembership?.projectRole;
@@ -297,7 +338,9 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
     const openEditProject = () => {
         setEditName(project.name);
         setEditDescription(project.description || "");
-        setEditColor(project.color || "#6366f1");
+        const nextColor = normalizeHexColor(project.color || "") || "#6366F1";
+        setEditColor(nextColor);
+        setEditColorText(nextColor);
         setEditPriority(project.priority);
         setEditStatus(project.status);
         setEditStartDate(toDateInput(project.startDate));
@@ -311,12 +354,14 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
             return;
         }
 
+        const normalizedColor = normalizeHexColor(editColorText) || normalizeHexColor(editColor) || "#6366F1";
+
         startTransition(async () => {
             const res = await updateProjectAction({
                 id: project.id,
                 name: editName.trim(),
                 description: editDescription.trim() ? editDescription : null,
-                color: editColor,
+                color: normalizedColor,
                 priority: editPriority as any,
                 status: (canChangeStatus ? editStatus : project.status) as any,
                 startDate: editStartDate ? new Date(editStartDate) : null,
@@ -562,6 +607,41 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
         return m.user.name?.toLowerCase().includes(term) || m.user.email.toLowerCase().includes(term);
     });
 
+    const groupedMembers = useMemo(() => {
+        const sortedMembers = [...project.members]
+            .filter((member) => {
+                if (!teamSearch.trim()) return true;
+                const term = teamSearch.trim().toLowerCase();
+                const areaName = member.projectArea?.name || "Gestión de Proyecto";
+                return (member.user.name || "").toLowerCase().includes(term)
+                    || member.user.email.toLowerCase().includes(term)
+                    || member.projectRole.name.toLowerCase().includes(term)
+                    || areaName.toLowerCase().includes(term);
+            })
+            .sort((a, b) => b.projectRole.hierarchyLevel - a.projectRole.hierarchyLevel);
+
+        const grouped = sortedMembers.reduce((acc, current) => {
+            const areaId = current.projectArea?.id || "general";
+            const areaName = current.projectArea?.name || "Gestión de Proyecto";
+            if (!acc[areaId]) {
+                acc[areaId] = {
+                    id: areaId,
+                    label: areaName,
+                    color: current.projectArea?.color || "#94a3b8",
+                    members: [],
+                };
+            }
+            acc[areaId].members.push(current);
+            return acc;
+        }, {} as Record<string, { id: string; label: string; color: string; members: Member[] }>);
+
+        return Object.values(grouped).sort((a, b) => {
+            if (a.id === "general") return -1;
+            if (b.id === "general") return 1;
+            return a.label.localeCompare(b.label);
+        });
+    }, [project.members, teamSearch]);
+
     // Stats
     const taskStats = {
         total: project.tasks.length,
@@ -588,6 +668,9 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
                 links: resource.links.map((link) => ({ id: link.id, url: link.url, label: link.label })),
             }))
         : [];
+    const accentColor = normalizeHexColor(project.color || "") || "#6366F1";
+    const projectCode = project.id.split("-")[0].toUpperCase();
+    const reviewCount = project.tasks.filter((task) => task.status === "REVIEW").length;
 
     return (
         <div className="space-y-6">
@@ -600,58 +683,133 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
                 </div>
             )}
 
-            {/* Project Info Bar */}
-            <div className="bg-white/80 backdrop-blur-md border border-gray-200 rounded-2xl overflow-hidden">
-                <div className="h-1.5 w-full" style={{ backgroundColor: project.color || "#6366f1" }} />
-                <div className="p-4 flex flex-wrap gap-4 items-center justify-between">
-                    <div className="flex items-center gap-3 flex-wrap">
-                        <span className={`px-3 py-1 rounded-lg text-xs font-bold ${STATUS_BADGE[project.status]?.color || "bg-gray-100 text-gray-600"}`}>
-                            {STATUS_BADGE[project.status]?.label || project.status}
-                        </span>
-                        <span className="text-xs font-bold text-gray-600">
-                            Prioridad: {PRIORITY_LABEL[project.priority] || project.priority}
-                        </span>
-                        <span className="text-xs text-gray-500">
-                            Creado por <strong>{project.createdBy.name || project.createdBy.email}</strong>
-                        </span>
-                        {project.deadline && (
-                            <span className="text-xs text-gray-500 flex items-center gap-1">
-                                <Clock className="w-3 h-3" />
-                                Deadline: {new Date(project.deadline).toLocaleDateString("es", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" })}
-                            </span>
-                        )}
-                    </div>
-                    <div className="flex items-center gap-3 text-xs font-bold">
-                        <span className="text-gray-600"><Users className="w-3.5 h-3.5 inline mr-1" />{project.members.length}</span>
-                        <span className="text-emerald-600"><CheckCircle2 className="w-3.5 h-3.5 inline mr-1" />{taskStats.done}/{taskStats.total}</span>
-                        {taskStats.blocked > 0 && <span className="text-red-500"><X className="w-3.5 h-3.5 inline mr-1" />{taskStats.blocked} bloq.</span>}
-                        {canArchiveCycle && (
-                            <button
-                                onClick={handleArchiveCycle}
-                                disabled={isPending}
-                                className="px-3 py-1.5 text-xs font-bold rounded-lg bg-amber-50 text-amber-700 hover:bg-amber-100 transition-colors disabled:opacity-50"
-                            >
-                                Archivar ciclo
-                            </button>
-                        )}
-                        {canExtendCycle && (
-                            <button
-                                onClick={handleExtendCycle}
-                                disabled={isPending}
-                                className="px-3 py-1.5 text-xs font-bold rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors disabled:opacity-50"
-                            >
-                                Extender al ciclo activo
-                            </button>
-                        )}
-                        {canManage && (
-                            <button
-                                onClick={() => showEditProject ? setShowEditProject(false) : openEditProject()}
-                                disabled={isPending}
-                                className="px-3 py-1.5 text-xs font-bold rounded-lg bg-violet-50 text-violet-700 hover:bg-violet-100 transition-colors disabled:opacity-50"
-                            >
-                                {showEditProject ? "Cerrar edición" : "Editar proyecto"}
-                            </button>
-                        )}
+            {/* Hero Banner */}
+            <div
+                className="relative overflow-hidden rounded-3xl border border-white/70 shadow-xl"
+                style={{
+                    backgroundImage: `radial-gradient(140% 120% at 100% 0%, ${colorToRgba(accentColor, 0.26)} 0%, rgba(255,255,255,0.88) 48%, rgba(255,255,255,0.97) 100%)`,
+                }}
+            >
+                <div
+                    className="absolute inset-x-0 top-0 h-2"
+                    style={{
+                        background: `linear-gradient(90deg, ${colorToRgba(accentColor, 0.98)} 0%, ${colorToRgba(accentColor, 0.5)} 65%, rgba(255,255,255,0.2) 100%)`,
+                    }}
+                />
+
+                {canManage && (
+                    <button
+                        onClick={() => showEditProject ? setShowEditProject(false) : openEditProject()}
+                        disabled={isPending}
+                        className="absolute top-4 right-4 z-10 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-white/80 bg-white/85 text-meteorite-700 hover:text-violet-700 hover:bg-white font-bold text-xs shadow-sm transition-colors disabled:opacity-50"
+                        title="Editar proyecto"
+                    >
+                        <Settings className="w-3.5 h-3.5" />
+                        Editar
+                    </button>
+                )}
+
+                <div className="p-5 md:p-6">
+                    <div className="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-5">
+                        <div className="min-w-0 space-y-3">
+                            <div className="flex items-center gap-2 flex-wrap pr-16 md:pr-0">
+                                <span className="px-2.5 py-1 rounded-lg text-[10px] font-black tracking-wider uppercase bg-white/90 border border-white/80 text-meteorite-700">
+                                    COD {projectCode}
+                                </span>
+                                <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black border ${PRIORITY_TONE[project.priority] || PRIORITY_TONE.MEDIUM}`}>
+                                    Prioridad {PRIORITY_LABEL[project.priority] || project.priority}
+                                </span>
+                                <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black ${STATUS_BADGE[project.status]?.color || "bg-gray-100 text-gray-600"}`}>
+                                    {STATUS_BADGE[project.status]?.label || project.status}
+                                </span>
+                            </div>
+
+                            <div>
+                                <h3 className="text-2xl md:text-3xl font-black text-meteorite-950 leading-tight">{project.name}</h3>
+                                {project.description && (
+                                    <p className="mt-1 text-sm text-meteorite-600 max-w-3xl line-clamp-2">{project.description}</p>
+                                )}
+                            </div>
+
+                            <div className="flex flex-wrap items-center gap-2 text-[11px] font-semibold text-meteorite-600">
+                                <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-white/80 border border-white/80">
+                                    <Sparkles className="w-3.5 h-3.5" />
+                                    Ciclo: {project.semester.name}
+                                </span>
+                                <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-white/80 border border-white/80">
+                                    <Timer className="w-3.5 h-3.5" />
+                                    Inicio: {formatShortDate(project.startDate)}
+                                </span>
+                                <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-white/80 border border-white/80">
+                                    <CalendarDays className="w-3.5 h-3.5" />
+                                    Deadline: {formatShortDate(project.deadline)}
+                                </span>
+                                <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-white/80 border border-white/80">
+                                    <Users className="w-3.5 h-3.5" />
+                                    Equipo: {project.members.length}
+                                </span>
+                            </div>
+                        </div>
+
+                        <div className="w-full xl:max-w-sm space-y-3">
+                            <div className="rounded-2xl border border-white/70 bg-white/75 backdrop-blur-md p-3">
+                                <div className="flex items-center justify-between text-[11px] font-black text-meteorite-600 mb-1">
+                                    <span>Progreso del proyecto</span>
+                                    <span>{progressPercent}%</span>
+                                </div>
+                                <div className="h-2.5 rounded-full bg-white/80 border border-white/70 overflow-hidden">
+                                    <div
+                                        className="h-full rounded-full"
+                                        style={{
+                                            width: `${progressPercent}%`,
+                                            background: `linear-gradient(90deg, ${colorToRgba(accentColor, 0.98)} 0%, ${colorToRgba(accentColor, 0.65)} 100%)`,
+                                        }}
+                                    />
+                                </div>
+                                <div className="mt-2 grid grid-cols-4 gap-1.5 text-center">
+                                    <div className="rounded-lg bg-white/80 px-1 py-1">
+                                        <p className="text-[10px] text-gray-500 font-bold">Total</p>
+                                        <p className="text-sm font-black text-meteorite-800">{taskStats.total}</p>
+                                    </div>
+                                    <div className="rounded-lg bg-emerald-50 px-1 py-1">
+                                        <p className="text-[10px] text-emerald-600 font-bold">Hecho</p>
+                                        <p className="text-sm font-black text-emerald-700">{taskStats.done}</p>
+                                    </div>
+                                    <div className="rounded-lg bg-blue-50 px-1 py-1">
+                                        <p className="text-[10px] text-blue-600 font-bold">Rev.</p>
+                                        <p className="text-sm font-black text-blue-700">{reviewCount}</p>
+                                    </div>
+                                    <div className="rounded-lg bg-red-50 px-1 py-1">
+                                        <p className="text-[10px] text-red-600 font-bold">Bloq.</p>
+                                        <p className="text-sm font-black text-red-700">{taskStats.blocked}</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="flex flex-wrap gap-2">
+                                {canArchiveCycle && (
+                                    <button
+                                        onClick={handleArchiveCycle}
+                                        disabled={isPending}
+                                        className="px-3 py-1.5 text-xs font-bold rounded-lg bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition-colors disabled:opacity-50"
+                                    >
+                                        Archivar ciclo
+                                    </button>
+                                )}
+                                {canExtendCycle && (
+                                    <button
+                                        onClick={handleExtendCycle}
+                                        disabled={isPending}
+                                        className="px-3 py-1.5 text-xs font-bold rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition-colors disabled:opacity-50"
+                                    >
+                                        Extender ciclo activo
+                                    </button>
+                                )}
+                                <span className="ml-auto text-[11px] text-gray-500 font-medium self-center">
+                                    Creado por <strong>{project.createdBy.name || project.createdBy.email}</strong>
+                                </span>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -663,115 +821,162 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
             )}
 
             {showEditProject && canManage && (
-                <div className="bg-white/80 backdrop-blur-md border border-violet-200 rounded-2xl p-4 space-y-4">
-                    <h4 className="text-sm font-black text-meteorite-950">Editar Proyecto</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        <div>
-                            <label className="block text-xs font-bold text-meteorite-700 mb-1">Nombre</label>
-                            <input
-                                type="text"
-                                value={editName}
-                                onChange={e => setEditName(e.target.value)}
-                                className="w-full px-3 py-2.5 rounded-xl border border-gray-200 focus:border-violet-500 focus:ring-2 focus:ring-violet-200 outline-none bg-white font-medium text-meteorite-950"
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-xs font-bold text-meteorite-700 mb-1">Prioridad</label>
-                            <select
-                                value={editPriority}
-                                onChange={e => setEditPriority(e.target.value)}
-                                className="w-full px-3 py-2.5 rounded-xl border border-gray-200 focus:border-violet-500 outline-none bg-white font-medium text-meteorite-950"
-                            >
-                                {PROJECT_PRIORITIES.map(p => (
-                                    <option key={p} value={p}>{PRIORITY_LABEL[p] || p}</option>
-                                ))}
-                            </select>
-                        </div>
-                    </div>
+                <div className="fixed inset-0 z-40">
+                    <button
+                        aria-label="Cerrar edición"
+                        className="absolute inset-0 bg-meteorite-950/40 backdrop-blur-[2px]"
+                        onClick={() => setShowEditProject(false)}
+                    />
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        <div>
-                            <label className="block text-xs font-bold text-meteorite-700 mb-1">Color</label>
-                            <div className="h-[42px] px-3 rounded-xl border border-gray-200 bg-white flex items-center justify-between">
-                                <input
-                                    type="color"
-                                    value={editColor}
-                                    onChange={e => setEditColor(e.target.value)}
-                                    className="w-8 h-8 rounded cursor-pointer border-none bg-transparent"
+                    <div className="absolute right-0 top-0 h-full w-full max-w-xl bg-white/95 backdrop-blur-md border-l border-violet-100 shadow-2xl overflow-y-auto">
+                        <div className="sticky top-0 z-10 px-5 py-4 border-b border-violet-100 bg-white/90 backdrop-blur-md flex items-center justify-between">
+                            <h4 className="text-sm font-black text-meteorite-950 flex items-center gap-2">
+                                <Settings className="w-4 h-4 text-violet-600" />
+                                Editar Proyecto
+                            </h4>
+                            <button
+                                onClick={() => setShowEditProject(false)}
+                                className="p-1.5 rounded-lg text-gray-500 hover:text-meteorite-800 hover:bg-gray-100 transition-colors"
+                            >
+                                <X className="w-4 h-4" />
+                            </button>
+                        </div>
+
+                        <div className="p-5 space-y-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <div>
+                                    <label className="block text-xs font-bold text-meteorite-700 mb-1">Nombre</label>
+                                    <input
+                                        type="text"
+                                        value={editName}
+                                        onChange={e => setEditName(e.target.value)}
+                                        className="w-full px-3 py-2.5 rounded-xl border border-gray-200 focus:border-violet-500 focus:ring-2 focus:ring-violet-200 outline-none bg-white font-medium text-meteorite-950"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-meteorite-700 mb-1">Prioridad</label>
+                                    <select
+                                        value={editPriority}
+                                        onChange={e => setEditPriority(e.target.value)}
+                                        className="w-full px-3 py-2.5 rounded-xl border border-gray-200 focus:border-violet-500 outline-none bg-white font-medium text-meteorite-950"
+                                    >
+                                        {PROJECT_PRIORITIES.map(p => (
+                                            <option key={p} value={p}>{PRIORITY_LABEL[p] || p}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <div>
+                                    <label className="block text-xs font-bold text-meteorite-700 mb-1">Color</label>
+                                    <div className="rounded-xl border border-gray-200 bg-white p-2.5 space-y-2">
+                                        <div className="flex items-center justify-between gap-2">
+                                            <input
+                                                type="color"
+                                                value={normalizeHexColor(editColor) || "#6366F1"}
+                                                onChange={e => {
+                                                    const next = (e.target.value || "#6366f1").toUpperCase();
+                                                    setEditColor(next);
+                                                    setEditColorText(next);
+                                                }}
+                                                className="w-9 h-9 rounded cursor-pointer border-none bg-transparent"
+                                            />
+                                            <input
+                                                type="text"
+                                                value={editColorText}
+                                                onChange={(e) => setEditColorText(e.target.value.toUpperCase())}
+                                                onBlur={() => {
+                                                    const normalized = normalizeHexColor(editColorText);
+                                                    if (normalized) {
+                                                        setEditColor(normalized);
+                                                        setEditColorText(normalized);
+                                                    } else {
+                                                        const fallback = normalizeHexColor(editColor) || "#6366F1";
+                                                        setEditColor(fallback);
+                                                        setEditColorText(fallback);
+                                                        showFeedback("error", "Color inválido. Usa formato hexadecimal #RRGGBB.");
+                                                    }
+                                                }}
+                                                placeholder="#6366F1"
+                                                className="flex-1 px-3 py-2 rounded-lg border border-gray-200 outline-none focus:border-violet-500 text-sm font-black uppercase tracking-wide"
+                                            />
+                                        </div>
+                                        <div className="h-2.5 rounded-full" style={{ backgroundColor: normalizeHexColor(editColorText) || normalizeHexColor(editColor) || "#6366F1" }} />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-meteorite-700 mb-1">Estado</label>
+                                    {canChangeStatus ? (
+                                        <select
+                                            value={editStatus}
+                                            onChange={e => setEditStatus(e.target.value)}
+                                            className="w-full px-3 py-2.5 rounded-xl border border-gray-200 focus:border-violet-500 outline-none bg-white font-medium text-meteorite-950"
+                                        >
+                                            {PROJECT_STATUSES.map(status => (
+                                                <option key={status} value={status}>
+                                                    {STATUS_BADGE[status]?.label || status}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    ) : (
+                                        <div className="h-[42px] px-3 rounded-xl border border-gray-200 bg-gray-50 flex items-center justify-between">
+                                            <span className={`px-2 py-0.5 rounded-lg text-[11px] font-bold ${STATUS_BADGE[project.status]?.color || "bg-gray-100 text-gray-600"}`}>
+                                                {STATUS_BADGE[project.status]?.label || project.status}
+                                            </span>
+                                            <span className="text-[11px] text-gray-500 font-medium">Sin permiso para cambiar estado</span>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-bold text-meteorite-700 mb-1">Descripción</label>
+                                <textarea
+                                    value={editDescription}
+                                    onChange={e => setEditDescription(e.target.value)}
+                                    rows={4}
+                                    className="w-full px-3 py-2.5 rounded-xl border border-gray-200 focus:border-violet-500 outline-none bg-white font-medium text-meteorite-950 resize-none"
                                 />
-                                <span className="text-xs font-bold text-gray-500">{editColor.toUpperCase()}</span>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <div>
+                                    <label className="block text-xs font-bold text-meteorite-700 mb-1">Inicio</label>
+                                    <input
+                                        type="date"
+                                        value={editStartDate}
+                                        onChange={e => setEditStartDate(e.target.value)}
+                                        className="w-full px-3 py-2.5 rounded-xl border border-gray-200 outline-none bg-white font-medium text-meteorite-950"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-meteorite-700 mb-1">Deadline</label>
+                                    <input
+                                        type="date"
+                                        value={editDeadline}
+                                        onChange={e => setEditDeadline(e.target.value)}
+                                        className="w-full px-3 py-2.5 rounded-xl border border-gray-200 outline-none bg-white font-medium text-meteorite-950"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="flex justify-end gap-2 pt-2">
+                                <button
+                                    onClick={() => setShowEditProject(false)}
+                                    className="px-4 py-2 text-sm font-bold text-gray-500 hover:bg-gray-50 rounded-xl"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    onClick={handleUpdateProject}
+                                    disabled={isPending || !editName.trim()}
+                                    className="px-4 py-2 text-sm font-bold bg-violet-600 hover:bg-violet-700 text-white rounded-xl transition-colors disabled:opacity-50"
+                                >
+                                    {isPending ? "Guardando..." : "Guardar cambios"}
+                                </button>
                             </div>
                         </div>
-                        <div>
-                            <label className="block text-xs font-bold text-meteorite-700 mb-1">Estado</label>
-                            {canChangeStatus ? (
-                                <select
-                                    value={editStatus}
-                                    onChange={e => setEditStatus(e.target.value)}
-                                    className="w-full px-3 py-2.5 rounded-xl border border-gray-200 focus:border-violet-500 outline-none bg-white font-medium text-meteorite-950"
-                                >
-                                    {PROJECT_STATUSES.map(status => (
-                                        <option key={status} value={status}>
-                                            {STATUS_BADGE[status]?.label || status}
-                                        </option>
-                                    ))}
-                                </select>
-                            ) : (
-                                <div className="h-[42px] px-3 rounded-xl border border-gray-200 bg-gray-50 flex items-center justify-between">
-                                    <span className={`px-2 py-0.5 rounded-lg text-[11px] font-bold ${STATUS_BADGE[project.status]?.color || "bg-gray-100 text-gray-600"}`}>
-                                        {STATUS_BADGE[project.status]?.label || project.status}
-                                    </span>
-                                    <span className="text-[11px] text-gray-500 font-medium">Sin permiso para cambiar estado</span>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-
-                    <div>
-                        <label className="block text-xs font-bold text-meteorite-700 mb-1">Descripción</label>
-                        <textarea
-                            value={editDescription}
-                            onChange={e => setEditDescription(e.target.value)}
-                            rows={3}
-                            className="w-full px-3 py-2.5 rounded-xl border border-gray-200 focus:border-violet-500 outline-none bg-white font-medium text-meteorite-950 resize-none"
-                        />
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        <div>
-                            <label className="block text-xs font-bold text-meteorite-700 mb-1">Inicio</label>
-                            <input
-                                type="date"
-                                value={editStartDate}
-                                onChange={e => setEditStartDate(e.target.value)}
-                                className="w-full px-3 py-2.5 rounded-xl border border-gray-200 outline-none bg-white font-medium text-meteorite-950"
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-xs font-bold text-meteorite-700 mb-1">Deadline</label>
-                            <input
-                                type="date"
-                                value={editDeadline}
-                                onChange={e => setEditDeadline(e.target.value)}
-                                className="w-full px-3 py-2.5 rounded-xl border border-gray-200 outline-none bg-white font-medium text-meteorite-950"
-                            />
-                        </div>
-                    </div>
-
-                    <div className="flex justify-end gap-2">
-                        <button
-                            onClick={() => setShowEditProject(false)}
-                            className="px-4 py-2 text-sm font-bold text-gray-500 hover:bg-gray-50 rounded-xl"
-                        >
-                            Cancelar
-                        </button>
-                        <button
-                            onClick={handleUpdateProject}
-                            disabled={isPending || !editName.trim()}
-                            className="px-4 py-2 text-sm font-bold bg-violet-600 hover:bg-violet-700 text-white rounded-xl transition-colors disabled:opacity-50"
-                        >
-                            {isPending ? "Guardando..." : "Guardar cambios"}
-                        </button>
                     </div>
                 </div>
             )}
@@ -872,107 +1077,129 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
                         </div>
                     )}
 
-                    <div className="bg-white/80 backdrop-blur-md border border-gray-200 rounded-2xl p-3 space-y-3">
-                        <div className="flex flex-wrap gap-2 items-center">
-                            <div className="inline-flex rounded-lg border border-gray-200 overflow-hidden">
+                    <div className="bg-white/80 backdrop-blur-md border border-gray-200 rounded-2xl p-4 space-y-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="inline-flex rounded-xl border border-gray-200 overflow-hidden bg-white">
                                 <button
                                     type="button"
                                     onClick={() => setViewMode("list")}
-                                    className={`px-3 py-1.5 text-xs font-bold ${viewMode === "list" ? "bg-violet-100 text-violet-700" : "bg-white text-gray-500"}`}
+                                    className={`px-3 py-1.5 text-xs font-black ${viewMode === "list" ? "bg-violet-100 text-violet-700" : "bg-white text-gray-500"}`}
                                 >
                                     Lista
                                 </button>
                                 <button
                                     type="button"
                                     onClick={() => setViewMode("kanban")}
-                                    className={`px-3 py-1.5 text-xs font-bold border-l border-gray-200 ${viewMode === "kanban" ? "bg-violet-100 text-violet-700" : "bg-white text-gray-500"}`}
+                                    className={`px-3 py-1.5 text-xs font-black border-l border-gray-200 ${viewMode === "kanban" ? "bg-violet-100 text-violet-700" : "bg-white text-gray-500"}`}
                                 >
                                     Kanban
                                 </button>
                             </div>
 
-                            <select value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)} className="px-2.5 py-1.5 rounded-lg border border-gray-200 text-xs font-bold text-gray-600">
-                                <option value="ALL">Prioridad: Todas</option>
-                                {TASK_PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
-                            </select>
-
-                            <select value={assigneeFilter} onChange={(e) => setAssigneeFilter(e.target.value)} className="px-2.5 py-1.5 rounded-lg border border-gray-200 text-xs font-bold text-gray-600">
-                                <option value="ALL">Asignado: Todos</option>
-                                <option value="UNASSIGNED">Sin asignar</option>
-                                {project.members.map((member) => (
-                                    <option key={member.user.id} value={member.user.id}>{member.user.name || member.user.email}</option>
-                                ))}
-                            </select>
-
-                            <select value={agingFilter} onChange={(e) => setAgingFilter(e.target.value)} className="px-2.5 py-1.5 rounded-lg border border-gray-200 text-xs font-bold text-gray-600">
-                                <option value="ALL">Aging: Todos</option>
-                                <option value="WARNING">3+ dias</option>
-                                <option value="DANGER">7+ dias</option>
-                                <option value="CRITICAL">14+ dias</option>
-                            </select>
-
-                            <select value={sortBy} onChange={(e) => setSortBy(e.target.value as any)} className="px-2.5 py-1.5 rounded-lg border border-gray-200 text-xs font-bold text-gray-600">
-                                <option value="position">Orden: Posicion</option>
-                                <option value="priority">Orden: Prioridad</option>
-                                <option value="dueDate">Orden: Fecha limite</option>
-                                <option value="aging">Orden: Aging</option>
-                                <option value="createdAt">Orden: Creacion</option>
-                            </select>
+                            <button
+                                type="button"
+                                onClick={() => setShowTaskFilters((prev) => !prev)}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-gray-200 bg-white text-xs font-black text-meteorite-700 hover:bg-gray-50 transition-colors"
+                            >
+                                <Filter className="w-3.5 h-3.5" />
+                                {showTaskFilters ? "Ocultar filtros" : "Mostrar filtros"}
+                            </button>
                         </div>
 
-                        <div className="space-y-1">
+                        <div className="space-y-1.5">
                             <div className="flex items-center gap-3">
                                 <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
                                     <div
-                                        className="h-full bg-gradient-to-r from-emerald-400 to-emerald-600 rounded-full transition-all duration-500"
-                                        style={{ width: `${progressPercent}%` }}
+                                        className="h-full rounded-full transition-all duration-500"
+                                        style={{
+                                            width: `${progressPercent}%`,
+                                            background: `linear-gradient(90deg, ${colorToRgba(accentColor, 0.95)} 0%, ${colorToRgba(accentColor, 0.62)} 100%)`,
+                                        }}
                                     />
                                 </div>
                                 <span className="text-[11px] font-bold text-gray-500">
                                     {taskStats.done}/{taskStats.total} ({progressPercent}%)
                                 </span>
                             </div>
-                            <div className="text-[10px] text-gray-500 font-medium">
-                                TODO {project.tasks.filter((task) => task.status === "TODO").length} · En progreso {taskStats.inProgress} · Revision {project.tasks.filter((task) => task.status === "REVIEW").length} · Hecho {taskStats.done} · Bloqueado {taskStats.blocked}
+                            <div className="grid grid-cols-2 md:grid-cols-5 gap-1.5">
+                                <span className="text-[10px] font-bold text-gray-600 px-2 py-1 rounded-lg bg-gray-100">TODO {project.tasks.filter((task) => task.status === "TODO").length}</span>
+                                <span className="text-[10px] font-bold text-blue-700 px-2 py-1 rounded-lg bg-blue-50">En progreso {taskStats.inProgress}</span>
+                                <span className="text-[10px] font-bold text-violet-700 px-2 py-1 rounded-lg bg-violet-50">Revisión {reviewCount}</span>
+                                <span className="text-[10px] font-bold text-emerald-700 px-2 py-1 rounded-lg bg-emerald-50">Hecho {taskStats.done}</span>
+                                <span className="text-[10px] font-bold text-red-700 px-2 py-1 rounded-lg bg-red-50">Bloqueado {taskStats.blocked}</span>
                             </div>
                         </div>
-                    </div>
 
-                    {/* Area Filter */}
-                    <div className="flex gap-1.5 flex-wrap">
-                        <button onClick={() => setAreaFilter("ALL")}
-                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${areaFilter === "ALL" ? "bg-violet-100 text-violet-700 border-violet-200 shadow-sm" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"}`}>
-                            Todas las Áreas
-                        </button>
-                        <button onClick={() => setAreaFilter("GENERAL")}
-                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${areaFilter === "GENERAL" ? "bg-violet-100 text-violet-700 border-violet-200 shadow-sm" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"}`}>
-                            General
-                        </button>
-                        {allProjectAreas.map(a => (
-                            <button key={a.id} onClick={() => setAreaFilter(a.id)}
-                                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${areaFilter === a.id ? "bg-violet-100 text-violet-700 border-violet-200 shadow-sm" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"}`}>
-                                {a.name}
-                            </button>
-                        ))}
-                    </div>
+                        {showTaskFilters && (
+                            <>
+                                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-2">
+                                    <select value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)} className="px-2.5 py-1.5 rounded-lg border border-gray-200 text-xs font-bold text-gray-600">
+                                        <option value="ALL">Prioridad: Todas</option>
+                                        {TASK_PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
+                                    </select>
 
-                    {/* Status Filter */}
-                    <div className="flex gap-1.5 flex-wrap">
-                        <button onClick={() => setStatusFilter("ALL")}
-                            className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${statusFilter === "ALL" ? "bg-meteorite-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>
-                            Todas ({project.tasks.length})
-                        </button>
-                        {(Object.keys(TASK_STATUS_ICON) as string[]).map(s => {
-                            const cfg = TASK_STATUS_ICON[s];
-                            const count = project.tasks.filter(t => t.status === s).length;
-                            if (count === 0) return null;
-                            return (
-                                <button key={s} onClick={() => setStatusFilter(s)}
-                                    className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${statusFilter === s ? "bg-meteorite-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>
-                                    {cfg.label} ({count})
-                                </button>
-                            );
-                        })}
+                                    <select value={assigneeFilter} onChange={(e) => setAssigneeFilter(e.target.value)} className="px-2.5 py-1.5 rounded-lg border border-gray-200 text-xs font-bold text-gray-600">
+                                        <option value="ALL">Asignado: Todos</option>
+                                        <option value="UNASSIGNED">Sin asignar</option>
+                                        {project.members.map((member) => (
+                                            <option key={member.user.id} value={member.user.id}>{member.user.name || member.user.email}</option>
+                                        ))}
+                                    </select>
+
+                                    <select value={agingFilter} onChange={(e) => setAgingFilter(e.target.value)} className="px-2.5 py-1.5 rounded-lg border border-gray-200 text-xs font-bold text-gray-600">
+                                        <option value="ALL">Aging: Todos</option>
+                                        <option value="WARNING">3+ días</option>
+                                        <option value="DANGER">7+ días</option>
+                                        <option value="CRITICAL">14+ días</option>
+                                    </select>
+
+                                    <select value={sortBy} onChange={(e) => setSortBy(e.target.value as any)} className="px-2.5 py-1.5 rounded-lg border border-gray-200 text-xs font-bold text-gray-600">
+                                        <option value="position">Orden: Posición</option>
+                                        <option value="priority">Orden: Prioridad</option>
+                                        <option value="dueDate">Orden: Fecha límite</option>
+                                        <option value="aging">Orden: Aging</option>
+                                        <option value="createdAt">Orden: Creación</option>
+                                    </select>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <div className="flex gap-1.5 flex-wrap">
+                                        <button onClick={() => setAreaFilter("ALL")}
+                                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${areaFilter === "ALL" ? "bg-violet-100 text-violet-700 border-violet-200 shadow-sm" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"}`}>
+                                            Todas las Áreas
+                                        </button>
+                                        <button onClick={() => setAreaFilter("GENERAL")}
+                                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${areaFilter === "GENERAL" ? "bg-violet-100 text-violet-700 border-violet-200 shadow-sm" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"}`}>
+                                            General
+                                        </button>
+                                        {allProjectAreas.map(a => (
+                                            <button key={a.id} onClick={() => setAreaFilter(a.id)}
+                                                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${areaFilter === a.id ? "bg-violet-100 text-violet-700 border-violet-200 shadow-sm" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"}`}>
+                                                {a.name}
+                                            </button>
+                                        ))}
+                                    </div>
+
+                                    <div className="flex gap-1.5 flex-wrap">
+                                        <button onClick={() => setStatusFilter("ALL")}
+                                            className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${statusFilter === "ALL" ? "bg-meteorite-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>
+                                            Todas ({project.tasks.length})
+                                        </button>
+                                        {(Object.keys(TASK_STATUS_ICON) as string[]).map(s => {
+                                            const cfg = TASK_STATUS_ICON[s];
+                                            const count = project.tasks.filter(t => t.status === s).length;
+                                            if (count === 0) return null;
+                                            return (
+                                                <button key={s} onClick={() => setStatusFilter(s)}
+                                                    className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${statusFilter === s ? "bg-meteorite-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>
+                                                    {cfg.label} ({count})
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            </>
+                        )}
                     </div>
 
                     {/* Task List / Kanban */}
@@ -1153,12 +1380,12 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
                 </div>
 
                 {/* ── RIGHT COLUMN: Members + Info ── */}
-                <div className="space-y-4">
+                <div className="space-y-4 lg:sticky lg:top-4 self-start">
                     {/* Members */}
-                    <div className="bg-white/80 backdrop-blur-md border border-gray-200 rounded-2xl p-4">
-                        <div className="flex items-center justify-between mb-3">
-                            <h4 className="font-black text-meteorite-950 text-sm flex items-center gap-1.5">
-                                <Users className="w-4 h-4 text-violet-500" />
+                    <div className="bg-white/80 backdrop-blur-md border border-gray-200 rounded-2xl overflow-hidden">
+                        <div className="px-4 py-3 bg-meteorite-900 text-white flex items-center justify-between">
+                            <h4 className="font-black text-sm flex items-center gap-1.5">
+                                <Users className="w-4 h-4 text-violet-300" />
                                 Equipo ({project.members.length})
                             </h4>
                             {canManageMembers && (
@@ -1172,11 +1399,13 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
                                         setInvitationMessage("");
                                     }
                                 }} disabled={isPending}
-                                    className="p-1.5 text-violet-600 hover:bg-violet-50 rounded-lg transition-colors disabled:opacity-50">
+                                    className="p-1.5 text-violet-200 hover:bg-white/10 rounded-lg transition-colors disabled:opacity-50">
                                     <UserPlus className="w-4 h-4" />
                                 </button>
                             )}
                         </div>
+
+                        <div className="p-4">
 
                         {/* Add Member Dropdown */}
                         {showAddMember && (
@@ -1273,85 +1502,95 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
                             </div>
                         )}
 
+                        <div className="mb-3">
+                            <input
+                                type="text"
+                                value={teamSearch}
+                                onChange={(e) => setTeamSearch(e.target.value)}
+                                placeholder="Buscar miembro, rol o área..."
+                                className="w-full px-3 py-2 text-xs font-medium rounded-xl border border-gray-200 outline-none focus:border-violet-500"
+                            />
+                        </div>
+
                         {/* Member List Grouped by Area */}
-                        <div className="space-y-4 mt-2">
-                            {(() => {
-                                const sortedMembers = [...project.members].sort((a, b) => b.projectRole.hierarchyLevel - a.projectRole.hierarchyLevel);
-                                const grouped = sortedMembers.reduce((acc, current) => {
-                                    const areaName = current.projectArea?.name || "Gestión de Proyecto";
-                                    if (!acc[areaName]) acc[areaName] = { members: [], color: current.projectArea?.color || "#94a3b8" };
-                                    acc[areaName].members.push(current);
-                                    return acc;
-                                }, {} as Record<string, { members: typeof project.members, color: string }>);
+                        <div className="space-y-2 mt-2">
+                            {groupedMembers.length === 0 ? (
+                                <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 text-xs text-gray-500 text-center">
+                                    No hay miembros que coincidan con la búsqueda.
+                                </div>
+                            ) : groupedMembers.map((group, index) => {
+                                const isCollapsed = collapsedAreaGroups[group.id] ?? index > 0;
+                                const isExpanded = expandedAreaGroups[group.id] ?? false;
+                                const visibleMembers = isExpanded ? group.members : group.members.slice(0, 4);
+                                const hiddenCount = group.members.length - visibleMembers.length;
 
-                                const sortedAreaNames = Object.keys(grouped).sort((a, b) => {
-                                    if (a === "Gestión de Proyecto") return -1;
-                                    if (b === "Gestión de Proyecto") return 1;
-                                    return a.localeCompare(b);
-                                });
+                                return (
+                                    <div key={group.id} className="rounded-xl border border-gray-200 overflow-hidden bg-white">
+                                        <button
+                                            type="button"
+                                            onClick={() => setCollapsedAreaGroups((prev) => ({ ...prev, [group.id]: !isCollapsed }))}
+                                            className="w-full px-3 py-2.5 flex items-center gap-2 bg-gray-50 hover:bg-gray-100 transition-colors"
+                                        >
+                                            <ChevronDown className={`w-3.5 h-3.5 text-gray-500 transition-transform ${isCollapsed ? "-rotate-90" : "rotate-0"}`} />
+                                            <div className="w-2 h-2 rounded-full shadow-sm" style={{ backgroundColor: group.color }} />
+                                            <span className="text-[11px] font-black text-meteorite-900 uppercase tracking-wider text-left">{group.label}</span>
+                                            <span className="ml-auto text-[10px] font-black text-gray-500">{group.members.length}</span>
+                                        </button>
 
-                                return sortedAreaNames.map(areaName => {
-                                    const data = grouped[areaName];
-                                    return (
-                                        <div key={areaName} className="space-y-2">
-                                            <div className="flex items-center gap-2">
-                                                <div className="w-2 h-2 rounded-full shadow-sm" style={{ backgroundColor: data.color }} />
-                                                <h5 className="text-xs font-black text-meteorite-900 uppercase tracking-wider">{areaName}</h5>
-                                                <div className="flex-1 h-px bg-gray-100" />
-                                            </div>
-                                            <div className="space-y-1.5 ml-1">
-                                                {data.members.map(m => (
-                                                    <div key={m.id} className="flex items-center gap-2 p-2 rounded-xl hover:bg-gray-50 transition-colors border border-transparent hover:border-gray-100">
-                                                        <div className="relative shrink-0">
-                                                            {m.user.image ? (
-                                                                <UserAvatar src={m.user.image} name={m.user.name} alt={m.user.name || ""} className="w-8 h-8 rounded-xl shadow-sm bg-gray-100" />
-                                                            ) : (
-                                                                <div className="w-8 h-8 rounded-xl flex items-center justify-center text-[10px] font-black shadow-sm"
-                                                                    style={{ backgroundColor: `${data.color}20`, color: data.color }}>
-                                                                    {m.user.name?.charAt(0).toUpperCase() || "?"}
-                                                                </div>
-                                                            )}
-                                                            {m.projectRole.isSystem && (
-                                                                <div className="absolute -bottom-1 -right-1 bg-amber-400 text-white rounded-full p-0.5 shadow-sm" title="Rol Maestro">
-                                                                    <Crown className="w-2.5 h-2.5" />
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                        <div className="flex-1 min-w-0 flex flex-col justify-center">
-                                                            <p className="text-xs font-bold text-meteorite-950 truncate leading-tight">{m.user.name || m.user.email}</p>
-                                                            <p className="text-[10px] text-gray-500 truncate leading-tight mt-0.5">{m.user.email}</p>
-                                                        </div>
-                                                        <div className="flex flex-col items-end gap-1">
-                                                            {(() => {
-                                                                const canModifyThisMember = isSystemAdmin || m.projectRole.hierarchyLevel < currentUserHierarchyLevel;
-                                                                if (canManageMembers && canModifyThisMember) {
-                                                                    return (
-                                                                        <>
-                                                                            <select
-                                                                                value={m.projectRole.id}
-                                                                                onChange={e => handleChangeRole(m.id, e.target.value)}
-                                                                                disabled={isPending}
-                                                                                className="text-[10px] font-bold rounded-lg px-2 py-1 border outline-none cursor-pointer bg-white text-gray-700 border-gray-200 shadow-sm focus:border-violet-500 hover:border-gray-300 transition-colors"
-                                                                            >
-                                                                                {assignableRoles.map(r => (
-                                                                                    <option key={r.id} value={r.id}>{r.name}</option>
-                                                                                ))}
-                                                                            </select>
-                                                                            <select
-                                                                                value={m.projectArea?.id || "none"}
-                                                                                onChange={e => handleChangeArea(m.id, e.target.value)}
-                                                                                disabled={isPending}
-                                                                                className="text-[10px] font-bold rounded-lg px-2 py-1 border outline-none cursor-pointer bg-white text-gray-500 border-gray-200 shadow-sm focus:border-violet-500 hover:border-gray-300 transition-colors"
-                                                                            >
-                                                                                <option value="none">Sin Área</option>
-                                                                                {allProjectAreas.map(a => (
-                                                                                    <option key={a.id} value={a.id}>{a.name}</option>
-                                                                                ))}
-                                                                            </select>
-                                                                        </>
-                                                                    );
-                                                                }
-                                                                return (
+                                        {!isCollapsed && (
+                                            <div className="p-2 space-y-1.5">
+                                                {visibleMembers.map((m) => {
+                                                    const canModifyThisMember = isSystemAdmin || m.projectRole.hierarchyLevel < currentUserHierarchyLevel;
+
+                                                    return (
+                                                        <div key={m.id} className="flex items-start gap-2 p-2 rounded-lg hover:bg-gray-50 transition-colors border border-transparent hover:border-gray-100">
+                                                            <div className="relative shrink-0">
+                                                                {m.user.image ? (
+                                                                    <UserAvatar src={m.user.image} name={m.user.name} alt={m.user.name || ""} className="w-8 h-8 rounded-lg shadow-sm bg-gray-100" />
+                                                                ) : (
+                                                                    <div className="w-8 h-8 rounded-lg flex items-center justify-center text-[10px] font-black shadow-sm"
+                                                                        style={{ backgroundColor: `${group.color}20`, color: group.color }}>
+                                                                        {m.user.name?.charAt(0).toUpperCase() || "?"}
+                                                                    </div>
+                                                                )}
+                                                                {m.projectRole.isSystem && (
+                                                                    <div className="absolute -bottom-1 -right-1 bg-amber-400 text-white rounded-full p-0.5 shadow-sm" title="Rol Maestro">
+                                                                        <Crown className="w-2.5 h-2.5" />
+                                                                    </div>
+                                                                )}
+                                                            </div>
+
+                                                            <div className="flex-1 min-w-0">
+                                                                <p className="text-xs font-bold text-meteorite-950 truncate leading-tight">{m.user.name || m.user.email}</p>
+                                                                <p className="text-[10px] text-gray-500 truncate leading-tight mt-0.5">{m.user.email}</p>
+                                                            </div>
+
+                                                            <div className="flex flex-col items-end gap-1">
+                                                                {canManageMembers && canModifyThisMember ? (
+                                                                    <>
+                                                                        <select
+                                                                            value={m.projectRole.id}
+                                                                            onChange={e => handleChangeRole(m.id, e.target.value)}
+                                                                            disabled={isPending}
+                                                                            className="text-[10px] font-bold rounded-lg px-2 py-1 border outline-none cursor-pointer bg-white text-gray-700 border-gray-200 shadow-sm focus:border-violet-500 hover:border-gray-300 transition-colors"
+                                                                        >
+                                                                            {assignableRoles.map(r => (
+                                                                                <option key={r.id} value={r.id}>{r.name}</option>
+                                                                            ))}
+                                                                        </select>
+                                                                        <select
+                                                                            value={m.projectArea?.id || "none"}
+                                                                            onChange={e => handleChangeArea(m.id, e.target.value)}
+                                                                            disabled={isPending}
+                                                                            className="text-[10px] font-bold rounded-lg px-2 py-1 border outline-none cursor-pointer bg-white text-gray-500 border-gray-200 shadow-sm focus:border-violet-500 hover:border-gray-300 transition-colors"
+                                                                        >
+                                                                            <option value="none">Sin Área</option>
+                                                                            {allProjectAreas.map(a => (
+                                                                                <option key={a.id} value={a.id}>{a.name}</option>
+                                                                            ))}
+                                                                        </select>
+                                                                    </>
+                                                                ) : (
                                                                     <>
                                                                         <span className="text-[10px] font-bold px-2 py-1 rounded-lg border shadow-sm" style={{ backgroundColor: `${m.projectRole.color || "#e2e8f0"}15`, color: m.projectRole.color || "#64748b", borderColor: `${m.projectRole.color || "#e2e8f0"}40` }}>
                                                                             {m.projectRole.name}
@@ -1362,23 +1601,34 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
                                                                             </span>
                                                                         )}
                                                                     </>
-                                                                );
-                                                            })()}
+                                                                )}
 
-                                                            {canManageMembers && (isSystemAdmin || m.projectRole.hierarchyLevel < currentUserHierarchyLevel) && m.user.id !== currentUserId && (
-                                                                <button onClick={() => handleRemoveMember(m.id)} disabled={isPending}
-                                                                    className="text-[10px] flex items-center gap-1 text-red-400 hover:text-red-500 transition-colors disabled:opacity-50">
-                                                                    Quitar
-                                                                </button>
-                                                            )}
+                                                                {canManageMembers && canModifyThisMember && m.user.id !== currentUserId && (
+                                                                    <button onClick={() => handleRemoveMember(m.id)} disabled={isPending}
+                                                                        className="text-[10px] flex items-center gap-1 text-red-400 hover:text-red-500 transition-colors disabled:opacity-50">
+                                                                        Quitar
+                                                                    </button>
+                                                                )}
+                                                            </div>
                                                         </div>
-                                                    </div>
-                                                ))}
+                                                    );
+                                                })}
+
+                                                {hiddenCount > 0 && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setExpandedAreaGroups((prev) => ({ ...prev, [group.id]: !isExpanded }))}
+                                                        className="w-full mt-1 py-1.5 text-[11px] font-black text-violet-700 hover:bg-violet-50 rounded-lg transition-colors"
+                                                    >
+                                                        {isExpanded ? "Mostrar menos" : `Mostrar ${hiddenCount} más`}
+                                                    </button>
+                                                )}
                                             </div>
-                                        </div>
-                                    );
-                                });
-                            })()}
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
                         </div>
                     </div>
 
