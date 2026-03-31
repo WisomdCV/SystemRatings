@@ -134,7 +134,7 @@ export const events = sqliteTable("event", {
 
   // Scope & Type (Events v2)
   eventScope: text("event_scope").notNull().default("IISE"),          // "IISE" | "PROJECT"
-  eventType: text("event_type").notNull().default("GENERAL"),          // "GENERAL" | "AREA" | "INDIVIDUAL_GROUP"
+  eventType: text("event_type").notNull().default("GENERAL"),          // "GENERAL" | "AREA" | "INDIVIDUAL_GROUP" | "TREASURY_SPECIAL"
 
   // IISE target
   targetAreaId: text("target_area_id").references(() => areas.id),
@@ -176,7 +176,7 @@ export const attendanceRecords = sqliteTable("attendance_record", {
   reviewedById: text("reviewed_by_id").references(() => users.id),
 });
 
-// Event Invitees (for INDIVIDUAL_GROUP events)
+// Event Invitees (for invitee-targeted events, e.g. INDIVIDUAL_GROUP/TREASURY_SPECIAL)
 export const eventInvitees = sqliteTable("event_invitee", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
   eventId: text("event_id").references(() => events.id, { onDelete: "cascade" }).notNull(),

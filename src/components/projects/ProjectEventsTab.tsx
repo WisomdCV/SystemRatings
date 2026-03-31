@@ -175,6 +175,11 @@ export default function ProjectEventsTab({
                                                     👥 Reunión
                                                 </span>
                                             )}
+                                            {event.eventType === "TREASURY_SPECIAL" && (
+                                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-100 shrink-0">
+                                                    💼 Tesorería
+                                                </span>
+                                            )}
                                         </div>
                                         <div className="flex items-center gap-3 mt-0.5 text-xs text-meteorite-400">
                                             {event.time && (
@@ -190,7 +195,7 @@ export default function ProjectEventsTab({
                                     </div>
 
                                     {/* Invitee Avatars */}
-                                    {event.eventType === "INDIVIDUAL_GROUP" && event.invitees && event.invitees.length > 0 && (
+                                    {(event.eventType === "INDIVIDUAL_GROUP" || event.eventType === "TREASURY_SPECIAL") && event.invitees && event.invitees.length > 0 && (
                                         <div className="flex items-center -space-x-1.5 shrink-0">
                                             {event.invitees.slice(0, 3).map(inv => (
                                                 <div

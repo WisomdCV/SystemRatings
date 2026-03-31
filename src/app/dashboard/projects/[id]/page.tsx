@@ -207,7 +207,7 @@ export default async function ProjectDetailPage(props: { params: Promise<{ id: s
 
     // System admins always get all types
     const finalCreatableTypes = isSystemAdmin
-        ? ["GENERAL", "AREA", "INDIVIDUAL_GROUP"]
+        ? ["GENERAL", "AREA", "INDIVIDUAL_GROUP", "TREASURY_SPECIAL"]
         : creatableProjectTypes;
 
     const canCreateProjectEvents = finalCreatableTypes.length > 0;

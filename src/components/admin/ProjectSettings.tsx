@@ -48,6 +48,7 @@ interface Props {
 const PERMISSION_LABELS: Record<string, { label: string; group: string; icon: "event" | "task" | "manage" | "visibility" }> = {
     "project:event_create_any": { label: "Crear eventos (cualquier área)", group: "Eventos", icon: "event" },
     "project:event_create_own_area": { label: "Crear eventos (su área)", group: "Eventos", icon: "event" },
+    "project:event_create_treasury_special": { label: "Crear reunión especial de tesorería", group: "Eventos", icon: "event" },
     "project:event_manage_any": { label: "Gestionar cualquier evento", group: "Eventos", icon: "event" },
     "project:event_manage_own": { label: "Gestionar eventos propios/área", group: "Eventos", icon: "event" },
     "project:event_view_all": { label: "Ver eventos de todas las áreas", group: "Eventos", icon: "visibility" },

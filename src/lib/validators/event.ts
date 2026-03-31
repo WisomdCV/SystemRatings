@@ -6,7 +6,7 @@ export const CreateEventSchema = z.object({
 
     // Scope & Type (Events v2)
     eventScope: z.enum(["IISE", "PROJECT"]).default("IISE"),
-    eventType: z.enum(["GENERAL", "AREA", "INDIVIDUAL_GROUP"]).default("GENERAL"),
+    eventType: z.enum(["GENERAL", "AREA", "INDIVIDUAL_GROUP", "TREASURY_SPECIAL"]).default("GENERAL"),
 
     date: z.coerce.date(),
 
@@ -78,6 +78,24 @@ export const CreateEventSchema = z.object({
             message: "Se requiere seleccionar un proyecto.",
             path: ["projectId"],
         });
+    }
+
+    if (data.eventType === "TREASURY_SPECIAL") {
+        if (data.eventScope !== "PROJECT") {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: "La reunión especial de tesorería solo puede crearse dentro de un proyecto.",
+                path: ["eventScope"],
+            });
+        }
+
+        if (!data.projectId) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: "Debes seleccionar un proyecto para la reunión especial de tesorería.",
+                path: ["projectId"],
+            });
+        }
     }
 
     if (data.eventType === "INDIVIDUAL_GROUP" && (!data.inviteeUserIds || data.inviteeUserIds.length === 0)) {

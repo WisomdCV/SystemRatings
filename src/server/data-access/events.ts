@@ -47,8 +47,9 @@ export async function createEventDAO(
             status: "SCHEDULED"
         }).returning();
 
-        // 3. Insert Invitees (for INDIVIDUAL_GROUP events)
-        if (data.eventType === "INDIVIDUAL_GROUP" && data.inviteeUserIds && data.inviteeUserIds.length > 0) {
+        // 3. Insert Invitees for invitee-based event types
+        const isInviteeBasedEvent = data.eventType === "INDIVIDUAL_GROUP" || data.eventType === "TREASURY_SPECIAL";
+        if (isInviteeBasedEvent && data.inviteeUserIds && data.inviteeUserIds.length > 0) {
             const inviteeRows = data.inviteeUserIds.map(uid => ({
                 eventId: newEvent.id,
                 userId: uid,
@@ -123,8 +124,9 @@ export async function updateEventDAO(eventId: string, data: Partial<CreateEventD
             // Delete old invitees
             await tx.delete(eventInvitees).where(eq(eventInvitees.eventId, eventId));
 
-            // Insert new invitees if INDIVIDUAL_GROUP
-            if (data.eventType === "INDIVIDUAL_GROUP" && data.inviteeUserIds && data.inviteeUserIds.length > 0) {
+            // Insert new invitees for invitee-based event types
+            const isInviteeBasedEvent = data.eventType === "INDIVIDUAL_GROUP" || data.eventType === "TREASURY_SPECIAL";
+            if (isInviteeBasedEvent && data.inviteeUserIds && data.inviteeUserIds.length > 0) {
                 const inviteeRows = data.inviteeUserIds.map(uid => ({
                     eventId,
                     userId: uid,

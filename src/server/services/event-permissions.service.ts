@@ -22,7 +22,7 @@ import { eq, and } from "drizzle-orm";
 // =============================================================================
 
 export type EventScope = "IISE" | "PROJECT";
-export type EventType = "GENERAL" | "AREA" | "INDIVIDUAL_GROUP";
+export type EventType = "GENERAL" | "AREA" | "INDIVIDUAL_GROUP" | "TREASURY_SPECIAL";
 
 interface IISEContext {
     userRole: string | null;
@@ -67,6 +67,10 @@ export async function canCreateIISEEvent(
 
         case "INDIVIDUAL_GROUP":
             return hasPermission(userRole, "event:create_meeting", customPermissions);
+
+        case "TREASURY_SPECIAL":
+            // This type is project-only; never creatable at IISE scope.
+            return false;
 
         default:
             return false;
@@ -139,6 +143,9 @@ export async function canCreateProjectEvent(
         case "INDIVIDUAL_GROUP":
             return hasAnyProjectPermission(membership, ["project:event_create_any", "project:event_create_own_area"]);
 
+        case "TREASURY_SPECIAL":
+            return hasProjectPermission(membership, "project:event_create_treasury_special");
+
         default:
             return false;
     }
@@ -154,6 +161,7 @@ export async function getCreatableProjectEventTypes(
     if (await canCreateProjectEvent(context, "GENERAL")) types.push("GENERAL");
     if (await canCreateProjectEvent(context, "AREA")) types.push("AREA");
     if (await canCreateProjectEvent(context, "INDIVIDUAL_GROUP")) types.push("INDIVIDUAL_GROUP");
+    if (await canCreateProjectEvent(context, "TREASURY_SPECIAL")) types.push("TREASURY_SPECIAL");
     return types;
 }
 
@@ -222,6 +230,7 @@ export async function canManageEvent(
 /**
  * Determines if an event should track attendance.
  * Rule: INDIVIDUAL_GROUP events NEVER track attendance.
+ * TREASURY_SPECIAL keeps attendance enabled.
  */
 export function shouldTrackAttendance(eventType: EventType): boolean {
     return eventType !== "INDIVIDUAL_GROUP";

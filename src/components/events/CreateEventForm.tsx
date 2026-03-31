@@ -144,7 +144,7 @@ export default function CreateEventForm({
         if (watchScope === "IISE" && watchType === "AREA" && !canSelectArea) {
             form.setValue("targetAreaId", userAreaId || "", { shouldValidate: false });
         }
-        if (watchType === "INDIVIDUAL_GROUP") {
+        if (watchType === "INDIVIDUAL_GROUP" || watchType === "TREASURY_SPECIAL") {
             form.setValue("targetAreaId", "", { shouldValidate: false });
             form.setValue("targetProjectAreaId", "", { shouldValidate: false });
         }
@@ -223,6 +223,7 @@ export default function CreateEventForm({
         GENERAL: { label: "General", icon: Megaphone, desc: "Para toda la organización o proyecto" },
         AREA: { label: "Área", icon: Users, desc: "Para un área específica" },
         INDIVIDUAL_GROUP: { label: "Individual/Grupal", icon: UserPlus, desc: "Reunión con invitados específicos" },
+        TREASURY_SPECIAL: { label: "Tesorería Especial", icon: Shield, desc: "Convoca automáticamente a directores de área del proyecto" },
     };
 
     // Build capability description for the indicator header
@@ -248,6 +249,12 @@ export default function CreateEventForm({
         capabilityChips.push({
             label: isProjectOnlyContext ? "Reunión con miembros" : "Individual/Grupal",
             color: "bg-teal-100 text-teal-700 border-teal-200"
+        });
+    }
+    if (availableTypes.includes("TREASURY_SPECIAL")) {
+        capabilityChips.push({
+            label: "Reunión especial (Tesorería)",
+            color: "bg-amber-100 text-amber-700 border-amber-200"
         });
     }
     const hasProjectScope = availableScopes.includes("PROJECT");
@@ -374,7 +381,7 @@ export default function CreateEventForm({
             </div>
 
             {/* Conditional: Area Target (IISE + AREA or IISE + GENERAL) */}
-            {watchScope === "IISE" && watchType !== "INDIVIDUAL_GROUP" && (
+            {watchScope === "IISE" && watchType !== "INDIVIDUAL_GROUP" && watchType !== "TREASURY_SPECIAL" && (
                 <div>
                     <label className="block text-sm font-bold text-gray-700 mb-1.5 ml-1">
                         Área Destino
@@ -494,6 +501,21 @@ export default function CreateEventForm({
                             })}
                         </div>
                     )}
+                </div>
+            )}
+
+            {watchType === "TREASURY_SPECIAL" && (
+                <div className="p-3 rounded-xl border border-amber-200 bg-amber-50 text-amber-800">
+                    <div className="flex items-start gap-2">
+                        <Info className="w-4 h-4 mt-0.5 text-amber-600" />
+                        <div>
+                            <p className="text-xs font-black uppercase tracking-wide">Reunión especial de tesorería</p>
+                            <p className="text-xs mt-1 leading-relaxed">
+                                Los invitados se asignan automáticamente con los directores de área del proyecto.
+                                La asistencia permanece activa para este tipo de evento.
+                            </p>
+                        </div>
+                    </div>
                 </div>
             )}
 

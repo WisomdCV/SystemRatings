@@ -434,7 +434,7 @@ function EventCardGrid({ event, isDeleting, onEdit, onDelete, canEdit, canDelete
                         Creado por: <span className="font-bold text-gray-700">{event.createdBy?.name || event.createdBy?.role || "Desconocido"}</span>
                     </span>
                 </div>
-                {event.eventType === "INDIVIDUAL_GROUP" && event.invitees && event.invitees.length > 0 && (
+                {(event.eventType === "INDIVIDUAL_GROUP" || event.eventType === "TREASURY_SPECIAL") && event.invitees && event.invitees.length > 0 && (
                     <div className="mt-2 pt-2 border-t border-gray-50">
                         <InviteeAvatars invitees={event.invitees} />
                     </div>
@@ -526,7 +526,7 @@ function EventCardList({ event, isDeleting, onEdit, onDelete, canEdit, canDelete
                         <span>{event.createdBy?.name || event.createdBy?.role || "Desconocido"}</span>
                     </div>
                 </div>
-                {event.eventType === "INDIVIDUAL_GROUP" && event.invitees && event.invitees.length > 0 && (
+                {(event.eventType === "INDIVIDUAL_GROUP" || event.eventType === "TREASURY_SPECIAL") && event.invitees && event.invitees.length > 0 && (
                     <div className="mt-1">
                         <InviteeAvatars invitees={event.invitees} />
                     </div>
@@ -624,8 +624,16 @@ function Tag({ isGeneral, isBoard, areaName, areaColor, event }: { isGeneral: bo
         );
     }
 
-    // Area badge — skip for INDIVIDUAL_GROUP (the "👥 Reunión" tag is sufficient)
-    if (event?.eventType === "INDIVIDUAL_GROUP") {
+    if (event?.eventType === "TREASURY_SPECIAL") {
+        tags.push(
+            <span key="type-treasury" className="inline-block px-2 py-0.5 rounded-md bg-amber-100 text-amber-700 text-[10px] font-bold uppercase tracking-wide border border-amber-200">
+                💼 Tesorería
+            </span>
+        );
+    }
+
+    // Area badge — skip for invitee-targeted event types.
+    if (event?.eventType === "INDIVIDUAL_GROUP" || event?.eventType === "TREASURY_SPECIAL") {
         // No extra area/general tag needed
     } else if (event?.eventScope === "PROJECT" && event?.targetProjectArea) {
         const style = "bg-violet-50 text-violet-600 border-violet-200";

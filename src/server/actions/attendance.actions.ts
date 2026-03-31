@@ -26,6 +26,25 @@ async function canTakeAttendanceForEvent(
         targetProjectAreaId: string | null;
     },
 ): Promise<boolean> {
+    if (event.eventScope === "PROJECT" && event.eventType === "TREASURY_SPECIAL") {
+        return canManageEvent(
+            {
+                userRole: role,
+                userId,
+                userAreaId,
+                customPermissions,
+            },
+            {
+                createdById: event.createdById,
+                eventScope: event.eventScope,
+                eventType: event.eventType,
+                targetAreaId: event.targetAreaId,
+                projectId: event.projectId,
+                targetProjectAreaId: event.targetProjectAreaId,
+            }
+        );
+    }
+
     // take_all → can take attendance on any event
     if (hasPermission(role, "attendance:take_all", customPermissions)) return true;
 
@@ -69,6 +88,25 @@ async function canReviewJustificationForEvent(
         targetProjectAreaId: string | null;
     },
 ): Promise<boolean> {
+    if (event.eventScope === "PROJECT" && event.eventType === "TREASURY_SPECIAL") {
+        return canManageEvent(
+            {
+                userRole: role,
+                userId,
+                userAreaId,
+                customPermissions,
+            },
+            {
+                createdById: event.createdById,
+                eventScope: event.eventScope,
+                eventType: event.eventType,
+                targetAreaId: event.targetAreaId,
+                projectId: event.projectId,
+                targetProjectAreaId: event.targetProjectAreaId,
+            }
+        );
+    }
+
     // review_all → can review justifications for any event
     if (hasPermission(role, "attendance:review_all", customPermissions)) return true;
 

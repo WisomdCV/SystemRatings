@@ -54,6 +54,7 @@ export interface VisibilityContext {
  * - AREA (IISE): handled at query level (only user's area + general fetched)
  * - AREA (PROJECT): visible to members of that project area OR roles with project:view_all_areas permission
  * - INDIVIDUAL_GROUP: visible only to invitees + creator
+ * - TREASURY_SPECIAL: visible to invitees + creator, with project manager/view-all override
  */
 export function filterVisibleEvents<T extends {
     eventType?: string | null;
@@ -71,6 +72,21 @@ export function filterVisibleEvents<T extends {
         if (event.eventType === "INDIVIDUAL_GROUP") {
             if (event.createdById === ctx.userId) return true;
             return event.invitees?.some(inv => inv.userId === ctx.userId) ?? false;
+        }
+
+        // TREASURY_SPECIAL: invitees + creator + project event managers
+        if (event.eventType === "TREASURY_SPECIAL") {
+            if (event.createdById === ctx.userId) return true;
+            if (event.invitees?.some(inv => inv.userId === ctx.userId)) return true;
+
+            if (event.projectId) {
+                const membership = ctx.projectMemberships.find(m => m.projectId === event.projectId);
+                if (!membership) return false;
+                if (membership.projectPermissions.includes("project:event_manage_any")) return true;
+                if (membership.projectPermissions.includes("project:event_view_all")) return true;
+            }
+
+            return false;
         }
 
         // PROJECT scope AREA events: filter by project membership area

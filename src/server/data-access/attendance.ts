@@ -1,5 +1,5 @@
 import { db } from "@/db";
-import { attendanceRecords, events, users, projectMembers } from "@/db/schema";
+import { attendanceRecords, events, users, projectMembers, eventInvitees } from "@/db/schema";
 import { eq, and, inArray, ne } from "drizzle-orm";
 
 export type AttendanceStatus = "PRESENT" | "ABSENT" | "LATE" | "EXCUSED";
@@ -31,6 +31,7 @@ export async function getAttendanceSheetDAO(eventId: string): Promise<Attendance
             targetAreaId: true,
             createdById: true,
             eventScope: true,
+            eventType: true,
             projectId: true,
             targetProjectAreaId: true,
         },
@@ -68,23 +69,37 @@ export async function getAttendanceSheetDAO(eventId: string): Promise<Attendance
 
     // ── Branch 4: PROJECT scope ──────────────────────────────────────
     if (event.eventScope === "PROJECT" && event.projectId) {
-        const members = await db.query.projectMembers.findMany({
-            where: eq(projectMembers.projectId, event.projectId),
-            with: {
-                user: {
-                    columns: { id: true, name: true, image: true, email: true, currentAreaId: true }
+        if (event.eventType === "TREASURY_SPECIAL") {
+            // Treasury-special meetings track attendance only for explicit invitees.
+            const invitees = await db.query.eventInvitees.findMany({
+                where: eq(eventInvitees.eventId, eventId),
+                with: {
+                    user: {
+                        columns: { id: true, name: true, image: true, email: true, currentAreaId: true }
+                    }
                 }
-            }
-        });
+            });
 
-        if (event.targetProjectAreaId) {
-            // Area-specific project event → only members of that project area
-            eligibleUsers = members
-                .filter(m => m.projectAreaId === event.targetProjectAreaId)
-                .map(m => m.user);
+            eligibleUsers = invitees.map((invitee) => invitee.user);
         } else {
-            // General project event → all project members
-            eligibleUsers = members.map(m => m.user);
+            const members = await db.query.projectMembers.findMany({
+                where: eq(projectMembers.projectId, event.projectId),
+                with: {
+                    user: {
+                        columns: { id: true, name: true, image: true, email: true, currentAreaId: true }
+                    }
+                }
+            });
+
+            if (event.targetProjectAreaId) {
+                // Area-specific project event → only members of that project area
+                eligibleUsers = members
+                    .filter(m => m.projectAreaId === event.targetProjectAreaId)
+                    .map(m => m.user);
+            } else {
+                // General project event → all project members
+                eligibleUsers = members.map(m => m.user);
+            }
         }
     }
     // ── Branch 1-3: IISE scope ───────────────────────────────────────

@@ -5,6 +5,9 @@ import { CreateEventDTO, CreateEventSchema } from "@/lib/validators/event";
 import { createGoogleMeeting } from "@/server/services/google-calendar.service";
 import { createEventDAO, getEventByIdDAO, updateEventDAO, deleteEventDAO } from "@/server/data-access/events";
 import { revalidatePath } from "next/cache";
+import { db } from "@/db";
+import { projectMembers } from "@/db/schema";
+import { eq } from "drizzle-orm";
 import {
     canCreateIISEEvent,
     canCreateProjectEvent,
@@ -16,6 +19,28 @@ import {
 } from "@/server/services/event-permissions.service";
 import { UpdateEventDTO, UpdateEventSchema } from "@/lib/validators/event";
 import { deleteGoogleEvent, updateGoogleEvent } from "@/server/services/google-calendar.service";
+
+function normalizeRoleName(value: string | null | undefined): string {
+    return (value || "")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase()
+        .trim();
+}
+
+async function getTreasurySpecialInvitees(projectId: string): Promise<string[]> {
+    const members = await db.query.projectMembers.findMany({
+        where: eq(projectMembers.projectId, projectId),
+        with: {
+            projectRole: { columns: { name: true } },
+            user: { columns: { id: true } },
+        },
+    });
+
+    return members
+        .filter((member) => normalizeRoleName(member.projectRole?.name) === "director de area")
+        .map((member) => member.user.id);
+}
 
 export async function createEventAction(input: CreateEventDTO) {
     try {
@@ -36,9 +61,9 @@ export async function createEventAction(input: CreateEventDTO) {
         const eventScope = data.eventScope as EventScope;
         const eventType = data.eventType as EventType;
 
-        // Individual/group meetings are invitee-driven, not area-target driven.
+        // Invitee-based events are not area-target driven.
         // Normalize hidden form leftovers so visibility is consistent for invitees.
-        if (eventType === "INDIVIDUAL_GROUP") {
+        if (eventType === "INDIVIDUAL_GROUP" || eventType === "TREASURY_SPECIAL") {
             data.targetAreaId = null;
             data.targetProjectAreaId = null;
         }
@@ -82,6 +107,18 @@ export async function createEventAction(input: CreateEventDTO) {
             );
             if (!canCreate) {
                 return { success: false, error: "No tienes permisos para crear eventos en este proyecto." };
+            }
+
+            // Treasury special meetings always target project area directors automatically.
+            if (eventType === "TREASURY_SPECIAL") {
+                const invitees = await getTreasurySpecialInvitees(data.projectId);
+                if (invitees.length === 0) {
+                    return { success: false, error: "No hay directores de área en este proyecto para convocar la reunión especial." };
+                }
+                data.eventScope = "PROJECT";
+                data.targetAreaId = null;
+                data.targetProjectAreaId = null;
+                data.inviteeUserIds = invitees;
             }
         }
 
@@ -216,10 +253,29 @@ export async function updateEventAction(eventId: string, input: UpdateEventDTO) 
         }
         const data = validated.data;
 
-        // Keep INDIVIDUAL_GROUP target fields normalized when editing.
-        if (data.eventType === "INDIVIDUAL_GROUP") {
+        const effectiveEventType = (data.eventType ?? event.eventType) as EventType;
+        const effectiveProjectId = data.projectId ?? event.projectId;
+
+        // Keep invitee-based target fields normalized when editing.
+        if (effectiveEventType === "INDIVIDUAL_GROUP" || effectiveEventType === "TREASURY_SPECIAL") {
             data.targetAreaId = null;
             data.targetProjectAreaId = null;
+        }
+
+        if (effectiveEventType === "TREASURY_SPECIAL") {
+            if (!effectiveProjectId) {
+                return { success: false, error: "La reunión especial de tesorería requiere un proyecto." };
+            }
+
+            const invitees = await getTreasurySpecialInvitees(effectiveProjectId);
+            if (invitees.length === 0) {
+                return { success: false, error: "No hay directores de área en este proyecto para convocar la reunión especial." };
+            }
+
+            data.eventScope = "PROJECT";
+            data.eventType = "TREASURY_SPECIAL";
+            data.projectId = effectiveProjectId;
+            data.inviteeUserIds = invitees;
         }
 
         // TIMEZONE FIX

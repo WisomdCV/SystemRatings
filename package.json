@@ -9,6 +9,8 @@
     "lint": "eslint",
     "db:push": "drizzle-kit push",
     "db:seed": "node --import tsx src/db/seed.ts",
+    "db:migrate:project-treasury-events": "node --import tsx src/scripts/migrate-project-treasury-event-permissions.ts",
+    "db:migrate:project-treasury-events:apply": "node --import tsx src/scripts/migrate-project-treasury-event-permissions.ts --apply",
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {

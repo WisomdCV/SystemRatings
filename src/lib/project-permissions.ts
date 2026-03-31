@@ -22,6 +22,7 @@ export const PROJECT_PERMISSIONS = [
   // Events
   "project:event_create_any",
   "project:event_create_own_area",
+  "project:event_create_treasury_special",
   "project:event_manage_any",
   "project:event_manage_own",
   "project:event_view_all",
@@ -112,6 +113,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, ProjectPermission[]> = {
   "Coordinador / Project Management": [
     "project:event_create_any",
     "project:event_create_own_area",
+    "project:event_create_treasury_special",
     "project:event_manage_any",
     "project:event_manage_own",
     "project:event_view_all",
@@ -136,6 +138,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, ProjectPermission[]> = {
   "Director de proyecto": [
     "project:event_create_any",
     "project:event_create_own_area",
+    "project:event_create_treasury_special",
     "project:event_manage_any",
     "project:event_manage_own",
     "project:event_view_all",
@@ -159,6 +162,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, ProjectPermission[]> = {
   "Subdirector de proyecto": [
     "project:event_create_any",
     "project:event_create_own_area",
+    "project:event_create_treasury_special",
     "project:event_manage_any",
     "project:event_manage_own",
     "project:event_view_all",
@@ -179,8 +183,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, ProjectPermission[]> = {
     "project:view_all_areas",
   ],
   "Tesorero de proyecto": [
-    "project:event_create_any",
-    "project:event_create_own_area",
+    "project:event_create_treasury_special",
     "project:event_manage_own",
     "project:task_create_any",
     "project:task_create_own_area",
