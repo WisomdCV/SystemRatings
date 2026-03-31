@@ -13,6 +13,7 @@
     "db:migrate:project-treasury-events:apply": "node --import tsx src/scripts/migrate-project-treasury-event-permissions.ts --apply",
     "db:migrate:project-cycles": "node --import tsx src/scripts/migrate-project-cycles.ts",
     "db:migrate:project-cycles:apply": "node --import tsx src/scripts/migrate-project-cycles.ts --apply",
+    "audit:area-membership": "node --import tsx src/scripts/audit-area-membership.ts",
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {

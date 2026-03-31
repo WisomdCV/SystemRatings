@@ -1182,7 +1182,7 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
 
                                     return (
                                         <div key={invitation.id} className="p-3 mb-2 rounded-xl border bg-indigo-50 border-indigo-200">
-                                            <div className="flex items-start justify-between gap-2">
+                                            <div className="flex items-start gap-2">
                                                 <div className="min-w-0 flex items-start gap-2">
                                                     <div
                                                         className="mt-0.5 h-3 w-3 rounded-full border border-white/80 shadow-sm"
@@ -1198,12 +1198,6 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
                                                         </p>
                                                     </div>
                                                 </div>
-                                                <Link
-                                                    href={`/dashboard/projects/${invitation.project.id}`}
-                                                    className="text-[10px] font-bold bg-white text-indigo-700 px-2 py-0.5 rounded-full border border-indigo-200 hover:bg-indigo-100"
-                                                >
-                                                    Ver
-                                                </Link>
                                             </div>
 
                                             <div className="mt-1 text-[11px] text-indigo-700 space-y-0.5">

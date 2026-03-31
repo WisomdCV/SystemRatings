@@ -1,6 +1,6 @@
 import { db } from "@/db";
 import { attendanceRecords, events, users, projectMembers, eventInvitees } from "@/db/schema";
-import { eq, and, inArray, ne } from "drizzle-orm";
+import { eq, and, ne } from "drizzle-orm";
 
 export type AttendanceStatus = "PRESENT" | "ABSENT" | "LATE" | "EXCUSED";
 
@@ -29,34 +29,17 @@ export async function getAttendanceSheetDAO(eventId: string): Promise<Attendance
         columns: {
             id: true,
             targetAreaId: true,
-            createdById: true,
             eventScope: true,
             eventType: true,
             projectId: true,
             targetProjectAreaId: true,
         },
-        with: {
-            targetArea: {
-                columns: { isLeadershipArea: true }
-            },
-            createdBy: {
-                columns: {
-                    id: true,
-                    name: true,
-                    image: true,
-                    email: true,
-                    currentAreaId: true,
-                    role: true
-                }
-            }
-        }
     });
 
     if (!event) throw new Error("Evento no encontrado");
 
     // 2. Search Eligible Users
     // If targetAreaId is NULL -> General -> All ACTIVE users
-    // If targetArea.code === 'MD' -> Board -> Director, Subdirector, Treasurer
     // If targetAreaId is SET -> Area -> Active users of that area
 
     let eligibleUsers: {
@@ -119,22 +102,6 @@ export async function getAttendanceSheetDAO(eventId: string): Promise<Attendance
             },
             orderBy: (users, { asc }) => [asc(users.name)]
         });
-    } else if (event.targetArea?.isLeadershipArea) {
-        // Mesa Directiva
-        eligibleUsers = await db.query.users.findMany({
-            where: and(
-                eq(users.status, "ACTIVE"),
-                inArray(users.role, ["DIRECTOR", "SUBDIRECTOR", "TREASURER"])
-            ),
-            columns: {
-                id: true,
-                name: true,
-                image: true,
-                email: true,
-                currentAreaId: true
-            },
-            orderBy: (users, { asc }) => [asc(users.name)]
-        });
     } else {
         // Evento Normal de Área
         eligibleUsers = await db.query.users.findMany({
@@ -152,24 +119,6 @@ export async function getAttendanceSheetDAO(eventId: string): Promise<Attendance
             },
             orderBy: (users, { asc }) => [asc(users.name)]
         });
-    }
-
-    // NEW LOGIC: Always include the Creator (if not DEV and not already in list)
-    if (event.createdBy && event.createdBy.role !== "DEV") {
-        const isAlreadyIncluded = eligibleUsers.some(u => u.id === event.createdBy?.id);
-        if (!isAlreadyIncluded) {
-            // Add creator to the list
-            eligibleUsers.push({
-                id: event.createdBy.id,
-                name: event.createdBy.name,
-                image: event.createdBy.image,
-                email: event.createdBy.email,
-                currentAreaId: event.createdBy.currentAreaId
-            });
-            // Re-sort strictly by name to maintain order? 
-            // Optional, but nice.
-            eligibleUsers.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
-        }
     }
 
     // 3. Get existing records for this event
