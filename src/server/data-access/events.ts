@@ -3,6 +3,30 @@ import { events, semesters, eventInvitees, projectCycles } from "@/db/schema";
 import { CreateEventDTO } from "@/lib/validators/event";
 import { eq, and, desc } from "drizzle-orm";
 
+function buildInviteeRows(
+    eventId: string,
+    inviteeUserIds: string[] | undefined,
+    creatorUserId: string | null | undefined,
+) {
+    const statusByUserId = new Map<string, "PENDING" | "ACCEPTED">();
+
+    for (const uid of inviteeUserIds ?? []) {
+        if (!uid) continue;
+        statusByUserId.set(uid, "PENDING");
+    }
+
+    // Creator is always present and automatically accepted.
+    if (creatorUserId) {
+        statusByUserId.set(creatorUserId, "ACCEPTED");
+    }
+
+    return Array.from(statusByUserId.entries()).map(([uid, status]) => ({
+        eventId,
+        userId: uid,
+        status,
+    }));
+}
+
 export async function createEventDAO(
     userId: string,
     data: CreateEventDTO,
@@ -67,21 +91,11 @@ export async function createEventDAO(
 
         // 3. Insert Invitees for invitee-based event types
         const isInviteeBasedEvent = data.eventType === "INDIVIDUAL_GROUP" || data.eventType === "TREASURY_SPECIAL";
-        if (isInviteeBasedEvent && data.inviteeUserIds && data.inviteeUserIds.length > 0) {
-            const inviteeRows = data.inviteeUserIds.map(uid => ({
-                eventId: newEvent.id,
-                userId: uid,
-                status: "PENDING",
-            }));
-
-            // Also add the creator as an invitee
-            inviteeRows.push({
-                eventId: newEvent.id,
-                userId: userId,
-                status: "ACCEPTED",
-            });
-
-            await tx.insert(eventInvitees).values(inviteeRows);
+        if (isInviteeBasedEvent) {
+            const inviteeRows = buildInviteeRows(newEvent.id, data.inviteeUserIds, userId);
+            if (inviteeRows.length > 0) {
+                await tx.insert(eventInvitees).values(inviteeRows);
+            }
         }
 
         return [newEvent];
@@ -164,27 +178,12 @@ export async function updateEventDAO(eventId: string, data: Partial<CreateEventD
 
             // Insert new invitees for invitee-based event types
             const isInviteeBasedEvent = data.eventType === "INDIVIDUAL_GROUP" || data.eventType === "TREASURY_SPECIAL";
-            if (isInviteeBasedEvent && data.inviteeUserIds && data.inviteeUserIds.length > 0) {
-                const inviteeRows = data.inviteeUserIds.map(uid => ({
-                    eventId,
-                    userId: uid,
-                    status: "PENDING",
-                }));
-
-                // Re-add creator as invitee
+            if (isInviteeBasedEvent) {
                 const event = result[0];
-                if (event?.createdById) {
-                    const creatorAlready = inviteeRows.some(r => r.userId === event.createdById);
-                    if (!creatorAlready) {
-                        inviteeRows.push({
-                            eventId,
-                            userId: event.createdById,
-                            status: "ACCEPTED",
-                        });
-                    }
+                const inviteeRows = buildInviteeRows(eventId, data.inviteeUserIds, event?.createdById);
+                if (inviteeRows.length > 0) {
+                    await tx.insert(eventInvitees).values(inviteeRows);
                 }
-
-                await tx.insert(eventInvitees).values(inviteeRows);
             }
         }
 

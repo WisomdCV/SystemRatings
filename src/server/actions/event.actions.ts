@@ -20,6 +20,20 @@ import {
 import { UpdateEventDTO, UpdateEventSchema } from "@/lib/validators/event";
 import { deleteGoogleEvent, updateGoogleEvent } from "@/server/services/google-calendar.service";
 
+function mapEventMutationError(error: unknown): string {
+    const raw = error instanceof Error ? error.message : "";
+    const normalized = raw.toLowerCase();
+
+    if (
+        normalized.includes("event_invitee")
+        && (normalized.includes("unique") || normalized.includes("failed query"))
+    ) {
+        return "No se pudo guardar la lista de invitados porque hay usuarios repetidos. Si te incluyes a ti mismo, el sistema te registrará una sola vez.";
+    }
+
+    return raw || "Error interno del servidor";
+}
+
 function normalizeRoleName(value: string | null | undefined): string {
     return (value || "")
         .normalize("NFD")
@@ -164,7 +178,7 @@ export async function createEventAction(input: CreateEventDTO) {
 
     } catch (err: any) {
         console.error("Create Event Action Error:", err);
-        return { success: false, error: err.message || "Error interno del servidor" };
+        return { success: false, error: mapEventMutationError(err) };
     }
 }
 
@@ -219,7 +233,7 @@ export async function deleteEventAction(eventId: string) {
         return { success: true, message: "Evento eliminado." + warning };
 
     } catch (error: any) {
-        return { success: false, error: error.message };
+        return { success: false, error: mapEventMutationError(error) };
     }
 }
 
@@ -328,6 +342,6 @@ export async function updateEventAction(eventId: string, input: UpdateEventDTO) 
         return { success: true, message: "Evento actualizado." + warning };
 
     } catch (error: any) {
-        return { success: false, error: error.message };
+        return { success: false, error: mapEventMutationError(error) };
     }
 }
