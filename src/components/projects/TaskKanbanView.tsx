@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import { DragDropContext, Droppable, Draggable, type DropResult } from "@hello-pangea/dnd";
 import { TASK_STATUSES } from "@/lib/validators/project";
 import { getAgingConfig, getTaskAgingLevel, getTaskDuration, getTaskTimeProgress } from "@/lib/task-utils";
-import { Clock3, MessageSquare, User } from "lucide-react";
+import { Clock3, MessageSquare, User, GripVertical } from "lucide-react";
 
 interface TaskAssignment {
   id: string;
@@ -119,7 +119,7 @@ export default function TaskKanbanView({
     <div className="space-y-3">
       <div className="text-[11px] text-gray-500 font-medium rounded-lg border border-gray-200 bg-white px-3 py-2">
         {canReorder
-          ? "Arrastra tareas entre columnas para cambiar estado y posición."
+          ? "Clic en tarjeta para abrir detalle. Arrastra desde el asa para mover entre columnas."
           : "Vista de tablero activa. Cambia a orden por posición y filtros globales para habilitar drag & drop."}
       </div>
 
@@ -155,78 +155,89 @@ export default function TaskKanbanView({
                         return (
                           <Draggable key={task.id} draggableId={task.id} index={index} isDragDisabled={!canReorder}>
                             {(dragProvided, dragSnapshot) => (
-                              <button
-                                type="button"
+                              <div
                                 ref={dragProvided.innerRef}
                                 {...dragProvided.draggableProps}
-                                {...dragProvided.dragHandleProps}
-                                onClick={() => onOpenTaskDetail(task.id)}
                                 className={`w-full text-left rounded-lg border bg-white p-2.5 transition-all border-l-4 ${agingCfg.borderColor} ${dragSnapshot.isDragging ? "shadow-lg rotate-1" : "hover:shadow-sm"}`}
                               >
                                 <div className="flex items-start justify-between gap-2">
-                                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${PRIORITY_BADGE[task.priority] || "bg-gray-100 text-gray-700"}`}>
-                                    {task.priority}
-                                  </span>
-                                  {task.projectArea && (
-                                    <span
-                                      className="text-[9px] font-bold px-1.5 py-0.5 rounded border"
-                                      style={{
-                                        color: task.projectArea.color || "#64748b",
-                                        borderColor: `${task.projectArea.color || "#64748b"}50`,
-                                        backgroundColor: `${task.projectArea.color || "#64748b"}12`,
-                                      }}
-                                    >
-                                      {task.projectArea.name}
-                                    </span>
-                                  )}
-                                </div>
-
-                                <p className="mt-2 text-xs font-bold text-meteorite-900 line-clamp-2">
-                                  {task.title}
-                                </p>
-
-                                {task.startDate && task.dueDate && (
-                                  <div className="mt-2 space-y-1">
-                                    <div className="text-[10px] text-gray-500 font-medium inline-flex items-center gap-1">
-                                      <Clock3 className="w-3 h-3" />
-                                      {new Date(task.startDate).toLocaleDateString("es", { day: "2-digit", month: "short", timeZone: "UTC" })}
-                                      <span>{"->"}</span>
-                                      {new Date(task.dueDate).toLocaleDateString("es", { day: "2-digit", month: "short", timeZone: "UTC" })}
-                                      {duration !== null ? ` (${duration}d)` : ""}
-                                    </div>
-                                    {timeProgress !== null && (
-                                      <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                                        <div
-                                          className="h-full bg-gradient-to-r from-violet-400 to-violet-600 rounded-full"
-                                          style={{ width: `${Math.max(0, Math.min(100, timeProgress))}%` }}
-                                        />
-                                      </div>
-                                    )}
-                                  </div>
-                                )}
-
-                                <div className="mt-2 flex items-center justify-between">
                                   <div className="flex items-center gap-1.5">
-                                    {task.assignments.slice(0, 2).map((assignment) => (
-                                      <span key={assignment.id} className="w-5 h-5 rounded-full bg-violet-100 text-violet-700 text-[9px] font-black flex items-center justify-center">
-                                        {(assignment.user.name || "?").charAt(0).toUpperCase()}
+                                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${PRIORITY_BADGE[task.priority] || "bg-gray-100 text-gray-700"}`}>
+                                      {task.priority}
+                                    </span>
+                                    {task.projectArea && (
+                                      <span
+                                        className="text-[9px] font-bold px-1.5 py-0.5 rounded border"
+                                        style={{
+                                          color: task.projectArea.color || "#64748b",
+                                          borderColor: `${task.projectArea.color || "#64748b"}50`,
+                                          backgroundColor: `${task.projectArea.color || "#64748b"}12`,
+                                        }}
+                                      >
+                                        {task.projectArea.name}
                                       </span>
-                                    ))}
-                                    {task.assignments.length > 2 && (
-                                      <span className="text-[10px] font-bold text-gray-500">+{task.assignments.length - 2}</span>
                                     )}
                                   </div>
-                                  <div className="flex items-center gap-2 text-[10px] text-gray-500">
-                                    <span className="inline-flex items-center gap-1">
-                                      <MessageSquare className="w-3 h-3" />
-                                      {task._commentCount ?? 0}
-                                    </span>
-                                    <span className="inline-flex items-center gap-1">
-                                      <User className="w-3 h-3" />
-                                      {task.assignments.length}
-                                    </span>
-                                  </div>
+
+                                  <button
+                                    type="button"
+                                    {...dragProvided.dragHandleProps}
+                                    className={`inline-flex items-center justify-center w-6 h-6 rounded-md border border-gray-200 bg-white text-gray-400 ${canReorder ? "cursor-grab active:cursor-grabbing hover:text-violet-600 hover:border-violet-300" : "cursor-not-allowed opacity-50"}`}
+                                    title={canReorder ? "Arrastrar tarea" : "Arrastre deshabilitado"}
+                                    aria-label="Arrastrar tarea"
+                                  >
+                                    <GripVertical className="w-3.5 h-3.5" />
+                                  </button>
                                 </div>
+
+                                <button type="button" onClick={() => onOpenTaskDetail(task.id)} className="w-full text-left">
+                                  <p className="mt-2 text-xs font-bold text-meteorite-900 line-clamp-2 hover:text-violet-700 transition-colors">
+                                    {task.title}
+                                  </p>
+
+                                  {task.startDate && task.dueDate && (
+                                    <div className="mt-2 space-y-1">
+                                      <div className="text-[10px] text-gray-500 font-medium inline-flex items-center gap-1">
+                                        <Clock3 className="w-3 h-3" />
+                                        {new Date(task.startDate).toLocaleDateString("es", { day: "2-digit", month: "short", timeZone: "UTC" })}
+                                        <span>{"->"}</span>
+                                        {new Date(task.dueDate).toLocaleDateString("es", { day: "2-digit", month: "short", timeZone: "UTC" })}
+                                        {duration !== null ? ` (${duration}d)` : ""}
+                                      </div>
+                                      {timeProgress !== null && (
+                                        <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                                          <div
+                                            className="h-full bg-gradient-to-r from-violet-400 to-violet-600 rounded-full"
+                                            style={{ width: `${Math.max(0, Math.min(100, timeProgress))}%` }}
+                                          />
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+
+                                  <div className="mt-2 flex items-center justify-between">
+                                    <div className="flex items-center gap-1.5">
+                                      {task.assignments.slice(0, 2).map((assignment) => (
+                                        <span key={assignment.id} className="w-5 h-5 rounded-full bg-violet-100 text-violet-700 text-[9px] font-black flex items-center justify-center">
+                                          {(assignment.user.name || "?").charAt(0).toUpperCase()}
+                                        </span>
+                                      ))}
+                                      {task.assignments.length > 2 && (
+                                        <span className="text-[10px] font-bold text-gray-500">+{task.assignments.length - 2}</span>
+                                      )}
+                                    </div>
+                                    <div className="flex items-center gap-2 text-[10px] text-gray-500">
+                                      <span className="inline-flex items-center gap-1">
+                                        <MessageSquare className="w-3 h-3" />
+                                        {task._commentCount ?? 0}
+                                      </span>
+                                      <span className="inline-flex items-center gap-1">
+                                        <User className="w-3 h-3" />
+                                        {task.assignments.length}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </button>
 
                                 {aging !== "NONE" && (
                                   <div className={`mt-2 inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded ${agingCfg.bgTint}`}>
@@ -234,7 +245,7 @@ export default function TaskKanbanView({
                                     {agingCfg.label}
                                   </div>
                                 )}
-                              </button>
+                              </div>
                             )}
                           </Draggable>
                         );

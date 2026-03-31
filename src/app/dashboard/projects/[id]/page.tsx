@@ -229,43 +229,16 @@ export default async function ProjectDetailPage(props: { params: Promise<{ id: s
 
             <div className="relative z-10">
                 {/* Header */}
-                <div className="mb-6 flex items-center gap-4">
+                <div className="mb-6 flex items-center gap-3">
                     <Link
                         href="/dashboard/projects"
                         className="bg-white p-2.5 rounded-full text-meteorite-600 hover:text-meteorite-800 hover:bg-meteorite-100 transition-all shadow-sm border border-meteorite-100"
                     >
                         <ArrowLeft className="w-5 h-5" />
                     </Link>
-                    <div>
-                        <h2 className="text-2xl font-black text-meteorite-950">{projectResult.data.name}</h2>
-                        <p className="text-meteorite-500 text-xs font-medium">
-                            Ciclo: {projectResult.data.semester.name}
-                        </p>
-                        <div className="mt-2 flex flex-wrap gap-1.5">
-                            {projectCycles.map((cycle) => (
-                                <span
-                                    key={cycle.id}
-                                    className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${cycle.status === "ACTIVE"
-                                        ? "bg-emerald-100 text-emerald-700"
-                                        : cycle.status === "EXTENDED"
-                                            ? "bg-amber-100 text-amber-700"
-                                            : "bg-slate-100 text-slate-700"
-                                        }`}
-                                >
-                                    {cycle.semester?.name || "Sin ciclo"} · {cycle.status}
-                                </span>
-                            ))}
-                            {isMultiCycle && (
-                                <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-100 text-indigo-700">
-                                    Multi-ciclo
-                                </span>
-                            )}
-                            {!projectResult.data.isWritable && (
-                                <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-rose-100 text-rose-700">
-                                    Solo lectura
-                                </span>
-                            )}
-                        </div>
+                    <div className="min-w-0">
+                        <p className="text-meteorite-500 text-xs font-black uppercase tracking-wider">Proyectos</p>
+                        <p className="text-sm font-black text-meteorite-900 truncate">Vista detallada</p>
                     </div>
                 </div>
 

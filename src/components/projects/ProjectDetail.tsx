@@ -1640,21 +1640,19 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
                         </div>
                     )}
 
-                    {/* Quick Stats */}
+                    {/* Interaction Guide */}
                     <div className="bg-white/80 backdrop-blur-md border border-gray-200 rounded-2xl p-4">
-                        <h4 className="font-black text-meteorite-950 text-sm mb-3">Resumen</h4>
-                        <div className="grid grid-cols-2 gap-2">
-                            {[
-                                { label: "Tareas", value: taskStats.total, color: "text-meteorite-700" },
-                                { label: "Completadas", value: taskStats.done, color: "text-emerald-600" },
-                                { label: "En progreso", value: taskStats.inProgress, color: "text-blue-600" },
-                                { label: "Bloqueadas", value: taskStats.blocked, color: "text-red-600" },
-                            ].map(s => (
-                                <div key={s.label} className="bg-gray-50 rounded-xl p-2.5 text-center">
-                                    <p className={`text-xl font-black ${s.color}`}>{s.value}</p>
-                                    <p className="text-[10px] text-gray-500 font-bold">{s.label}</p>
-                                </div>
-                            ))}
+                        <h4 className="font-black text-meteorite-950 text-sm mb-3">Guía rápida</h4>
+                        <div className="space-y-2 text-[11px] text-gray-600 font-medium">
+                            <p className="rounded-lg bg-gray-50 border border-gray-200 px-3 py-2">
+                                En <strong>Kanban</strong>, abre detalle con clic en la tarjeta y arrastra solo desde el <strong>asa de arrastre</strong>.
+                            </p>
+                            <p className="rounded-lg bg-gray-50 border border-gray-200 px-3 py-2">
+                                En <strong>Equipo</strong>, cada área se puede plegar/desplegar para reducir ruido visual.
+                            </p>
+                            <p className="rounded-lg bg-gray-50 border border-gray-200 px-3 py-2">
+                                El botón de <strong>engranaje</strong> del banner abre la edición avanzada del proyecto.
+                            </p>
                         </div>
                     </div>
                 </div>
