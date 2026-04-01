@@ -62,8 +62,8 @@ export default async function AgendaPage() {
 
         const eventWith = {
             targetArea: true,
-            project: { columns: { id: true, name: true } },
-            targetProjectArea: { columns: { id: true, name: true } },
+            project: { columns: { id: true, name: true, color: true } },
+            targetProjectArea: { columns: { id: true, name: true, color: true } },
             createdBy: { columns: { name: true, role: true } },
             invitees: {
                 with: {

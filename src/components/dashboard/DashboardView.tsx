@@ -126,6 +126,19 @@ interface DashboardViewProps {
     canViewAnyProjects?: boolean;
 }
 
+type EventIndicatorItem = {
+    eventScope?: string | null;
+    eventType?: string | null;
+    targetAreaId?: string | null;
+    isVirtual?: boolean | null;
+    date: Date | string;
+    startTime?: string | null;
+    endTime?: string | null;
+    project?: { name?: string | null; color?: string | null } | null;
+    targetProjectArea?: { name?: string | null; color?: string | null } | null;
+    targetArea?: { name?: string | null; color?: string | null; isLeadershipArea?: boolean | null } | null;
+};
+
 export default function DashboardView({ user, upcomingEvents = [], pendingJustifications = [], attendanceHistory = [], currentSemester, dashboardData, pendingApprovalUsers = [], pendingProjectInvitations = [], roleChanged = false, myProjects = [], allVisibleProjects = [], canViewAnyProjects = false }: DashboardViewProps) {
     const [chartView, setChartView] = useState<"monthly" | "semester">("monthly");
     const [projectViewMode, setProjectViewMode] = useState<"mine" | "all">("mine");
@@ -221,6 +234,61 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
         (item.status === "ABSENT" || item.status === "LATE") &&
         (item.justificationStatus === "NONE" || item.justificationStatus === "REJECTED")
     ).length;
+
+    const DASH_HEX_COLOR_REGEX = /^#([0-9a-fA-F]{6})$/;
+    const normalizeDashHex = (value?: string | null) => {
+        if (!value) return null;
+        const text = value.trim();
+        const withHash = text.startsWith("#") ? text : `#${text}`;
+        return DASH_HEX_COLOR_REGEX.test(withHash) ? withHash : null;
+    };
+    const dashColorToRgba = (hex: string | null | undefined, alpha: number) => {
+        const normalized = normalizeDashHex(hex) || "#6366F1";
+        const clean = normalized.slice(1);
+        const r = Number.parseInt(clean.slice(0, 2), 16);
+        const g = Number.parseInt(clean.slice(2, 4), 16);
+        const b = Number.parseInt(clean.slice(4, 6), 16);
+        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    };
+
+    const getDashboardEventAccentColor = (event: EventIndicatorItem) => {
+        if (event?.eventScope === "PROJECT") {
+            return normalizeDashHex(event?.targetProjectArea?.color) || normalizeDashHex(event?.project?.color) || "#6366F1";
+        }
+        if (event?.targetArea?.isLeadershipArea) {
+            return "#f59e0b";
+        }
+        return normalizeDashHex(event?.targetArea?.color) || "#64748b";
+    };
+
+    const getDashboardScopeIndicator = (event: EventIndicatorItem) => {
+        if (event?.eventScope === "PROJECT") {
+            const color = getDashboardEventAccentColor(event);
+            if (event?.targetProjectArea?.name) {
+                return { label: `Proyecto • ${event.targetProjectArea.name}`, color };
+            }
+            return { label: `Proyecto • ${event?.project?.name || "General"}`, color };
+        }
+
+        if (event?.eventScope === "IISE" && event?.targetArea) {
+            return {
+                label: `IISE • ${event.targetArea.name}`,
+                color: normalizeDashHex(event.targetArea.color) || "#0f766e",
+            };
+        }
+
+        return { label: "IISE • General", color: "#64748b" };
+    };
+
+    const getDashboardTypeIndicator = (event: EventIndicatorItem) => {
+        if (event?.eventType === "INDIVIDUAL_GROUP") {
+            return { label: "Reunión Individual", className: "bg-teal-100 text-teal-700 border-teal-200" };
+        }
+        if (event?.eventType === "TREASURY_SPECIAL") {
+            return { label: "Tesorería Especial", className: "bg-amber-100 text-amber-700 border-amber-200" };
+        }
+        return null;
+    };
 
     const getEventStatusLabel = (event: any) => {
         if (!event) return { label: "", style: "" };
@@ -908,29 +976,18 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
                                 {upcomingEvents.length > 0 ? (
                                     upcomingEvents.map((ev, idx) => {
                                         const statusObjEv = getEventStatusLabel(ev);
-                                        // Badge Logic para Slides
-                                        let badgeColor = "bg-white/20 text-white";
-                                        let badgeLabel = "Event";
-                                        let slideGradient = "from-meteorite-600 to-meteorite-800"; // General default
-
-                                        if (ev.eventScope === "PROJECT") {
-                                            badgeColor = "bg-white/20 text-white border border-white/30";
-                                            badgeLabel = ev.project?.name || "Proyecto";
-                                            slideGradient = "from-indigo-500 to-violet-700";
-                                        } else if (ev.eventScope === "IISE") {
-                                            if (ev.targetAreaId) {
-                                                badgeColor = "bg-white/20 text-white border border-white/30";
-                                                badgeLabel = ev.targetArea?.name || "Área";
-                                                slideGradient = "from-orange-500 to-amber-600";
-                                            } else {
-                                                badgeColor = "bg-white/20 text-white border border-white/30";
-                                                badgeLabel = "General";
-                                                slideGradient = "from-meteorite-600 to-meteorite-800";
-                                            }
-                                        }
+                                        const accentColorEv = getDashboardEventAccentColor(ev);
+                                        const scopeIndicatorEv = getDashboardScopeIndicator(ev);
+                                        const typeIndicatorEv = getDashboardTypeIndicator(ev);
 
                                         return (
-                                            <div key={ev.id} className={`w-full h-full flex-shrink-0 snap-center p-5 lg:p-6 relative flex flex-col justify-between bg-gradient-to-br transition-all duration-700 ${slideGradient}`}>
+                                            <div
+                                                key={ev.id}
+                                                className="w-full h-full flex-shrink-0 snap-center p-5 lg:p-6 relative flex flex-col justify-between transition-all duration-700"
+                                                style={{
+                                                    backgroundImage: `linear-gradient(140deg, ${dashColorToRgba(accentColorEv, 0.95)} 0%, ${dashColorToRgba(accentColorEv, 0.72)} 52%, #1f1b3f 100%)`,
+                                                }}
+                                            >
                                                 <div className="absolute right-0 top-0 w-32 h-32 bg-white opacity-10 rounded-bl-full -mr-6 -mt-6 pointer-events-none"></div>
                                                 <div className="relative z-10 flex flex-col h-full justify-between">
                                                     <div>
@@ -939,9 +996,21 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
                                                                 <span className={`inline-block px-3 py-1 rounded-lg text-[10px] font-bold backdrop-blur-md transition-all ${statusObjEv.style}`}>
                                                                     {statusObjEv.label}
                                                                 </span>
-                                                                <span className={`inline-block px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider backdrop-blur-md ${badgeColor} shadow-sm max-w-[150px] truncate`}>
-                                                                    {badgeLabel}
+                                                                <span
+                                                                    className="inline-block px-2 py-0.5 rounded text-[9px] font-black tracking-wider backdrop-blur-md shadow-sm max-w-[180px] truncate border"
+                                                                    style={{
+                                                                        backgroundColor: "rgba(255,255,255,0.18)",
+                                                                        borderColor: "rgba(255,255,255,0.35)",
+                                                                        color: "#ffffff",
+                                                                    }}
+                                                                >
+                                                                    {scopeIndicatorEv.label}
                                                                 </span>
+                                                                {typeIndicatorEv && (
+                                                                    <span className="inline-block px-2 py-0.5 rounded text-[9px] font-black tracking-wider backdrop-blur-md shadow-sm border bg-white/20 border-white/35 text-white">
+                                                                        {typeIndicatorEv.label}
+                                                                    </span>
+                                                                )}
                                                             </div>
                                                             {upcomingEvents.length > 1 && (
                                                                 <div className="flex gap-1 justify-center items-center bg-black/20 px-2.5 py-1.5 rounded-full backdrop-blur-sm self-start">
@@ -1073,28 +1142,25 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
                                     upcomingEvents.map((event) => {
                                         const status = getEventStatusLabel(event);
                                         const isInProgress = status.label.includes("En curso");
-
-                                        // Badge Logic para List
-                                        let listBadgeColor = "bg-meteorite-100 text-meteorite-700 border-meteorite-200";
-                                        let listBadgeLabel = "General";
-                                        if (event.eventScope === "PROJECT") {
-                                            listBadgeColor = "bg-indigo-100 text-indigo-700 border-indigo-200";
-                                            listBadgeLabel = event.project?.name || "Proyecto";
-                                        } else if (event.eventScope === "IISE") {
-                                            if (event.targetAreaId) {
-                                                listBadgeColor = "bg-orange-100 text-orange-700 border-orange-200";
-                                                listBadgeLabel = event.targetArea?.name || "Área";
-                                            }
-                                        }
+                                        const accentColor = getDashboardEventAccentColor(event);
+                                        const scopeIndicator = getDashboardScopeIndicator(event);
+                                        const typeIndicator = getDashboardTypeIndicator(event);
 
                                         return (
                                             <div key={event.id} className={`flex items-center p-3 rounded-xl transition-all group cursor-pointer border ${isInProgress
                                                 ? "bg-red-50/80 border-red-300 shadow-sm animate-pulse-slow"
-                                                : "hover:bg-meteorite-50 border-transparent hover:border-meteorite-200"
+                                                : "hover:bg-white border-transparent hover:border-meteorite-200"
                                                 }`}>
-                                                <div className={`w-12 h-12 rounded-xl flex flex-col items-center justify-center font-bold shadow-sm transition-colors ${isInProgress ? "bg-red-500 text-white" :
-                                                    event.targetAreaId ? 'bg-orange-50 text-orange-600 group-hover:bg-orange-100' : 'bg-meteorite-100 text-meteorite-600 group-hover:bg-meteorite-200'
-                                                    }`}>
+                                                <div
+                                                    className={`w-12 h-12 rounded-xl flex flex-col items-center justify-center font-bold shadow-sm transition-colors border ${isInProgress ? "bg-red-500 text-white border-red-500" : "group-hover:brightness-95"}`}
+                                                    style={isInProgress
+                                                        ? undefined
+                                                        : {
+                                                            backgroundColor: dashColorToRgba(accentColor, 0.15),
+                                                            color: accentColor,
+                                                            borderColor: dashColorToRgba(accentColor, 0.32),
+                                                        }}
+                                                >
                                                     <span className="text-[10px] uppercase tracking-wide">
                                                         {new Date(event.date).toLocaleDateString('es-ES', { month: 'short', timeZone: 'UTC' })}
                                                     </span>
@@ -1106,7 +1172,21 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
                                                     <div className="flex justify-between items-start mb-1">
                                                         <div className="flex flex-col gap-1">
                                                             <div className="flex items-center gap-2">
-                                                                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase tracking-wider ${listBadgeColor}`}>{listBadgeLabel}</span>
+                                                                <span
+                                                                    className="text-[9px] font-bold px-1.5 py-0.5 rounded border tracking-wider"
+                                                                    style={{
+                                                                        backgroundColor: dashColorToRgba(scopeIndicator.color, 0.14),
+                                                                        color: scopeIndicator.color,
+                                                                        borderColor: dashColorToRgba(scopeIndicator.color, 0.32),
+                                                                    }}
+                                                                >
+                                                                    {scopeIndicator.label}
+                                                                </span>
+                                                                {typeIndicator && (
+                                                                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border tracking-wider ${typeIndicator.className}`}>
+                                                                        {typeIndicator.label}
+                                                                    </span>
+                                                                )}
                                                                 {isInProgress && (
                                                                     <span className="text-[9px] font-black text-red-500 uppercase tracking-wider animate-pulse">
                                                                         ● En Curso
@@ -1124,17 +1204,17 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
                                                         )}
                                                     </div>
                                                     <div className={`flex items-center mt-1 text-xs ${isInProgress ? "text-red-600/80" : "text-gray-500"}`}>
-                                                        <Clock className={`w-3 h-3 mr-1.5 ${isInProgress ? "text-red-500" : (event.targetAreaId ? 'text-orange-400' : 'text-meteorite-400')}`} />
+                                                        <Clock className="w-3 h-3 mr-1.5" style={isInProgress ? { color: "#ef4444" } : { color: accentColor }} />
                                                         {event.startTime} - {event.endTime}
                                                         <span className={`mx-2 ${isInProgress ? "text-red-300" : "text-gray-300"}`}>|</span>
                                                         {event.isVirtual ? (
                                                             <>
-                                                                <Video className={`w-3 h-3 mr-1.5 ${isInProgress ? "text-red-500" : 'text-meteorite-400'}`} />
+                                                                <Video className="w-3 h-3 mr-1.5" style={isInProgress ? { color: "#ef4444" } : { color: accentColor }} />
                                                                 Virtual
                                                             </>
                                                         ) : (
                                                             <>
-                                                                <MapPin className={`w-3 h-3 mr-1.5 ${isInProgress ? "text-red-500" : 'text-meteorite-400'}`} />
+                                                                <MapPin className="w-3 h-3 mr-1.5" style={isInProgress ? { color: "#ef4444" } : { color: accentColor }} />
                                                                 Campus
                                                             </>
                                                         )}

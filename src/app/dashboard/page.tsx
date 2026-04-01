@@ -88,8 +88,8 @@ export default async function DashboardPage() {
 
         const eventWith = {
             targetArea: true,
-            project: { columns: { id: true, name: true } },
-            targetProjectArea: { columns: { id: true, name: true } },
+            project: { columns: { id: true, name: true, color: true } },
+            targetProjectArea: { columns: { id: true, name: true, color: true } },
             invitees: { columns: { userId: true } },
         } as const;
 

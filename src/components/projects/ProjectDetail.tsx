@@ -231,6 +231,7 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
 
     // Member add
     const [showAddMember, setShowAddMember] = useState(false);
+    const [showAddMemberMobileSheet, setShowAddMemberMobileSheet] = useState(false);
     const [memberSearch, setMemberSearch] = useState("");
     const [selectedAreaId, setSelectedAreaId] = useState<string>("none"); // 'none' means system/sin area
     const [selectedRoleId, setSelectedRoleId] = useState<string>("");
@@ -300,11 +301,11 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
     const isAreaRestricted = !isSystemAdmin && !userPerms.includes("project:task_create_any") && userPerms.includes("project:task_create_own_area");
 
     useEffect(() => {
-        if (!showAddMember) return;
+        if (!showAddMember && !showAddMemberMobileSheet) return;
         if (!selectedRoleId && defaultAssignableRoleId) {
             setSelectedRoleId(defaultAssignableRoleId);
         }
-    }, [showAddMember, selectedRoleId, defaultAssignableRoleId]);
+    }, [showAddMember, showAddMemberMobileSheet, selectedRoleId, defaultAssignableRoleId]);
 
     useEffect(() => {
         const saved = loadTaskFilters(project.id);
@@ -333,6 +334,19 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
     const showFeedback = (type: "success" | "error", message: string) => {
         setFeedback({ type, message });
         setTimeout(() => setFeedback(null), 4000);
+    };
+
+    const resetAddMemberFields = () => {
+        setMemberSearch("");
+        setSelectedAreaId("none");
+        setSelectedRoleId("");
+        setInvitationMessage("");
+    };
+
+    const closeAddMemberPanels = () => {
+        setShowAddMember(false);
+        setShowAddMemberMobileSheet(false);
+        resetAddMemberFields();
     };
 
     const openEditProject = () => {
@@ -419,7 +433,7 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
             if (selectedAreaId !== "none") payload.projectAreaId = selectedAreaId;
 
             const res = await createProjectInvitationAction(payload);
-            if (res.success) { showFeedback("success", res.message!); setShowAddMember(false); setMemberSearch(""); setSelectedRoleId(""); setInvitationMessage(""); router.refresh(); }
+            if (res.success) { showFeedback("success", res.message!); closeAddMemberPanels(); router.refresh(); }
             else showFeedback("error", res.error!);
         });
     };
@@ -671,6 +685,7 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
     const accentColor = normalizeHexColor(project.color || "") || "#6366F1";
     const projectCode = project.id.split("-")[0].toUpperCase();
     const reviewCount = project.tasks.filter((task) => task.status === "REVIEW").length;
+    const addMemberCandidates = filteredEligible.slice(0, 14);
 
     return (
         <div className="space-y-6">
@@ -974,6 +989,99 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
                                 >
                                     {isPending ? "Guardando..." : "Guardar cambios"}
                                 </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {showAddMemberMobileSheet && canManageMembers && (
+                <div className="fixed inset-0 z-40 sm:hidden">
+                    <button
+                        type="button"
+                        className="absolute inset-0 bg-meteorite-950/45 backdrop-blur-[2px]"
+                        onClick={closeAddMemberPanels}
+                        aria-label="Cerrar agregar miembro"
+                    />
+                    <div className="absolute inset-0 bg-white flex flex-col">
+                        <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between bg-white">
+                            <div>
+                                <p className="text-[11px] font-black uppercase tracking-wide text-violet-600">Equipo</p>
+                                <h4 className="text-sm font-black text-meteorite-900">Agregar miembro</h4>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={closeAddMemberPanels}
+                                className="p-2 rounded-lg text-gray-500 hover:bg-gray-100"
+                                aria-label="Cerrar"
+                            >
+                                <X className="w-4 h-4" />
+                            </button>
+                        </div>
+
+                        <div className="flex-1 min-h-0 p-4 overflow-y-auto space-y-3">
+                            <div className="grid grid-cols-1 gap-2">
+                                <select
+                                    value={selectedRoleId || defaultAssignableRoleId}
+                                    onChange={e => setSelectedRoleId(e.target.value)}
+                                    className="w-full px-3 py-2.5 text-sm font-bold rounded-xl border border-gray-200 outline-none focus:border-violet-500 text-meteorite-900 bg-white"
+                                >
+                                    {assignableRoles.map(r => (
+                                        <option key={r.id} value={r.id}>{r.name} (Nv. {r.hierarchyLevel})</option>
+                                    ))}
+                                </select>
+                                <select
+                                    value={selectedAreaId}
+                                    onChange={e => setSelectedAreaId(e.target.value)}
+                                    className="w-full px-3 py-2.5 text-sm font-bold rounded-xl border border-gray-200 outline-none focus:border-violet-500 text-meteorite-900 bg-white"
+                                >
+                                    <option value="none">Sin Área Específica</option>
+                                    {allProjectAreas.map(a => (
+                                        <option key={a.id} value={a.id}>{a.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            {assignableRoles.length === 0 && (
+                                <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700">
+                                    No tienes roles asignables para invitar miembros en este proyecto.
+                                </div>
+                            )}
+
+                            <textarea
+                                value={invitationMessage}
+                                onChange={e => setInvitationMessage(e.target.value)}
+                                rows={3}
+                                placeholder="Mensaje opcional para la invitación..."
+                                className="w-full px-3 py-2 text-sm rounded-xl border border-gray-200 outline-none resize-none focus:border-violet-500 text-meteorite-950 placeholder:text-gray-400"
+                            />
+                            <input
+                                type="text"
+                                value={memberSearch}
+                                onChange={e => setMemberSearch(e.target.value)}
+                                placeholder="Buscar usuario..."
+                                autoFocus
+                                className="w-full px-3 py-2.5 text-sm rounded-xl border border-gray-200 outline-none focus:border-violet-500 text-meteorite-950 placeholder:text-gray-400"
+                            />
+
+                            <div className="rounded-xl border border-gray-200 bg-white max-h-[50vh] overflow-y-auto overscroll-contain">
+                                {assignableRoles.length === 0 && (
+                                    <div className="p-3 text-center text-xs text-gray-500">No tienes roles asignables.</div>
+                                )}
+                                {assignableRoles.length > 0 && addMemberCandidates.map(u => (
+                                    <button
+                                        key={u.id}
+                                        onClick={() => handleAddMember(u.id)}
+                                        disabled={isPending}
+                                        className="w-full flex items-center gap-2 px-3 py-2.5 hover:bg-violet-50 text-left text-xs disabled:opacity-50 transition-colors border-b border-gray-100 last:border-0"
+                                    >
+                                        <span className="font-semibold text-gray-900 truncate flex-1">{u.name || u.email}</span>
+                                        <span className="text-[10px] font-bold px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded">{u.role}</span>
+                                    </button>
+                                ))}
+                                {filteredEligible.length === 0 && (
+                                    <div className="p-3 text-center text-xs text-gray-500">No hay usuarios disponibles.</div>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -1327,7 +1435,7 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
                                                                     <Plus className="w-3.5 h-3.5" />
                                                                 </button>
                                                                 {assigningTaskId === task.id && (
-                                                                    <div className="absolute top-8 left-0 z-50 bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden min-w-48 w-max">
+                                                                    <div className="absolute top-8 right-0 sm:left-0 sm:right-auto z-50 bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden min-w-48 w-max max-w-[min(92vw,20rem)]">
                                                                         <div className="p-2 border-b border-gray-100 bg-gray-50/50">
                                                                             <input type="text" value={assignSearch} onChange={e => setAssignSearch(e.target.value)}
                                                                                 placeholder="Buscar miembro..." autoFocus
@@ -1381,26 +1489,41 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
                 {/* ── RIGHT COLUMN: Members + Info ── */}
                 <div className="space-y-4 lg:sticky lg:top-4 self-start">
                     {/* Members */}
-                    <div className="bg-white/80 backdrop-blur-md border border-gray-200 rounded-2xl overflow-hidden">
+                    <div className="bg-white/80 backdrop-blur-md border border-gray-200 rounded-2xl">
                         <div className="px-4 py-3 bg-meteorite-900 text-white flex items-center justify-between">
                             <h4 className="font-black text-sm flex items-center gap-1.5">
                                 <Users className="w-4 h-4 text-violet-300" />
                                 Equipo ({project.members.length})
                             </h4>
                             {canManageMembers && (
-                                <button onClick={() => {
-                                    const next = !showAddMember;
-                                    setShowAddMember(next);
-                                    if (!next) {
-                                        setMemberSearch("");
-                                        setSelectedAreaId("none");
-                                        setSelectedRoleId("");
-                                        setInvitationMessage("");
-                                    }
-                                }} disabled={isPending}
-                                    className="p-1.5 text-violet-200 hover:bg-white/10 rounded-lg transition-colors disabled:opacity-50">
-                                    <UserPlus className="w-4 h-4" />
-                                </button>
+                                <div className="flex items-center gap-1.5">
+                                    <button
+                                        onClick={() => {
+                                            setShowAddMember(false);
+                                            setShowAddMemberMobileSheet(true);
+                                        }}
+                                        disabled={isPending}
+                                        className="sm:hidden p-1.5 text-violet-200 hover:bg-white/10 rounded-lg transition-colors disabled:opacity-50"
+                                        title="Agregar miembro"
+                                    >
+                                        <UserPlus className="w-4 h-4" />
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            const next = !showAddMember;
+                                            setShowAddMember(next);
+                                            setShowAddMemberMobileSheet(false);
+                                            if (!next) {
+                                                resetAddMemberFields();
+                                            }
+                                        }}
+                                        disabled={isPending}
+                                        className="hidden sm:inline-flex p-1.5 text-violet-200 hover:bg-white/10 rounded-lg transition-colors disabled:opacity-50"
+                                        title="Agregar miembro"
+                                    >
+                                        <UserPlus className="w-4 h-4" />
+                                    </button>
+                                </div>
                             )}
                         </div>
 
@@ -1408,13 +1531,13 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
 
                         {/* Add Member Dropdown */}
                         {showAddMember && (
-                            <div className="mb-3 bg-gray-50 border border-gray-200 rounded-xl overflow-hidden">
+                            <div className="mb-3 bg-gray-50 border border-gray-200 rounded-xl relative z-20">
                                 <div className="p-2 border-b border-gray-100 flex flex-col gap-2">
-                                    <div className="flex gap-2">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                                         <select
                                             value={selectedRoleId || defaultAssignableRoleId}
                                             onChange={e => setSelectedRoleId(e.target.value)}
-                                            className="px-2 py-1.5 text-xs font-bold rounded-lg border border-gray-200 outline-none flex-1 text-meteorite-900 bg-white"
+                                            className="w-full px-2 py-2 text-xs font-bold rounded-lg border border-gray-200 outline-none text-meteorite-900 bg-white"
                                         >
                                             {assignableRoles.map(r => (
                                                 <option key={r.id} value={r.id}>{r.name} (Nv. {r.hierarchyLevel})</option>
@@ -1423,7 +1546,7 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
                                         <select
                                             value={selectedAreaId}
                                             onChange={e => setSelectedAreaId(e.target.value)}
-                                            className="px-2 py-1.5 text-xs font-bold rounded-lg border border-gray-200 outline-none flex-1 text-meteorite-900 bg-white"
+                                            className="w-full px-2 py-2 text-xs font-bold rounded-lg border border-gray-200 outline-none text-meteorite-900 bg-white"
                                         >
                                             <option value="none">Sin Área Específica</option>
                                             {allProjectAreas.map(a => (
@@ -1431,22 +1554,27 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
                                             ))}
                                         </select>
                                     </div>
+                                    {assignableRoles.length === 0 && (
+                                        <div className="rounded-lg border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] font-semibold text-amber-700">
+                                            No tienes roles asignables para invitar miembros en este proyecto.
+                                        </div>
+                                    )}
                                     <textarea
                                         value={invitationMessage}
                                         onChange={e => setInvitationMessage(e.target.value)}
                                         rows={2}
                                         placeholder="Mensaje opcional para la invitación..."
-                                        className="w-full px-3 py-1.5 text-xs rounded-lg border border-gray-200 outline-none resize-none text-meteorite-950 placeholder:text-gray-400"
+                                        className="w-full px-3 py-1.5 text-xs rounded-lg border border-gray-200 outline-none resize-none focus:border-violet-500 text-meteorite-950 placeholder:text-gray-400"
                                     />
                                     <input type="text" value={memberSearch} onChange={e => setMemberSearch(e.target.value)}
                                         placeholder="Buscar usuario…" autoFocus
-                                        className="w-full px-3 py-1.5 text-xs rounded-lg border border-gray-200 outline-none text-meteorite-950 placeholder:text-gray-400" />
+                                        className="w-full px-3 py-1.5 text-xs rounded-lg border border-gray-200 outline-none focus:border-violet-500 text-meteorite-950 placeholder:text-gray-400" />
                                 </div>
-                                <div className="max-h-32 overflow-y-auto">
+                                <div className="max-h-56 overflow-y-auto overscroll-contain">
                                     {assignableRoles.length === 0 && (
                                         <div className="p-3 text-center text-xs text-gray-500">No tienes roles asignables.</div>
                                     )}
-                                    {assignableRoles.length > 0 && filteredEligible.slice(0, 10).map(u => (
+                                    {assignableRoles.length > 0 && addMemberCandidates.map(u => (
                                         <button key={u.id} onClick={() => handleAddMember(u.id)}
                                             disabled={isPending}
                                             className="w-full flex items-center gap-2 px-3 py-2 hover:bg-white text-left text-xs disabled:opacity-50 transition-colors">
@@ -1484,7 +1612,7 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
                                                             : "sin fecha"}
                                                     </p>
                                                     {invitation.message && (
-                                                        <p className="text-[10px] text-gray-500 italic mt-1 line-clamp-2">"{invitation.message}"</p>
+                                                        <p className="text-[10px] text-gray-500 italic mt-1 line-clamp-2">&quot;{invitation.message}&quot;</p>
                                                     )}
                                                 </div>
                                                 <button
@@ -1524,7 +1652,7 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
                                 const hiddenCount = group.members.length - visibleMembers.length;
 
                                 return (
-                                    <div key={group.id} className="rounded-xl border border-gray-200 overflow-hidden bg-white">
+                                    <div key={group.id} className="rounded-xl border border-gray-200 bg-white">
                                         <button
                                             type="button"
                                             onClick={() => setCollapsedAreaGroups((prev) => ({ ...prev, [group.id]: !isCollapsed }))}
@@ -1571,7 +1699,7 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
                                                                             value={m.projectRole.id}
                                                                             onChange={e => handleChangeRole(m.id, e.target.value)}
                                                                             disabled={isPending}
-                                                                            className="text-[10px] font-bold rounded-lg px-2 py-1 border outline-none cursor-pointer bg-white text-gray-700 border-gray-200 shadow-sm focus:border-violet-500 hover:border-gray-300 transition-colors"
+                                                                            className="text-[10px] font-bold rounded-lg px-2 py-1 border outline-none cursor-pointer bg-white text-meteorite-900 border-gray-200 shadow-sm focus:border-violet-500 hover:border-gray-300 transition-colors"
                                                                         >
                                                                             {assignableRoles.map(r => (
                                                                                 <option key={r.id} value={r.id}>{r.name}</option>
@@ -1581,7 +1709,7 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
                                                                             value={m.projectArea?.id || "none"}
                                                                             onChange={e => handleChangeArea(m.id, e.target.value)}
                                                                             disabled={isPending}
-                                                                            className="text-[10px] font-bold rounded-lg px-2 py-1 border outline-none cursor-pointer bg-white text-gray-500 border-gray-200 shadow-sm focus:border-violet-500 hover:border-gray-300 transition-colors"
+                                                                            className="text-[10px] font-bold rounded-lg px-2 py-1 border outline-none cursor-pointer bg-white text-meteorite-900 border-gray-200 shadow-sm focus:border-violet-500 hover:border-gray-300 transition-colors"
                                                                         >
                                                                             <option value="none">Sin Área</option>
                                                                             {allProjectAreas.map(a => (
