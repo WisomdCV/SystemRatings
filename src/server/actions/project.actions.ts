@@ -336,6 +336,11 @@ export async function deleteProjectAction(projectId: string) {
         // IISE bypass OR project:delete
         const iiseBypass = canBypassProjectPerms(session.user.role || "", session.user.customPermissions);
         if (!iiseBypass) {
+            const writable = await isProjectWritable(projectId);
+            if (!writable) {
+                return { success: false as const, error: "Este proyecto está en modo solo lectura para este ciclo." };
+            }
+
             const membership = await getProjectMembershipWithPerms(session.user.id, projectId);
             if (!hasProjectPermission(membership, "project:delete")) {
                 return { success: false as const, error: "No tienes permisos para eliminar este proyecto." };

@@ -41,6 +41,7 @@ import {
   generatePreviewUrl,
   checkLinkHealth,
 } from "@/lib/resource-links";
+import { isProjectWritable } from "@/server/services/project-cycle.service";
 
 async function getProjectMembershipWithPerms(userId: string, projectId: string) {
   const membership = await db.query.projectMembers.findFirst({
@@ -289,6 +290,11 @@ export async function createResourceAction(input: CreateResourceDTO) {
     const iiseBypass = canBypassProjectPerms(session.user.role || "", session.user.customPermissions);
 
     if (!iiseBypass) {
+      const writable = await isProjectWritable(projectId);
+      if (!writable) {
+        return { success: false as const, error: "Este proyecto está en modo solo lectura para este ciclo." };
+      }
+
       const membership = await getProjectMembershipWithPerms(session.user.id, projectId);
       if (!membership) return { success: false as const, error: "No eres miembro del proyecto." };
 
@@ -494,6 +500,11 @@ export async function updateResourceAction(input: UpdateResourceDTO) {
 
     const iiseBypass = canBypassProjectPerms(session.user.role || "", session.user.customPermissions);
     if (!iiseBypass) {
+      const writable = await isProjectWritable(resource.projectId);
+      if (!writable) {
+        return { success: false as const, error: "Este proyecto está en modo solo lectura para este ciclo." };
+      }
+
       const membership = await getProjectMembershipWithPerms(session.user.id, resource.projectId);
       const isOwner = resource.createdById === session.user.id;
 
@@ -536,6 +547,11 @@ export async function deleteResourceAction(resourceId: string) {
 
     const iiseBypass = canBypassProjectPerms(session.user.role || "", session.user.customPermissions);
     if (!iiseBypass) {
+      const writable = await isProjectWritable(resource.projectId);
+      if (!writable) {
+        return { success: false as const, error: "Este proyecto está en modo solo lectura para este ciclo." };
+      }
+
       const membership = await getProjectMembershipWithPerms(session.user.id, resource.projectId);
       const isOwner = resource.createdById === session.user.id;
 
@@ -582,6 +598,11 @@ export async function addResourceLinkAction(input: AddResourceLinkDTO) {
 
     const iiseBypass = canBypassProjectPerms(session.user.role || "", session.user.customPermissions);
     if (!iiseBypass) {
+      const writable = await isProjectWritable(resource.projectId);
+      if (!writable) {
+        return { success: false as const, error: "Este proyecto está en modo solo lectura para este ciclo." };
+      }
+
       const membership = await getProjectMembershipWithPerms(session.user.id, resource.projectId);
       if (!membership) return { success: false as const, error: "No eres miembro del proyecto." };
 
@@ -663,6 +684,11 @@ export async function updateResourceLinkAction(input: UpdateResourceLinkDTO) {
 
     const iiseBypass = canBypassProjectPerms(session.user.role || "", session.user.customPermissions);
     if (!iiseBypass) {
+      const writable = await isProjectWritable(link.resource.projectId);
+      if (!writable) {
+        return { success: false as const, error: "Este proyecto está en modo solo lectura para este ciclo." };
+      }
+
       const membership = await getProjectMembershipWithPerms(session.user.id, link.resource.projectId);
       if (!membership) return { success: false as const, error: "No eres miembro del proyecto." };
 
@@ -741,6 +767,11 @@ export async function deleteResourceLinkAction(input: DeleteResourceLinkDTO) {
 
     const iiseBypass = canBypassProjectPerms(session.user.role || "", session.user.customPermissions);
     if (!iiseBypass) {
+      const writable = await isProjectWritable(link.resource.projectId);
+      if (!writable) {
+        return { success: false as const, error: "Este proyecto está en modo solo lectura para este ciclo." };
+      }
+
       const isLinkOwner = link.addedById === session.user.id;
       if (!isLinkOwner) {
         const membership = await getProjectMembershipWithPerms(session.user.id, link.resource.projectId);
@@ -782,6 +813,11 @@ export async function verifyResourceLinksAction(resourceId: string) {
 
     const iiseBypass = canBypassProjectPerms(session.user.role || "", session.user.customPermissions);
     if (!iiseBypass) {
+      const writable = await isProjectWritable(resource.projectId);
+      if (!writable) {
+        return { success: false as const, error: "Este proyecto está en modo solo lectura para este ciclo." };
+      }
+
       const membership = await getProjectMembershipWithPerms(session.user.id, resource.projectId);
       const isOwner = resource.createdById === session.user.id;
 

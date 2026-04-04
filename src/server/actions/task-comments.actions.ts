@@ -13,6 +13,7 @@ import {
 } from "@/lib/validators/project";
 import { hasProjectPermission, canBypassProjectPerms } from "@/lib/project-permissions";
 import { filterVisibleTasks, type MembershipContext } from "@/server/services/project-visibility.service";
+import { isProjectWritable } from "@/server/services/project-cycle.service";
 
 async function getProjectMembershipWithPerms(userId: string, projectId: string) {
   const membership = await db.query.projectMembers.findFirst({
@@ -75,6 +76,11 @@ export async function createTaskCommentAction(input: CreateTaskCommentDTO) {
       },
     });
     if (!task) return { success: false as const, error: "Tarea no encontrada." };
+
+    const writable = await isProjectWritable(task.projectId);
+    if (!writable) {
+      return { success: false as const, error: "Este proyecto está en modo solo lectura para este ciclo." };
+    }
 
     const canViewTask = await canUserViewTask(
       {
@@ -187,8 +193,17 @@ export async function updateTaskCommentAction(input: UpdateTaskCommentDTO) {
     });
     if (!comment) return { success: false as const, error: "Comentario no encontrado." };
 
-    if (comment.userId !== session.user.id) {
-      return { success: false as const, error: "Solo puedes editar tus propios comentarios." };
+    const writable = await isProjectWritable(comment.task.projectId);
+    if (!writable) {
+      return { success: false as const, error: "Este proyecto está en modo solo lectura para este ciclo." };
+    }
+
+    const iiseBypass = canBypassProjectPerms(session.user.role || "", session.user.customPermissions);
+    if (!iiseBypass && comment.userId !== session.user.id) {
+      const membership = await getProjectMembershipWithPerms(session.user.id, comment.task.projectId);
+      if (!hasProjectPermission(membership, "project:task_manage_any")) {
+        return { success: false as const, error: "Solo puedes editar tus propios comentarios." };
+      }
     }
 
     await db.update(taskComments)
@@ -219,6 +234,11 @@ export async function deleteTaskCommentAction(commentId: string) {
       },
     });
     if (!comment) return { success: false as const, error: "Comentario no encontrado." };
+
+    const writable = await isProjectWritable(comment.task.projectId);
+    if (!writable) {
+      return { success: false as const, error: "Este proyecto está en modo solo lectura para este ciclo." };
+    }
 
     const iiseBypass = canBypassProjectPerms(session.user.role || "", session.user.customPermissions);
     if (!iiseBypass && comment.userId !== session.user.id) {
