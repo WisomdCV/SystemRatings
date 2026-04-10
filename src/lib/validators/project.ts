@@ -1,12 +1,15 @@
 import { z } from "zod";
+import {
+    PROJECT_STATUSES,
+    PROJECT_PRIORITIES,
+    TASK_STATUSES,
+    TASK_PRIORITIES,
+    INVITATION_STATUSES,
+    INVITATION_EXPIRY_DAYS,
+} from "@/lib/constants";
 
-// ─── Project Statuses ────────────────────────────────────────────────────────
-export const PROJECT_STATUSES = ["PLANNING", "ACTIVE", "PAUSED", "COMPLETED", "CANCELLED"] as const;
-export const PROJECT_PRIORITIES = ["LOW", "MEDIUM", "HIGH", "CRITICAL"] as const;
-export const TASK_STATUSES = ["TODO", "IN_PROGRESS", "REVIEW", "DONE", "BLOCKED"] as const;
-export const TASK_PRIORITIES = ["LOW", "MEDIUM", "HIGH"] as const;
-export const INVITATION_STATUSES = ["PENDING", "ACCEPTED", "REJECTED", "CANCELLED", "EXPIRED"] as const;
-export const INVITATION_EXPIRY_DAYS = 7;
+// Re-export so existing imports from this file still work
+export { PROJECT_STATUSES, PROJECT_PRIORITIES, TASK_STATUSES, TASK_PRIORITIES, INVITATION_STATUSES, INVITATION_EXPIRY_DAYS };
 
 // ─── Project Schemas ─────────────────────────────────────────────────────────
 

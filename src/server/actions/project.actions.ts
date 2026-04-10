@@ -33,6 +33,10 @@ import type {
     AddProjectMemberDTO, UpdateProjectMemberRoleDTO,
     CreateTaskDTO, UpdateTaskDTO, UpdateTaskStatusDTO, AssignTaskDTO,
 } from "@/lib/validators/project";
+import { EXTENDABLE_PROJECT_STATUSES } from "@/lib/constants";
+import type { CycleStatus, ProjectStatus, TaskStatus } from "@/lib/constants";
+
+const TASK_DONE: TaskStatus = "DONE";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -89,15 +93,19 @@ export async function getProjectsAction(cycleFilterInput?: string) {
             },
         });
 
+        const ACTIVE: CycleStatus = "ACTIVE";
+        const ARCHIVED: CycleStatus = "ARCHIVED";
+        const EXTENDED: CycleStatus = "EXTENDED";
+
         let cycleFilteredProjects = allProjects;
         if (cycleFilter === "active") {
             if (!activeSemester) return { success: false as const, error: "No hay ciclo activo." };
             cycleFilteredProjects = allProjects.filter((project) =>
-                project.cycles.some((cycle) => cycle.semesterId === activeSemester.id && cycle.status === "ACTIVE"),
+                project.cycles.some((cycle) => cycle.semesterId === activeSemester.id && cycle.status === ACTIVE),
             );
         } else if (cycleFilter === "history") {
             cycleFilteredProjects = allProjects.filter((project) =>
-                project.cycles.some((cycle) => cycle.status === "ARCHIVED" || cycle.status === "EXTENDED"),
+                project.cycles.some((cycle) => cycle.status === ARCHIVED || cycle.status === EXTENDED),
             );
         }
 
@@ -200,7 +208,7 @@ export async function getProjectByIdAction(projectId: string) {
 
         const projectWithCommentCount = {
             ...project,
-            isWritable: project.cycles.some((cycle) => cycle.status === "ACTIVE"),
+            isWritable: project.cycles.some((cycle) => cycle.status === ("ACTIVE" satisfies CycleStatus)),
             tasks: visibleTasks.map((task) => ({
                 ...task,
                 _commentCount: task.comments?.length ?? 0,
@@ -245,7 +253,7 @@ export async function createProjectAction(input: CreateProjectDTO) {
             await tx.insert(projectCycles).values({
                 projectId: created.id,
                 semesterId: activeSemester.id,
-                status: "ACTIVE",
+                status: "ACTIVE" satisfies CycleStatus,
             });
 
             // Auto-add creator as Coordinador (highest hierarchy) or find the highest available
@@ -307,6 +315,7 @@ export async function updateProjectAction(input: UpdateProjectDTO) {
             }
         }
 
+        const COMPLETED: ProjectStatus = "COMPLETED";
         await db.update(projects).set({
             name: validated.data.name,
             description: validated.data.description || null,
@@ -315,7 +324,7 @@ export async function updateProjectAction(input: UpdateProjectDTO) {
             priority: validated.data.priority,
             startDate: validated.data.startDate || null,
             deadline: validated.data.deadline || null,
-            completedAt: validated.data.status === "COMPLETED" ? new Date() : null,
+            completedAt: validated.data.status === COMPLETED ? new Date() : null,
             updatedAt: new Date(),
         }).where(eq(projects.id, validated.data.id));
 
@@ -368,7 +377,7 @@ export async function extendProjectCycleAction(projectId: string) {
         });
         if (!project) return { success: false as const, error: "Proyecto no encontrado." };
 
-        if (!["ACTIVE", "PAUSED", "PLANNING"].includes(project.status)) {
+        if (!(EXTENDABLE_PROJECT_STATUSES as readonly string[]).includes(project.status)) {
             return { success: false as const, error: "Solo se pueden extender proyectos en estado ACTIVO, PAUSADO o PLANIFICACIÓN." };
         }
 
@@ -388,18 +397,21 @@ export async function extendProjectCycleAction(projectId: string) {
             return { success: false as const, error: "Este proyecto ya está vinculado al ciclo activo." };
         }
 
+        const ACTIVE_C: CycleStatus = "ACTIVE";
+        const EXTENDED_C: CycleStatus = "EXTENDED";
+
         await db.transaction(async (tx) => {
             const previousActive = await tx.query.projectCycles.findFirst({
                 where: and(
                     eq(projectCycles.projectId, projectId),
-                    eq(projectCycles.status, "ACTIVE"),
+                    eq(projectCycles.status, ACTIVE_C),
                 ),
                 orderBy: [desc(projectCycles.startedAt)],
             });
 
             if (previousActive) {
                 await tx.update(projectCycles).set({
-                    status: "EXTENDED",
+                    status: EXTENDED_C,
                     endedAt: new Date(),
                 }).where(eq(projectCycles.id, previousActive.id));
             }
@@ -407,7 +419,7 @@ export async function extendProjectCycleAction(projectId: string) {
             await tx.insert(projectCycles).values({
                 projectId,
                 semesterId: activeSemester.id,
-                status: "ACTIVE",
+                status: ACTIVE_C,
                 extendedFromCycleId: previousActive?.id ?? null,
                 extendedById: session.user.id,
             });
@@ -436,10 +448,13 @@ export async function archiveProjectCycleAction(projectId: string) {
             }
         }
 
+        const ACTIVE_ARCHIVE: CycleStatus = "ACTIVE";
+        const ARCHIVED_STATUS: CycleStatus = "ARCHIVED";
+
         const activeCycle = await db.query.projectCycles.findFirst({
             where: and(
                 eq(projectCycles.projectId, projectId),
-                eq(projectCycles.status, "ACTIVE"),
+                eq(projectCycles.status, ACTIVE_ARCHIVE),
             ),
             orderBy: [desc(projectCycles.startedAt)],
         });
@@ -448,7 +463,7 @@ export async function archiveProjectCycleAction(projectId: string) {
         }
 
         await db.update(projectCycles).set({
-            status: "ARCHIVED",
+            status: ARCHIVED_STATUS,
             endedAt: new Date(),
         }).where(eq(projectCycles.id, activeCycle.id));
 
@@ -696,7 +711,7 @@ export async function updateTaskAction(input: UpdateTaskDTO) {
             priority: validated.data.priority,
             startDate: validated.data.startDate || null,
             dueDate: validated.data.dueDate || null,
-            completedAt: validated.data.status === "DONE" ? new Date() : null,
+            completedAt: validated.data.status === TASK_DONE ? new Date() : null,
             updatedAt: new Date(),
         }).where(eq(projectTasks.id, validated.data.id));
 
@@ -768,7 +783,7 @@ export async function updateTaskStatusAction(input: UpdateTaskStatusDTO) {
 
         await db.update(projectTasks).set({
             status: validated.data.status,
-            completedAt: validated.data.status === "DONE" ? new Date() : null,
+            completedAt: validated.data.status === TASK_DONE ? new Date() : null,
             updatedAt: new Date(),
         }).where(eq(projectTasks.id, validated.data.id));
 
@@ -814,7 +829,7 @@ export async function reorderTasksAction(input: {
             };
             if (update.status) {
                 setData.status = update.status;
-                setData.completedAt = update.status === "DONE" ? new Date() : null;
+                setData.completedAt = update.status === TASK_DONE ? new Date() : null;
             }
 
             await db.update(projectTasks)

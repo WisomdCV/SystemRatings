@@ -25,6 +25,13 @@ import { canBypassProjectPerms, hasProjectPermission } from "@/lib/project-permi
 import { hasPermission } from "@/lib/permissions";
 import { filterVisibleInvitations, type MembershipContext } from "@/server/services/project-visibility.service";
 import { isProjectWritable } from "@/server/services/project-cycle.service";
+import type { InvitationStatus } from "@/lib/constants";
+
+const PENDING: InvitationStatus = "PENDING";
+const ACCEPTED: InvitationStatus = "ACCEPTED";
+const REJECTED: InvitationStatus = "REJECTED";
+const CANCELLED: InvitationStatus = "CANCELLED";
+const EXPIRED: InvitationStatus = "EXPIRED";
 
 async function getProjectMembershipWithPerms(userId: string, projectId: string) {
   const membership = await db.query.projectMembers.findFirst({
@@ -137,7 +144,7 @@ export async function createProjectInvitationAction(input: CreateProjectInvitati
       where: and(
         eq(projectInvitations.projectId, projectId),
         eq(projectInvitations.userId, userId),
-        eq(projectInvitations.status, "PENDING"),
+        eq(projectInvitations.status, PENDING),
       ),
       columns: { id: true },
     });
@@ -151,7 +158,7 @@ export async function createProjectInvitationAction(input: CreateProjectInvitati
       projectRoleId,
       projectAreaId: projectAreaId || null,
       invitedById: session.user.id,
-      status: "PENDING",
+      status: PENDING,
       message: message || null,
       expiresAt: computeExpiresAt(),
     });
@@ -187,14 +194,14 @@ export async function respondToInvitationAction(input: RespondInvitationDTO) {
       return { success: false as const, error: "Esta invitación no te pertenece." };
     }
 
-    if (invitation.status !== "PENDING") {
+    if (invitation.status !== PENDING) {
       return { success: false as const, error: `La invitación ya fue ${invitation.status.toLowerCase()}.` };
     }
 
     if (isExpired(invitation.expiresAt)) {
       await db
         .update(projectInvitations)
-        .set({ status: "EXPIRED", respondedAt: new Date() })
+        .set({ status: EXPIRED, respondedAt: new Date() })
         .where(eq(projectInvitations.id, invitationId));
 
       revalidateInvitations(invitation.projectId);
@@ -241,7 +248,7 @@ export async function respondToInvitationAction(input: RespondInvitationDTO) {
       if (existingMember) {
         await db
           .update(projectInvitations)
-          .set({ status: "CANCELLED", respondedAt: new Date() })
+          .set({ status: CANCELLED, respondedAt: new Date() })
           .where(eq(projectInvitations.id, invitationId));
 
         revalidateInvitations(invitation.projectId);
@@ -258,7 +265,7 @@ export async function respondToInvitationAction(input: RespondInvitationDTO) {
 
         await tx
           .update(projectInvitations)
-          .set({ status: "ACCEPTED", respondedAt: new Date() })
+          .set({ status: ACCEPTED, respondedAt: new Date() })
           .where(eq(projectInvitations.id, invitationId));
       });
 
@@ -269,7 +276,7 @@ export async function respondToInvitationAction(input: RespondInvitationDTO) {
     await db
       .update(projectInvitations)
       .set({
-        status: "REJECTED",
+        status: REJECTED,
         rejectionReason: rejectionReason || null,
         respondedAt: new Date(),
       })
@@ -300,7 +307,7 @@ export async function cancelProjectInvitationAction(input: CancelInvitationDTO) 
       return { success: false as const, error: "Invitación no encontrada." };
     }
 
-    if (invitation.status !== "PENDING") {
+    if (invitation.status !== PENDING) {
       return { success: false as const, error: "Solo se pueden cancelar invitaciones pendientes." };
     }
 
@@ -314,7 +321,7 @@ export async function cancelProjectInvitationAction(input: CancelInvitationDTO) 
 
     await db
       .update(projectInvitations)
-      .set({ status: "CANCELLED", respondedAt: new Date() })
+      .set({ status: CANCELLED, respondedAt: new Date() })
       .where(eq(projectInvitations.id, invitation.id));
 
     revalidateInvitations(invitation.projectId);
@@ -333,7 +340,7 @@ export async function getPendingInvitationsForUserAction() {
     const invitations = await db.query.projectInvitations.findMany({
       where: and(
         eq(projectInvitations.userId, session.user.id),
-        eq(projectInvitations.status, "PENDING"),
+        eq(projectInvitations.status, PENDING),
       ),
       with: {
         project: { columns: { id: true, name: true, color: true } },
@@ -349,7 +356,7 @@ export async function getPendingInvitationsForUserAction() {
       if (isExpired(invitation.expiresAt)) {
         await db
           .update(projectInvitations)
-          .set({ status: "EXPIRED", respondedAt: new Date() })
+          .set({ status: EXPIRED, respondedAt: new Date() })
           .where(eq(projectInvitations.id, invitation.id));
       } else {
         activeInvitations.push(invitation);

@@ -6,10 +6,15 @@ import { users } from "@/db/schema";
 import { eq, desc, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { canManageUserByHierarchy, hasPermission } from "@/lib/permissions";
+import type { UserStatus } from "@/lib/constants";
+
+const PENDING_APPROVAL = "PENDING_APPROVAL" satisfies UserStatus;
+const ACTIVE = "ACTIVE" satisfies UserStatus;
+const BANNED = "BANNED" satisfies UserStatus;
 
 function isAccessRequestUser(user: { status: string | null; role: string | null }) {
     // Keep the same business rule used in dashboard notifications.
-    return user.status === "PENDING_APPROVAL" || (user.role === "VOLUNTEER" && user.status === "ACTIVE");
+    return user.status === PENDING_APPROVAL || (user.role === "VOLUNTEER" && user.status === ACTIVE);
 }
 
 // ─── Get pending approval users ──────────────────────────────────────────────
@@ -23,7 +28,7 @@ export async function getPendingUsersAction() {
         }
 
         const pendingUsers = await db.query.users.findMany({
-            where: sql`${users.status} = 'PENDING_APPROVAL' OR (${users.role} = 'VOLUNTEER' AND ${users.status} = 'ACTIVE')`,
+            where: sql`${users.status} = ${PENDING_APPROVAL} OR (${users.role} = 'VOLUNTEER' AND ${users.status} = ${ACTIVE})`,
             orderBy: [desc(users.createdAt)],
             columns: {
                 id: true,
@@ -56,7 +61,7 @@ export async function getPendingCountAction() {
         const [result] = await db
             .select({ count: sql<number>`count(*)` })
             .from(users)
-            .where(sql`${users.status} = 'PENDING_APPROVAL' OR (${users.role} = 'VOLUNTEER' AND ${users.status} = 'ACTIVE')`);
+            .where(sql`${users.status} = ${PENDING_APPROVAL} OR (${users.role} = 'VOLUNTEER' AND ${users.status} = ${ACTIVE})`);
 
         return { success: true as const, data: result.count };
     } catch (error) {
@@ -92,7 +97,7 @@ export async function approveUserAction(userId: string) {
         }
 
         await db.update(users).set({
-            status: "ACTIVE",
+            status: ACTIVE,
             role: "MEMBER",
             updatedAt: new Date(),
         }).where(eq(users.id, userId));
@@ -137,7 +142,7 @@ export async function rejectUserAction(userId: string) {
         }
 
         await db.update(users).set({
-            status: "BANNED",
+            status: BANNED,
             moderationReason: "Solicitud de acceso rechazada por un administrador.",
             updatedAt: new Date(),
         }).where(eq(users.id, userId));

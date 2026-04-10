@@ -8,6 +8,7 @@ import {
     ModerateUserDTO,
 } from "@/lib/validators/user";
 import { canAssignRoleByHierarchy, canManageUserByHierarchy } from "@/lib/permissions";
+import type { UserStatus } from "@/lib/constants";
 
 // --- Helpers ---
 async function getActiveSemesterId() {
@@ -145,7 +146,7 @@ export async function moderateUserService(
     }
 
     // Logic: If status is not SUSPENDED, clear suspendedUntil
-    const suspendedUntil = data.status === "SUSPENDED" ? data.suspendedUntil : null;
+    const suspendedUntil = data.status === ("SUSPENDED" satisfies UserStatus) ? data.suspendedUntil : null;
 
     return await userDAO.updateUser(data.userId, {
         status: data.status,

@@ -11,6 +11,7 @@
 
 import { canManageEvent as serverCanManage } from "./event-permissions.service";
 import { hasPermission } from "@/lib/permissions";
+import type { EventScope, EventType } from "@/lib/constants";
 
 // =============================================================================
 // Types
@@ -69,13 +70,13 @@ export function filterVisibleEvents<T extends {
 
     return events.filter(event => {
         // INDIVIDUAL_GROUP: only invitees + creator
-        if (event.eventType === "INDIVIDUAL_GROUP") {
+        if (event.eventType === ("INDIVIDUAL_GROUP" satisfies EventType)) {
             if (event.createdById === ctx.userId) return true;
             return event.invitees?.some(inv => inv.userId === ctx.userId) ?? false;
         }
 
         // TREASURY_SPECIAL: invitees + creator + project event managers
-        if (event.eventType === "TREASURY_SPECIAL") {
+        if (event.eventType === ("TREASURY_SPECIAL" satisfies EventType)) {
             if (event.createdById === ctx.userId) return true;
             if (event.invitees?.some(inv => inv.userId === ctx.userId)) return true;
 
@@ -90,7 +91,7 @@ export function filterVisibleEvents<T extends {
         }
 
         // PROJECT scope AREA events: filter by project membership area
-        if (event.eventScope === "PROJECT" && event.eventType === "AREA" && event.targetProjectArea?.id && event.projectId) {
+        if (event.eventScope === ("PROJECT" satisfies EventScope) && event.eventType === ("AREA" satisfies EventType) && event.targetProjectArea?.id && event.projectId) {
             const membership = ctx.projectMemberships.find(m => m.projectId === event.projectId);
             if (!membership) return false;
             // Permission check: can see all area events
@@ -139,8 +140,8 @@ export async function enrichEventsWithPermissions<T extends {
             },
             {
                 createdById: event.createdById ?? null,
-                eventScope: event.eventScope || "IISE",
-                eventType: event.eventType || "GENERAL",
+                eventScope: event.eventScope || ("IISE" satisfies EventScope),
+                eventType: event.eventType || ("GENERAL" satisfies EventType),
                 targetAreaId: event.targetAreaId ?? null,
                 projectId: event.projectId ?? null,
                 targetProjectAreaId: event.targetProjectAreaId ?? null,

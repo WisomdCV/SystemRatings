@@ -42,6 +42,7 @@ import {
   checkLinkHealth,
 } from "@/lib/resource-links";
 import { isProjectWritable } from "@/server/services/project-cycle.service";
+import type { LinkStatus } from "@/lib/constants";
 
 async function getProjectMembershipWithPerms(userId: string, projectId: string) {
   const membership = await db.query.projectMembers.findFirst({
@@ -366,7 +367,7 @@ export async function createResourceAction(input: CreateResourceDTO) {
           previewUrl: link.previewUrl,
           label: link.label,
           domain: link.domain,
-          linkStatus: "UNKNOWN",
+          linkStatus: ("UNKNOWN" satisfies LinkStatus),
           addedById: session.user.id,
         });
       }
@@ -644,7 +645,7 @@ export async function addResourceLinkAction(input: AddResourceLinkDTO) {
       previewUrl,
       label: validated.data.label || null,
       domain,
-      linkStatus: "UNKNOWN",
+      linkStatus: ("UNKNOWN" satisfies LinkStatus),
       addedById: session.user.id,
     });
 
@@ -718,7 +719,7 @@ export async function updateResourceLinkAction(input: UpdateResourceLinkDTO) {
       normalizedPreviewUrl = normalizedDomain && isWhitelistedDomain(normalizedDomain)
         ? generatePreviewUrl(normalizedUrl, normalizedDomain)
         : null;
-      status = "UNKNOWN";
+      status = ("UNKNOWN" satisfies LinkStatus);
     }
 
     await db.update(projectResourceLinks)

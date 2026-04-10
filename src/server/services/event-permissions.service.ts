@@ -18,11 +18,11 @@ import { projectMembers } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
 
 // =============================================================================
-// Types
+// Types (re-exported from centralized constants)
 // =============================================================================
 
-export type EventScope = "IISE" | "PROJECT";
-export type EventType = "GENERAL" | "AREA" | "INDIVIDUAL_GROUP" | "TREASURY_SPECIAL";
+export type { EventScope, EventType } from "@/lib/constants";
+import type { EventScope, EventType } from "@/lib/constants";
 
 interface IISEContext {
     userRole: string | null;

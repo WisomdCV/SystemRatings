@@ -108,7 +108,14 @@ export function canBypassProjectPerms(
 // Default Permission Map (used by seed & admin panel)
 // =============================================================================
 
-/** Default permissions for each system role, keyed by role name */
+/**
+ * Default permissions for each built-in project role, keyed by role name.
+ *
+ * Used ONLY by seed scripts and migration backfills — NOT at runtime.
+ * Runtime authorization reads from the `project_role_permission` table via
+ * `hasProjectPermission()`. If you add a new permission to PROJECT_PERMISSIONS,
+ * update the relevant roles here so new seeds get the correct defaults.
+ */
 export const DEFAULT_ROLE_PERMISSIONS: Record<string, ProjectPermission[]> = {
   "Coordinador / Project Management": [
     "project:event_create_any",

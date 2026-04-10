@@ -1,12 +1,13 @@
 "use server";
 
 import { auth } from "@/server/auth";
-import { getAttendanceSheetDAO, batchUpsertAttendanceDAO, AttendanceStatus } from "@/server/data-access/attendance";
+import { getAttendanceSheetDAO, batchUpsertAttendanceDAO } from "@/server/data-access/attendance";
 import { getEventByIdDAO } from "@/server/data-access/events";
 import { revalidatePath } from "next/cache";
 import { hasPermission } from "@/lib/permissions";
 import { canManageEvent } from "@/server/services/event-permissions.service";
 import { getUserAttendanceHistoryDAO, updateAttendanceRecordDAO, getAttendanceRecordByIdDAO } from "@/server/data-access/attendance";
+import type { AttendanceStatus, JustificationStatus } from "@/lib/constants";
 
 // =============================================================================
 // Helpers — attendance permission check (shared by get & save)
@@ -255,12 +256,12 @@ export async function submitJustificationAction(recordId: string, reason: string
             return { success: false, error: "No puedes justificar la asistencia de otro usuario" };
         }
 
-        if (record.justificationStatus === "APPROVED") {
+        if (record.justificationStatus === ("APPROVED" satisfies JustificationStatus)) {
             return { success: false, error: "Esta falta ya ha sido justificada y aprobada." };
         }
 
         await updateAttendanceRecordDAO(recordId, {
-            justificationStatus: "PENDING",
+            justificationStatus: "PENDING" satisfies JustificationStatus,
             justificationReason: reason,
             justificationLink: link || null
         });
@@ -311,10 +312,10 @@ export async function reviewJustificationAction(
             reviewedById: session.user.id
         };
 
-        if (verdict === "APPROVED") {
-            updates.status = "EXCUSED";
+        if (verdict === ("APPROVED" satisfies JustificationStatus)) {
+            updates.status = "EXCUSED" satisfies AttendanceStatus;
         } else {
-            updates.status = "ABSENT";
+            updates.status = "ABSENT" satisfies AttendanceStatus;
         }
 
         await updateAttendanceRecordDAO(recordId, updates);
@@ -322,7 +323,7 @@ export async function reviewJustificationAction(
         revalidatePath("/admin/events");
         revalidatePath(`/admin/events/${record.eventId}/attendance`);
 
-        return { success: true, message: `Justificación ${verdict === "APPROVED" ? "Aprobada" : "Rechazada"}` };
+        return { success: true, message: `Justificación ${verdict === ("APPROVED" satisfies JustificationStatus) ? "Aprobada" : "Rechazada"}` };
 
     } catch (error) {
         console.error("Error reviewing justification:", error);
@@ -338,9 +339,9 @@ export async function getPendingJustificationsAction() {
         const history = await getUserAttendanceHistoryDAO(session.user.id);
 
         const pending = history.filter(record =>
-            ((record.status === "ABSENT" || record.status === "LATE") &&
-                (record.justificationStatus === "NONE" || record.justificationStatus === "REJECTED")) ||
-            (record.status === "EXCUSED" && record.justificationStatus === "APPROVED")
+            ((record.status === ("ABSENT" satisfies AttendanceStatus) || record.status === ("LATE" satisfies AttendanceStatus)) &&
+                (record.justificationStatus === ("NONE" satisfies JustificationStatus) || record.justificationStatus === ("REJECTED" satisfies JustificationStatus))) ||
+            (record.status === ("EXCUSED" satisfies AttendanceStatus) && record.justificationStatus === ("APPROVED" satisfies JustificationStatus))
         );
 
         pending.sort((a, b) => new Date(b.event.date).getTime() - new Date(a.event.date).getTime());
@@ -365,7 +366,7 @@ export async function acknowledgeRejectionAction(recordId: string) {
         }
 
         await updateAttendanceRecordDAO(recordId, {
-            justificationStatus: "ACKNOWLEDGED"
+            justificationStatus: "ACKNOWLEDGED" satisfies JustificationStatus
         });
 
         revalidatePath("/dashboard");

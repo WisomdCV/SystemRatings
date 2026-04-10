@@ -14,9 +14,8 @@ import {
     canManageEvent,
     canTargetAnyArea,
     shouldTrackAttendance,
-    type EventScope,
-    type EventType,
 } from "@/server/services/event-permissions.service";
+import type { EventScope, EventType } from "@/lib/constants";
 import { UpdateEventDTO, UpdateEventSchema } from "@/lib/validators/event";
 import { deleteGoogleEvent, updateGoogleEvent } from "@/server/services/google-calendar.service";
 
@@ -76,19 +75,19 @@ export async function createEventAction(input: CreateEventDTO) {
         const eventType = data.eventType as EventType;
 
         // General events are never area-targeted.
-        if (eventType === "GENERAL") {
+        if (eventType === ("GENERAL" satisfies EventType)) {
             data.targetAreaId = null;
             data.targetProjectAreaId = null;
         }
 
         // Invitee-based events are not area-target driven.
         // Normalize hidden form leftovers so visibility is consistent for invitees.
-        if (eventType === "INDIVIDUAL_GROUP" || eventType === "TREASURY_SPECIAL") {
+        if (eventType === ("INDIVIDUAL_GROUP" satisfies EventType) || eventType === ("TREASURY_SPECIAL" satisfies EventType)) {
             data.targetAreaId = null;
             data.targetProjectAreaId = null;
         }
 
-        if (eventScope === "IISE") {
+        if (eventScope === ("IISE" satisfies EventScope)) {
             const canCreate = await canCreateIISEEvent(
                 {
                     userRole: role,
@@ -103,14 +102,14 @@ export async function createEventAction(input: CreateEventDTO) {
             }
 
             // For AREA events: if user cannot target any area, force their own area
-            if (eventType === "AREA" && !canTargetAnyArea({
+            if (eventType === ("AREA" satisfies EventType) && !canTargetAnyArea({
                 userRole: role,
                 userAreaId: session.user.currentAreaId,
                 customPermissions: session.user.customPermissions,
             })) {
                 data.targetAreaId = session.user.currentAreaId;
             }
-        } else if (eventScope === "PROJECT") {
+        } else if (eventScope === ("PROJECT" satisfies EventScope)) {
             if (!data.projectId) {
                 return { success: false, error: "Se requiere un proyecto para este tipo de evento." };
             }
@@ -130,12 +129,12 @@ export async function createEventAction(input: CreateEventDTO) {
             }
 
             // Treasury special meetings always target project area directors automatically.
-            if (eventType === "TREASURY_SPECIAL") {
+            if (eventType === ("TREASURY_SPECIAL" satisfies EventType)) {
                 const invitees = await getTreasurySpecialInvitees(data.projectId);
                 if (invitees.length === 0) {
                     return { success: false, error: "No hay directores de área en este proyecto para convocar la reunión especial." };
                 }
-                data.eventScope = "PROJECT";
+                data.eventScope = "PROJECT" satisfies EventScope;
                 data.targetAreaId = null;
                 data.targetProjectAreaId = null;
                 data.inviteeUserIds = invitees;
@@ -278,25 +277,25 @@ export async function updateEventAction(eventId: string, input: UpdateEventDTO) 
         const effectiveProjectId = data.projectId ?? event.projectId;
 
         // Keep scope/type target fields consistent even if the client sends stale hidden values.
-        if (effectiveEventType === "GENERAL") {
+        if (effectiveEventType === ("GENERAL" satisfies EventType)) {
             data.targetAreaId = null;
             data.targetProjectAreaId = null;
-        } else if (effectiveEventType === "AREA") {
-            if (effectiveEventScope === "IISE") {
+        } else if (effectiveEventType === ("AREA" satisfies EventType)) {
+            if (effectiveEventScope === ("IISE" satisfies EventScope)) {
                 data.targetProjectAreaId = null;
             }
-            if (effectiveEventScope === "PROJECT") {
+            if (effectiveEventScope === ("PROJECT" satisfies EventScope)) {
                 data.targetAreaId = null;
             }
         }
 
         // Keep invitee-based target fields normalized when editing.
-        if (effectiveEventType === "INDIVIDUAL_GROUP" || effectiveEventType === "TREASURY_SPECIAL") {
+        if (effectiveEventType === ("INDIVIDUAL_GROUP" satisfies EventType) || effectiveEventType === ("TREASURY_SPECIAL" satisfies EventType)) {
             data.targetAreaId = null;
             data.targetProjectAreaId = null;
         }
 
-        if (effectiveEventType === "TREASURY_SPECIAL") {
+        if (effectiveEventType === ("TREASURY_SPECIAL" satisfies EventType)) {
             if (!effectiveProjectId) {
                 return { success: false, error: "La reunión especial de tesorería requiere un proyecto." };
             }
@@ -306,8 +305,8 @@ export async function updateEventAction(eventId: string, input: UpdateEventDTO) 
                 return { success: false, error: "No hay directores de área en este proyecto para convocar la reunión especial." };
             }
 
-            data.eventScope = "PROJECT";
-            data.eventType = "TREASURY_SPECIAL";
+            data.eventScope = "PROJECT" satisfies EventScope;
+            data.eventType = "TREASURY_SPECIAL" satisfies EventType;
             data.projectId = effectiveProjectId;
             data.inviteeUserIds = invitees;
         }

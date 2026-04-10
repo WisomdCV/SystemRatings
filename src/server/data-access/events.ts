@@ -1,6 +1,7 @@
 import { db } from "@/db";
 import { events, semesters, eventInvitees, projectCycles } from "@/db/schema";
 import { CreateEventDTO } from "@/lib/validators/event";
+import type { EventInviteeStatus, EventScope, EventType, EventStatus, CycleStatus } from "@/lib/constants";
 import { eq, and, desc } from "drizzle-orm";
 
 function buildInviteeRows(
@@ -8,16 +9,16 @@ function buildInviteeRows(
     inviteeUserIds: string[] | undefined,
     creatorUserId: string | null | undefined,
 ) {
-    const statusByUserId = new Map<string, "PENDING" | "ACCEPTED">();
+    const statusByUserId = new Map<string, EventInviteeStatus>();
 
     for (const uid of inviteeUserIds ?? []) {
         if (!uid) continue;
-        statusByUserId.set(uid, "PENDING");
+        statusByUserId.set(uid, ("PENDING" satisfies EventInviteeStatus));
     }
 
     // Creator is always present and automatically accepted.
     if (creatorUserId) {
-        statusByUserId.set(creatorUserId, "ACCEPTED");
+        statusByUserId.set(creatorUserId, ("ACCEPTED" satisfies EventInviteeStatus));
     }
 
     return Array.from(statusByUserId.entries()).map(([uid, status]) => ({
@@ -49,7 +50,7 @@ export async function createEventDAO(
             const activeProjectCycle = await tx.query.projectCycles.findFirst({
                 where: and(
                     eq(projectCycles.projectId, data.projectId),
-                    eq(projectCycles.status, "ACTIVE"),
+                    eq(projectCycles.status, ("ACTIVE" satisfies CycleStatus)),
                 ),
                 orderBy: [desc(projectCycles.startedAt)],
             });
@@ -68,8 +69,8 @@ export async function createEventDAO(
             description: data.description,
 
             // Events v2 fields
-            eventScope: data.eventScope || "IISE",
-            eventType: data.eventType || "GENERAL",
+            eventScope: data.eventScope || ("IISE" satisfies EventScope),
+            eventType: data.eventType || ("GENERAL" satisfies EventType),
             tracksAttendance,
 
             // IISE target
@@ -86,11 +87,11 @@ export async function createEventDAO(
             isVirtual: data.isVirtual,
             googleEventId: googleData.googleId,
             meetLink: googleData.meetLink,
-            status: "SCHEDULED"
+            status: ("SCHEDULED" satisfies EventStatus)
         }).returning();
 
         // 3. Insert Invitees for invitee-based event types
-        const isInviteeBasedEvent = data.eventType === "INDIVIDUAL_GROUP" || data.eventType === "TREASURY_SPECIAL";
+        const isInviteeBasedEvent = data.eventType === ("INDIVIDUAL_GROUP" satisfies EventType) || data.eventType === ("TREASURY_SPECIAL" satisfies EventType);
         if (isInviteeBasedEvent) {
             const inviteeRows = buildInviteeRows(newEvent.id, data.inviteeUserIds, userId);
             if (inviteeRows.length > 0) {
@@ -142,7 +143,7 @@ export async function updateEventDAO(eventId: string, data: Partial<CreateEventD
                 const activeProjectCycle = await tx.query.projectCycles.findFirst({
                     where: and(
                         eq(projectCycles.projectId, data.projectId),
-                        eq(projectCycles.status, "ACTIVE"),
+                        eq(projectCycles.status, ("ACTIVE" satisfies CycleStatus)),
                     ),
                     orderBy: [desc(projectCycles.startedAt)],
                 });
@@ -177,7 +178,7 @@ export async function updateEventDAO(eventId: string, data: Partial<CreateEventD
             await tx.delete(eventInvitees).where(eq(eventInvitees.eventId, eventId));
 
             // Insert new invitees for invitee-based event types
-            const isInviteeBasedEvent = data.eventType === "INDIVIDUAL_GROUP" || data.eventType === "TREASURY_SPECIAL";
+            const isInviteeBasedEvent = data.eventType === ("INDIVIDUAL_GROUP" satisfies EventType) || data.eventType === ("TREASURY_SPECIAL" satisfies EventType);
             if (isInviteeBasedEvent) {
                 const event = result[0];
                 const inviteeRows = buildInviteeRows(eventId, data.inviteeUserIds, event?.createdById);

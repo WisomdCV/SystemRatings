@@ -6,6 +6,7 @@ import { authConfig } from "../../auth.config";
 import { accounts, sessions, users, verificationTokens } from "@/db/schema";
 import { eq, and, count } from "drizzle-orm";
 import { getAllExtraPermissionsForUser } from "@/server/data-access/custom-roles";
+import type { UserStatus } from "@/lib/constants";
 
 
 // Helper to refresh Google Access Token
@@ -141,20 +142,20 @@ export const {
             if (dbUser && (dbUser.role === "VOLUNTEER" || !dbUser.role)) {
                 const [{ total }] = await db.select({ total: count() }).from(users);
                 if (total <= 1) {
-                    await db.update(users).set({ role: "DEV", status: "ACTIVE" }).where(eq(users.id, user.id!));
+                    await db.update(users).set({ role: "DEV", status: ("ACTIVE" satisfies UserStatus) }).where(eq(users.id, user.id!));
                     console.log(`🔑 Auto-DEV: First user ${user.email} promoted to DEV role`);
-                } else if (dbUser.status === "ACTIVE") {
+                } else if (dbUser.status === ("ACTIVE" satisfies UserStatus)) {
                     // New VOLUNTEER with ACTIVE status → gate them behind approval
-                    await db.update(users).set({ status: "PENDING_APPROVAL" }).where(eq(users.id, user.id!));
+                    await db.update(users).set({ status: ("PENDING_APPROVAL" satisfies UserStatus) }).where(eq(users.id, user.id!));
                     console.log(`⏳ Approval gate: ${user.email} set to PENDING_APPROVAL`);
                 }
             }
 
             if (!dbUser) return true;
 
-            if (dbUser.status === "BANNED") return "/auth/error?error=RequestRejected";
+            if (dbUser.status === ("BANNED" satisfies UserStatus)) return "/auth/error?error=RequestRejected";
 
-            if (dbUser.status === "SUSPENDED") {
+            if (dbUser.status === ("SUSPENDED" satisfies UserStatus)) {
                 if (dbUser.suspendedUntil && new Date() < dbUser.suspendedUntil) {
                     return false;
                 }
@@ -174,7 +175,7 @@ export const {
                 token.id = user.id;
                 token.role = freshUser?.role ?? user.role;
                 token.loginRole = freshUser?.role ?? user.role;
-                token.status = freshUser?.status ?? "ACTIVE";
+                token.status = freshUser?.status ?? ("ACTIVE" satisfies UserStatus);
                 token.currentAreaId = freshUser?.currentAreaId ?? user.currentAreaId;
 
                 // Save Provider tokens

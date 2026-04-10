@@ -2,6 +2,7 @@ import { db } from "@/db";
 import { users, positionHistory } from "@/db/schema";
 import { eq, or, like, and, desc, asc, sql, ne } from "drizzle-orm";
 import { UpdateUserRoleDTO, UpdateUserProfileDTO, ModerateUserDTO } from "@/lib/validators/user";
+import type { UserStatus } from "@/lib/constants";
 
 export type UserFilters = {
     search?: string;
@@ -53,7 +54,7 @@ export async function getAllUsers(filters?: UserFilters, pagination?: Pagination
     conditions.push(ne(users.role, "DEV"));
 
     // Exclude PENDING_APPROVAL users (they appear in /admin/approvals instead)
-    conditions.push(ne(users.status, "PENDING_APPROVAL"));
+    conditions.push(ne(users.status, ("PENDING_APPROVAL" satisfies UserStatus)));
 
     // Combine conditions
     const whereCondition = conditions.length > 0 ? and(...conditions) : undefined;

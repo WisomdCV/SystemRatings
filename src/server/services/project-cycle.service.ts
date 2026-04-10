@@ -1,8 +1,11 @@
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { projectCycles, semesters } from "@/db/schema";
+import type { CycleStatus } from "@/lib/constants";
 
 export type ProjectCycleFilter = "active" | "history" | "all";
+
+const ACTIVE_CYCLE: CycleStatus = "ACTIVE";
 
 export function normalizeProjectCycleFilter(value?: string | null): ProjectCycleFilter {
     if (value === "history" || value === "all") return value;
@@ -19,7 +22,7 @@ export async function getProjectActiveCycle(projectId: string) {
     return db.query.projectCycles.findFirst({
         where: and(
             eq(projectCycles.projectId, projectId),
-            eq(projectCycles.status, "ACTIVE"),
+            eq(projectCycles.status, ACTIVE_CYCLE),
         ),
         orderBy: (cycles, { desc }) => [desc(cycles.startedAt)],
     });

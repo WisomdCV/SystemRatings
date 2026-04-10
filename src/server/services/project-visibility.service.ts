@@ -288,6 +288,14 @@ export function explainRule(rule: VisibilityRule): string {
   return RULE_EXPLANATIONS[rule] ?? "Regla desconocida.";
 }
 
+/**
+ * Generate a visibility report for a target user on a specific project.
+ * Useful for admin/audit panels to understand what a user can see.
+ *
+ * @todo tasksSample and resourcesSample are not yet implemented — they return
+ * empty arrays. When needed, query tasks/resources and run them through
+ * filterVisibleTasks/filterVisibleResources to populate samples.
+ */
 export async function generateVisibilityReport(
   projectId: string,
   targetUserId: string,
