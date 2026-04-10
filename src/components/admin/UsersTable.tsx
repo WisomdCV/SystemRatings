@@ -20,7 +20,7 @@ type User = {
     phone: string | null;
     category: string | null;
     moderationReason: string | null;
-    suspendedUntil: Date | string | null;
+    suspendedUntil: Date | null;
     currentArea: {
         id: string;
         name: string;

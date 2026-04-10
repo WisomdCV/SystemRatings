@@ -10,6 +10,87 @@ import {
 import { assignCustomRoleAction, removeCustomRoleAction } from "@/server/actions/custom-role.actions";
 import { STATUSES, CATEGORIES, ROLES } from "@/lib/validators/user";
 
+const ROLE_LABELS_ES: Record<string, string> = {
+    DEV: "Desarrollador",
+    PRESIDENT: "Presidente",
+    VICEPRESIDENT: "Vicepresidente",
+    SECRETARY: "Secretario",
+    TREASURER: "Tesorero",
+    DIRECTOR: "Director",
+    SUBDIRECTOR: "Subdirector",
+    MEMBER: "Miembro",
+    VOLUNTEER: "Voluntario",
+};
+
+const ROLE_VISUAL_ORDER = [
+    "PRESIDENT",
+    "VICEPRESIDENT",
+    "SECRETARY",
+    "TREASURER",
+    "DIRECTOR",
+    "SUBDIRECTOR",
+    "MEMBER",
+    "VOLUNTEER",
+    "DEV",
+] as const;
+
+const STATUS_LABELS_ES: Record<string, string> = {
+    ACTIVE: "Activo",
+    SUSPENDED: "Suspendido",
+    BANNED: "Baneado",
+    WARNED: "Advertido",
+};
+
+const STATUS_VISUAL_ORDER = ["ACTIVE", "SUSPENDED", "BANNED", "WARNED"] as const;
+
+function getModerationTheme(status: string) {
+    if (status === "BANNED") {
+        return {
+            panel: "bg-red-50 border-red-100 text-red-800",
+            icon: "text-red-600",
+            title: "text-red-900",
+            label: "text-red-700",
+            control: "border-red-200 text-red-900 focus:border-red-500 focus:ring-red-200",
+            chevron: "text-red-500",
+            button: "bg-red-600 hover:bg-red-700 shadow-red-600/20",
+        };
+    }
+
+    if (status === "SUSPENDED") {
+        return {
+            panel: "bg-yellow-50 border-yellow-100 text-yellow-800",
+            icon: "text-yellow-600",
+            title: "text-yellow-900",
+            label: "text-yellow-700",
+            control: "border-yellow-200 text-yellow-900 focus:border-yellow-500 focus:ring-yellow-200",
+            chevron: "text-yellow-500",
+            button: "bg-yellow-600 hover:bg-yellow-700 shadow-yellow-600/20",
+        };
+    }
+
+    if (status === "ACTIVE") {
+        return {
+            panel: "bg-emerald-50 border-emerald-100 text-emerald-800",
+            icon: "text-emerald-600",
+            title: "text-emerald-900",
+            label: "text-emerald-700",
+            control: "border-emerald-200 text-emerald-900 focus:border-emerald-500 focus:ring-emerald-200",
+            chevron: "text-emerald-500",
+            button: "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/20",
+        };
+    }
+
+    return {
+        panel: "bg-orange-50 border-orange-100 text-orange-800",
+        icon: "text-orange-600",
+        title: "text-orange-900",
+        label: "text-orange-700",
+        control: "border-orange-200 text-orange-900 focus:border-orange-500 focus:ring-orange-200",
+        chevron: "text-orange-500",
+        button: "bg-orange-600 hover:bg-orange-700 shadow-orange-600/20",
+    };
+}
+
 type User = {
     id: string;
     name: string | null;
@@ -108,6 +189,15 @@ export default function UserEditDrawer({
     }, [isOpen, activeTab, availableTabs]);
 
     if (!isOpen || !user) return null;
+
+    const roleOptions = ROLE_VISUAL_ORDER
+        .filter((r) => (ROLES as readonly string[]).includes(r) && r !== "DEV");
+
+    const statusOptions = STATUS_VISUAL_ORDER
+        .filter((s) => (STATUSES as readonly string[]).includes(s));
+
+    const effectiveModerationStatus = String(formData.status ?? user.status ?? "ACTIVE");
+    const moderationTheme = getModerationTheme(effectiveModerationStatus);
 
     const notify = (type: "success" | "error", msg: string) => {
         if (onShowFeedback) onShowFeedback(type, msg);
@@ -343,10 +433,12 @@ export default function UserEditDrawer({
                                 <div className="relative">
                                     <select
                                         className="w-full appearance-none rounded-xl border border-meteorite-200 bg-white px-4 py-2.5 text-meteorite-900 focus:border-meteorite-500 focus:ring-2 focus:ring-meteorite-200 focus:outline-none transition-all shadow-sm font-medium cursor-pointer"
-                                        defaultValue={user.role || "Voluntario"}
+                                        defaultValue={user.role || "VOLUNTEER"}
                                         onChange={(e) => setFormData({ ...formData, role: e.target.value })}
                                     >
-                                        {ROLES.filter(r => r !== "DEV").map(r => <option key={r} value={r}>{r}</option>)}
+                                        {roleOptions.map((r) => (
+                                            <option key={r} value={r}>{ROLE_LABELS_ES[r] || r}</option>
+                                        ))}
                                     </select>
                                     <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-meteorite-500">
                                         <svg className="h-4 w-4 fill-current" viewBox="0 0 20 20"><path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" fillRule="evenodd"></path></svg>
@@ -437,40 +529,42 @@ export default function UserEditDrawer({
                     {/* --- Tab: Moderation --- */}
                     {activeTab === "moderation" && (
                         <div className="space-y-4 animate-fade-in">
-                            <div className="bg-red-50 border border-red-100 text-red-800 p-4 rounded-xl text-xs flex gap-3 items-start">
-                                <AlertTriangle className="w-5 h-5 text-red-600 shrink-0" />
+                            <div className={`p-4 rounded-xl text-xs flex gap-3 items-start border ${moderationTheme.panel}`}>
+                                <AlertTriangle className={`w-5 h-5 shrink-0 ${moderationTheme.icon}`} />
                                 <div>
-                                    <strong className="block font-bold text-red-900 mb-0.5">Zona de Moderación</strong>
-                                    Estas acciones restringirán el acceso del usuario. Úselas con precaución.
+                                    <strong className={`block font-bold mb-0.5 ${moderationTheme.title}`}>Zona de Moderación</strong>
+                                    Estado actual: <strong>{STATUS_LABELS_ES[effectiveModerationStatus] || effectiveModerationStatus}</strong>. Estos cambios afectan el acceso del usuario.
                                 </div>
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-red-700 uppercase tracking-wide mb-1.5">
+                                <label className={`block text-xs font-bold uppercase tracking-wide mb-1.5 ${moderationTheme.label}`}>
                                     Estado del Usuario
                                 </label>
                                 <div className="relative">
                                     <select
-                                        className="w-full appearance-none rounded-xl border border-red-200 bg-white px-4 py-2.5 text-red-900 focus:border-red-500 focus:ring-2 focus:ring-red-200 focus:outline-none transition-all shadow-sm font-medium cursor-pointer"
+                                        className={`w-full appearance-none rounded-xl border bg-white px-4 py-2.5 focus:ring-2 focus:outline-none transition-all shadow-sm font-medium cursor-pointer ${moderationTheme.control}`}
                                         defaultValue={user.status || "ACTIVE"}
                                         onChange={(e) => setFormData({ ...formData, status: e.target.value })}
                                     >
-                                        {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                                        {statusOptions.map((s) => (
+                                            <option key={s} value={s}>{STATUS_LABELS_ES[s] || s}</option>
+                                        ))}
                                     </select>
-                                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-red-500">
+                                    <div className={`pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 ${moderationTheme.chevron}`}>
                                         <svg className="h-4 w-4 fill-current" viewBox="0 0 20 20"><path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" fillRule="evenodd"></path></svg>
                                     </div>
                                 </div>
                             </div>
 
                             {/* Date Picker for Suspension */}
-                            {(formData.status === "SUSPENDED" || (user.status === "SUSPENDED" && !formData.status)) && (
+                            {effectiveModerationStatus === "SUSPENDED" && (
                                 <div className="animate-fade-in">
-                                    <label className="block text-xs font-bold text-red-700 uppercase tracking-wide mb-1.5">
+                                    <label className={`block text-xs font-bold uppercase tracking-wide mb-1.5 ${moderationTheme.label}`}>
                                         Suspender hasta
                                     </label>
                                     <input
                                         type="date"
-                                        className="w-full rounded-xl border border-red-200 bg-white px-4 py-2.5 text-red-900 focus:border-red-500 focus:ring-2 focus:ring-red-200 focus:outline-none transition-all shadow-sm font-medium"
+                                        className={`w-full rounded-xl border bg-white px-4 py-2.5 focus:ring-2 focus:outline-none transition-all shadow-sm font-medium ${moderationTheme.control}`}
                                         defaultValue={
                                             user.suspendedUntil ? new Date(user.suspendedUntil).toISOString().split('T')[0] : ""
                                         }
@@ -480,11 +574,11 @@ export default function UserEditDrawer({
                                 </div>
                             )}
                             <div>
-                                <label className="block text-xs font-bold text-red-700 uppercase tracking-wide mb-1.5">
+                                <label className={`block text-xs font-bold uppercase tracking-wide mb-1.5 ${moderationTheme.label}`}>
                                     Justificación (Obligatoria)
                                 </label>
                                 <textarea
-                                    className="w-full rounded-xl border border-red-200 bg-white px-4 py-2.5 text-red-900 focus:border-red-500 focus:ring-2 focus:ring-red-200 focus:outline-none transition-all shadow-sm font-medium"
+                                    className={`w-full rounded-xl border bg-white px-4 py-2.5 focus:ring-2 focus:outline-none transition-all shadow-sm font-medium ${moderationTheme.control}`}
                                     placeholder="Explique el motivo de la sanción..."
                                     rows={3}
                                     defaultValue={user.moderationReason || ""}
@@ -494,7 +588,7 @@ export default function UserEditDrawer({
                             <button
                                 onClick={handleSaveModeration}
                                 disabled={isPending}
-                                className="w-full mt-4 flex justify-center items-center gap-2 rounded-xl bg-red-600 px-6 py-3 font-bold text-white hover:bg-red-700 disabled:opacity-50 shadow-md shadow-red-600/20 active:scale-95 transition-all"
+                                className={`w-full mt-4 flex justify-center items-center gap-2 rounded-xl px-6 py-3 font-bold text-white disabled:opacity-50 shadow-md active:scale-95 transition-all ${moderationTheme.button}`}
                             >
                                 <AlertTriangle className="w-4 h-4" /> Confirmar Estado
                             </button>
