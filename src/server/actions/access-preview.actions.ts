@@ -175,6 +175,21 @@ interface ProjectMembershipCheck {
   canManageTasksAny: boolean;
 }
 
+interface UIViewItem {
+  key: string;
+  group: "dashboard" | "admin" | "cycle-flow" | "quick-actions" | "auth-flow";
+  label: string;
+  path: string;
+  allowed: boolean;
+  reason: string;
+}
+
+interface UIViewPreview {
+  totalAllowed: number;
+  totalEvaluated: number;
+  items: UIViewItem[];
+}
+
 export interface AccessPreviewResult {
   context: {
     mode: "USER" | "ROLE";
@@ -199,6 +214,7 @@ export interface AccessPreviewResult {
     sample: ProjectPreviewItem[];
   };
   projectMembershipChecks: ProjectMembershipCheck[];
+  uiViews: UIViewPreview;
 }
 
 function describePermission(permission: Permission, role: string, customPermissions: string[]) {
@@ -259,6 +275,348 @@ function anyPermissionDecision(
 function sanitizePermissions(input: string[] | undefined) {
   const allowed = new Set(ALL_PERMISSIONS);
   return (input || []).filter((permission) => allowed.has(permission as Permission));
+}
+
+function buildUIViewPreview(params: {
+  role: string;
+  customPermissions: string[];
+  status: string | null;
+  hasActiveSemester: boolean;
+  hasAnySemester: boolean;
+  visibleProjectsCount: number;
+  hasTakeAttendanceActionableEvent: boolean;
+}): UIViewPreview {
+  const {
+    role,
+    customPermissions,
+    status,
+    hasActiveSemester,
+    hasAnySemester,
+    visibleProjectsCount,
+    hasTakeAttendanceActionableEvent,
+  } = params;
+
+  const items: UIViewItem[] = [];
+  const add = (
+    key: string,
+    group: UIViewItem["group"],
+    label: string,
+    path: string,
+    allowed: boolean,
+    reason: string,
+  ) => {
+    items.push({ key, group, label, path, allowed, reason });
+  };
+
+  const canAdminAccess = hasPermission(role, "admin:access", customPermissions);
+  const canApproveUsers = hasPermission(role, "user:approve", customPermissions);
+  const canManageUserRoles = hasPermission(role, "user:manage_role", customPermissions);
+  const canManageUserData = hasPermission(role, "user:manage_data", customPermissions);
+  const canModerateUsers = hasPermission(role, "user:moderate", customPermissions);
+  const canManageUsers = canManageUserRoles || canManageUserData || canModerateUsers;
+  const canManageAreas = hasPermission(role, "area:manage", customPermissions);
+  const canManageAdminRoles = hasPermission(role, "admin:roles", customPermissions);
+  const canViewAdminAudit = hasPermission(role, "admin:audit", customPermissions);
+  const canManageSemesters = hasPermission(role, "semester:manage", customPermissions);
+  const canManagePillars = hasPermission(role, "pillar:manage", customPermissions);
+
+  const canViewGrades =
+    hasPermission(role, "grade:view_all", customPermissions)
+    || hasPermission(role, "grade:view_own_area", customPermissions);
+  const canViewAreaComparison = hasPermission(role, "dashboard:analytics", customPermissions);
+
+  const blockedByStatus = status === "BANNED" || status === "SUSPENDED";
+  const blockedByPendingFlow = status === "PENDING_APPROVAL" || (status === "ACTIVE" && role === "VOLUNTEER");
+
+  let dashboardBlockReason = "Cumple condiciones de acceso al dashboard";
+  if (status === "BANNED") {
+    dashboardBlockReason = "Estado BANNED: redirección a /auth/error?error=RequestRejected";
+  } else if (status === "SUSPENDED") {
+    dashboardBlockReason = "Estado SUSPENDED: redirección a /auth/error?error=AccessDenied";
+  } else if (blockedByPendingFlow) {
+    dashboardBlockReason = "Usuario en flujo de aprobación: redirección a /pending-approval";
+  } else if (!hasActiveSemester) {
+    if (!hasAnySemester) {
+      dashboardBlockReason = "No existe ningún ciclo: redirección a /setup?first=true";
+    } else if (canManageSemesters) {
+      dashboardBlockReason = "Sin ciclo activo pero con semester:manage: redirección a /setup";
+    } else {
+      dashboardBlockReason = "Sin ciclo activo y sin permisos de gestión: redirección a /no-cycle";
+    }
+  }
+
+  const dashboardAllowed = !blockedByStatus && !blockedByPendingFlow && hasActiveSemester;
+
+  add("dashboard.home", "dashboard", "Dashboard principal", "/dashboard", dashboardAllowed, dashboardBlockReason);
+  add("dashboard.profile", "dashboard", "Mi perfil", "/dashboard/profile", dashboardAllowed, dashboardAllowed ? "Visible en menú principal" : dashboardBlockReason);
+  add("dashboard.agenda", "dashboard", "Agenda de eventos", "/dashboard/agenda", dashboardAllowed, dashboardAllowed ? "Visible en navegación de dashboard" : dashboardBlockReason);
+  add("dashboard.history", "dashboard", "Historial personal", "/dashboard/history", dashboardAllowed, dashboardAllowed ? "Visible en navegación de dashboard" : dashboardBlockReason);
+  add("dashboard.projects", "dashboard", "Proyectos", "/dashboard/projects", dashboardAllowed, dashboardAllowed ? "Visible en navegación de dashboard" : dashboardBlockReason);
+  add(
+    "dashboard.project_detail",
+    "dashboard",
+    "Detalle de proyecto",
+    "/dashboard/projects/[id]",
+    dashboardAllowed && visibleProjectsCount > 0,
+    !dashboardAllowed
+      ? dashboardBlockReason
+      : visibleProjectsCount > 0
+        ? "Tiene proyectos visibles para navegar a detalle"
+        : "No tiene proyectos visibles con su contexto de permisos",
+  );
+  add(
+    "dashboard.grades",
+    "dashboard",
+    "Gestión de calificaciones",
+    "/dashboard/management/grades",
+    dashboardAllowed && canViewGrades,
+    !dashboardAllowed
+      ? dashboardBlockReason
+      : canViewGrades
+        ? "Cumple grade:view_all o grade:view_own_area"
+        : "Falta grade:view_all o grade:view_own_area",
+  );
+  add(
+    "dashboard.areas",
+    "dashboard",
+    "Analítica de áreas",
+    "/dashboard/areas",
+    dashboardAllowed && canViewAreaComparison,
+    !dashboardAllowed
+      ? dashboardBlockReason
+      : canViewAreaComparison
+        ? "Cumple dashboard:analytics"
+        : "Falta dashboard:analytics",
+  );
+  add("dashboard.attendance", "dashboard", "Asistencia (mis registros)", "/dashboard/attendance", dashboardAllowed, dashboardAllowed ? "Visible para usuarios de dashboard" : dashboardBlockReason);
+  add(
+    "dashboard.attendance_detail",
+    "dashboard",
+    "Hoja de asistencia por evento",
+    "/dashboard/attendance/[id]",
+    dashboardAllowed && hasTakeAttendanceActionableEvent,
+    !dashboardAllowed
+      ? dashboardBlockReason
+      : hasTakeAttendanceActionableEvent
+        ? "Tiene al menos un evento visible con capacidad de tomar asistencia"
+        : "No hay eventos visibles con permiso efectivo de asistencia",
+  );
+
+  add(
+    "cycle.setup",
+    "cycle-flow",
+    "Pantalla de setup de ciclo",
+    "/setup",
+    !hasActiveSemester && (!hasAnySemester || canManageSemesters),
+    hasActiveSemester
+      ? "Con ciclo activo no se usa este flujo"
+      : !hasAnySemester
+        ? "Primer ciclo: acceso habilitado"
+        : canManageSemesters
+          ? "Sin ciclo activo y con semester:manage"
+          : "Sin semester:manage, se redirige a /no-cycle",
+  );
+  add(
+    "cycle.no_cycle",
+    "cycle-flow",
+    "Pantalla sin ciclo activo",
+    "/no-cycle",
+    !hasActiveSemester && hasAnySemester && !canManageSemesters,
+    hasActiveSemester
+      ? "Con ciclo activo no se usa este flujo"
+      : !hasAnySemester
+        ? "Primer ciclo redirige a /setup?first=true"
+        : canManageSemesters
+          ? "Con permisos de gestión se redirige a /setup"
+          : "Sin permisos de gestión y sin ciclo activo",
+  );
+
+  const adminReasonBase = canAdminAccess
+    ? "Cumple admin:access"
+    : "Falta admin:access (bloqueado por middleware /admin)";
+
+  add("admin.home", "admin", "Hub de administración", "/admin", canAdminAccess, adminReasonBase);
+  add("admin.events", "admin", "Gestión de eventos (admin)", "/admin/events", canAdminAccess, adminReasonBase);
+  add(
+    "admin.events_attendance_detail",
+    "admin",
+    "Asistencia de evento (admin)",
+    "/admin/events/[id]/attendance",
+    canAdminAccess && hasTakeAttendanceActionableEvent,
+    !canAdminAccess
+      ? adminReasonBase
+      : hasTakeAttendanceActionableEvent
+        ? "Tiene al menos un evento visible con capacidad de tomar asistencia"
+        : "No hay eventos visibles con permiso efectivo de asistencia",
+  );
+  add(
+    "admin.approvals",
+    "admin",
+    "Solicitudes de acceso",
+    "/admin/approvals",
+    canAdminAccess && canApproveUsers,
+    !canAdminAccess ? adminReasonBase : canApproveUsers ? "Cumple user:approve" : "Falta user:approve",
+  );
+  add(
+    "admin.users",
+    "admin",
+    "Gestión de usuarios",
+    "/admin/users",
+    canAdminAccess && canManageUsers,
+    !canAdminAccess ? adminReasonBase : canManageUsers ? "Cumple permisos user:manage_* / user:moderate" : "Falta user:manage_role, user:manage_data y user:moderate",
+  );
+  add(
+    "admin.areas",
+    "admin",
+    "Gestión de áreas",
+    "/admin/areas",
+    canAdminAccess && canManageAreas,
+    !canAdminAccess ? adminReasonBase : canManageAreas ? "Cumple area:manage" : "Falta area:manage",
+  );
+  add(
+    "admin.roles",
+    "admin",
+    "Permisos y roles",
+    "/admin/roles",
+    canAdminAccess && canManageAdminRoles,
+    !canAdminAccess ? adminReasonBase : canManageAdminRoles ? "Cumple admin:roles" : "Falta admin:roles",
+  );
+  add(
+    "admin.project_settings",
+    "admin",
+    "Ajustes de proyectos",
+    "/admin/project-settings",
+    canAdminAccess && canManageAdminRoles,
+    !canAdminAccess ? adminReasonBase : canManageAdminRoles ? "Cumple admin:roles" : "Falta admin:roles",
+  );
+  add(
+    "admin.cycles",
+    "admin",
+    "Ciclos académicos",
+    "/admin/cycles",
+    canAdminAccess && (canManageSemesters || canManagePillars),
+    !canAdminAccess
+      ? adminReasonBase
+      : (canManageSemesters || canManagePillars)
+        ? "Cumple semester:manage o pillar:manage"
+        : "Falta semester:manage y pillar:manage",
+  );
+  add(
+    "admin.cycle_pillars",
+    "admin",
+    "Pilares por ciclo",
+    "/admin/cycles/[id]/pillars",
+    canAdminAccess && canManagePillars,
+    !canAdminAccess ? adminReasonBase : canManagePillars ? "Cumple pillar:manage" : "Falta pillar:manage",
+  );
+  add(
+    "admin.audit",
+    "admin",
+    "Auditoría de permisos",
+    "/admin/audit",
+    canAdminAccess && canViewAdminAudit,
+    !canAdminAccess ? adminReasonBase : canViewAdminAudit ? "Cumple admin:audit" : "Falta admin:audit",
+  );
+  add(
+    "admin.access_preview",
+    "admin",
+    "Vista previa de accesos",
+    "/admin/access-preview",
+    canAdminAccess && (canViewAdminAudit || canManageAdminRoles),
+    !canAdminAccess
+      ? adminReasonBase
+      : (canViewAdminAudit || canManageAdminRoles)
+        ? "Cumple admin:audit o admin:roles"
+        : "Falta admin:audit y admin:roles",
+  );
+  add(
+    "admin.setup_wizard",
+    "admin",
+    "Asistente de setup",
+    "/admin/setup-wizard",
+    canAdminAccess && canManageSemesters,
+    !canAdminAccess ? adminReasonBase : canManageSemesters ? "Cumple semester:manage" : "Falta semester:manage",
+  );
+
+  const eventsQuickPath = canAdminAccess ? "/admin/events" : "/dashboard/agenda";
+  add(
+    "quick.events",
+    "quick-actions",
+    "Acción rápida: Eventos",
+    eventsQuickPath,
+    canAdminAccess || dashboardAllowed,
+    canAdminAccess
+      ? "Quick action apunta a /admin/events"
+      : dashboardAllowed
+        ? "Quick action apunta a /dashboard/agenda"
+        : dashboardBlockReason,
+  );
+
+  add(
+    "quick.grades_or_projects",
+    "quick-actions",
+    canViewGrades ? "Acción rápida: Evaluar equipos" : "Acción rápida: Mis proyectos",
+    canViewGrades ? "/dashboard/management/grades" : "/dashboard/projects",
+    dashboardAllowed && (canViewGrades || true),
+    !dashboardAllowed ? dashboardBlockReason : canViewGrades ? "Cumple permisos de notas" : "Sin permisos de notas, muestra acceso a proyectos",
+  );
+
+  add(
+    "quick.admin_or_profile",
+    "quick-actions",
+    canAdminAccess ? "Acción rápida: Configuración admin" : "Acción rápida: Mi perfil",
+    canAdminAccess ? "/admin" : "/dashboard/profile",
+    canAdminAccess || dashboardAllowed,
+    canAdminAccess ? "Cumple admin:access" : dashboardAllowed ? "Perfil disponible en dashboard" : dashboardBlockReason,
+  );
+
+  // Entry/auth flow visibility simulation for route-level behavior understanding.
+  add(
+    "flow.root_entry",
+    "auth-flow",
+    "Entrada raíz",
+    "/",
+    true,
+    blockedByStatus
+      ? "Redirige a /auth/error según estado"
+      : blockedByPendingFlow
+        ? "Redirige a /pending-approval"
+        : "Con sesión válida redirige a /dashboard; sin sesión a /login",
+  );
+  add(
+    "flow.login",
+    "auth-flow",
+    "Login",
+    "/login",
+    true,
+    dashboardAllowed || canAdminAccess
+      ? "Con sesión activa redirige a /dashboard"
+      : "Disponible para autenticación",
+  );
+  add(
+    "flow.pending_approval",
+    "auth-flow",
+    "Pendiente de aprobación",
+    "/pending-approval",
+    blockedByPendingFlow,
+    blockedByPendingFlow
+      ? "Visible para usuarios en estado pendiente o volunteer activo sin aprobación"
+      : "Si no está pendiente, redirige a dashboard o error",
+  );
+  add(
+    "flow.auth_error",
+    "auth-flow",
+    "Pantalla de error de acceso",
+    "/auth/error",
+    true,
+    "Ruta informativa invocada por flujos de acceso denegado/suspendido/rechazado",
+  );
+
+  return {
+    totalAllowed: items.filter((item) => item.allowed).length,
+    totalEvaluated: items.length,
+    items,
+  };
 }
 
 function normalizeRoleName(value: string | null | undefined): string {
@@ -899,6 +1257,7 @@ export async function getAccessPreviewAction(
     let resolvedUserId = "preview-role-mode";
     let resolvedRole = payload.role || "VOLUNTEER";
     let resolvedAreaId: string | null = payload.areaId || null;
+    let resolvedStatus: string | null = payload.mode === "ROLE" ? "ACTIVE" : null;
     let sourceUser: AccessPreviewResult["context"]["sourceUser"] = null;
 
     let extraPermissions = sanitizePermissions(payload.extraPermissions);
@@ -910,13 +1269,14 @@ export async function getAccessPreviewAction(
 
       const targetUser = await db.query.users.findFirst({
         where: eq(users.id, payload.userId),
-        columns: { id: true, name: true, email: true, role: true, currentAreaId: true },
+        columns: { id: true, name: true, email: true, role: true, currentAreaId: true, status: true },
       });
       if (!targetUser) return { success: false, error: "Usuario objetivo no encontrado" };
 
       resolvedUserId = targetUser.id;
       resolvedRole = targetUser.role || "VOLUNTEER";
       resolvedAreaId = targetUser.currentAreaId;
+      resolvedStatus = targetUser.status;
       sourceUser = { id: targetUser.id, name: targetUser.name, email: targetUser.email };
 
       extraPermissions = await getAllExtraPermissionsForUser(targetUser.id);
@@ -990,11 +1350,12 @@ export async function getAccessPreviewAction(
       customPermissions: extraPermissions,
     };
 
-    const [areaInfo, activeSemester, allProjects] = await Promise.all([
+    const [areaInfo, activeSemester, anySemester, allProjects] = await Promise.all([
       resolvedAreaId
         ? db.query.areas.findFirst({ where: eq(areas.id, resolvedAreaId), columns: { name: true } })
         : Promise.resolve(null),
       db.query.semesters.findFirst({ where: eq(semesters.isActive, true), columns: { id: true } }),
+      db.query.semesters.findFirst({ columns: { id: true } }),
       db.query.projects.findMany({
         columns: { id: true, name: true, status: true },
         with: {
@@ -1090,6 +1451,16 @@ export async function getAccessPreviewAction(
       },
     );
 
+    const uiViews = buildUIViewPreview({
+      role: resolvedRole,
+      customPermissions: extraPermissions,
+      status: resolvedStatus,
+      hasActiveSemester: !!activeSemester,
+      hasAnySemester: !!anySemester,
+      visibleProjectsCount: visibleProjects.length,
+      hasTakeAttendanceActionableEvent: eventRows.some((row) => row.canTakeAttendance),
+    });
+
     return {
       success: true,
       data: {
@@ -1116,6 +1487,7 @@ export async function getAccessPreviewAction(
           sample: projectSample,
         },
         projectMembershipChecks,
+        uiViews,
       },
     };
   } catch (error) {

@@ -112,6 +112,26 @@ export default function AccessPreviewView({ bootstrap }: Props) {
     };
   }, [preview]);
 
+  const groupedUiViews = useMemo(() => {
+    if (!preview) {
+      return {
+        dashboard: [],
+        admin: [],
+        cycle: [],
+        quick: [],
+        auth: [],
+      };
+    }
+
+    return {
+      dashboard: preview.uiViews.items.filter((item) => item.group === "dashboard"),
+      admin: preview.uiViews.items.filter((item) => item.group === "admin"),
+      cycle: preview.uiViews.items.filter((item) => item.group === "cycle-flow"),
+      quick: preview.uiViews.items.filter((item) => item.group === "quick-actions"),
+      auth: preview.uiViews.items.filter((item) => item.group === "auth-flow"),
+    };
+  }, [preview]);
+
   const generatePreview = () => {
     setErrorMsg(null);
 
@@ -522,6 +542,25 @@ export default function AccessPreviewView({ bootstrap }: Props) {
             </div>
           </div>
 
+          <div className="rounded-2xl border border-sky-200 bg-sky-50/60 p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <Eye className="w-4 h-4 text-sky-700" />
+              <p className="text-xs font-black text-sky-800 uppercase tracking-wide">Simulación de Vistas de Interfaz</p>
+            </div>
+
+            <p className="text-xs text-sky-900 font-semibold">
+              Vistas habilitadas: <strong>{preview.uiViews.totalAllowed}</strong> / <strong>{preview.uiViews.totalEvaluated}</strong>
+            </p>
+
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+              <UIViewSection title="Dashboard" items={groupedUiViews.dashboard} />
+              <UIViewSection title="Admin" items={groupedUiViews.admin} />
+              <UIViewSection title="Flujo de Ciclo" items={groupedUiViews.cycle} />
+              <UIViewSection title="Acciones Rápidas" items={groupedUiViews.quick} />
+              <UIViewSection title="Auth y Entrada" items={groupedUiViews.auth} />
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
             <DecisionCard title="Decisiones de Endpoints (Events)" decisions={groupedDecisions.events} />
             <DecisionCard title="Decisiones de Endpoints (Projects)" decisions={groupedDecisions.projects} />
@@ -649,6 +688,36 @@ export default function AccessPreviewView({ bootstrap }: Props) {
           )}
         </>
       )}
+    </div>
+  );
+}
+
+type UIViewItem = {
+  key: string;
+  label: string;
+  path: string;
+  allowed: boolean;
+  reason: string;
+};
+
+function UIViewSection({ title, items }: { title: string; items: UIViewItem[] }) {
+  return (
+    <div className="rounded-xl border border-sky-100 bg-white/80 p-3">
+      <p className="text-xs font-black text-sky-900 uppercase tracking-wide mb-2">{title}</p>
+      <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+        {items.map((item) => (
+          <div key={item.key} className="rounded-lg border border-meteorite-100 bg-meteorite-50/30 p-2">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <p className="text-xs font-bold text-meteorite-900">{item.label}</p>
+                <p className="text-[11px] text-sky-800 mt-0.5">{item.path}</p>
+              </div>
+              <BoolTag ok={item.allowed} text={item.allowed ? "VISIBLE" : "OCULTA"} />
+            </div>
+            <p className="text-[11px] text-meteorite-600 mt-1">{item.reason}</p>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
