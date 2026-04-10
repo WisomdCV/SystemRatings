@@ -460,7 +460,7 @@ export default function CreateEventForm({
                         value={inviteeSearch}
                         onChange={(e) => setInviteeSearch(e.target.value)}
                         placeholder="Buscar usuarios..."
-                        className="w-full px-4 py-2 rounded-xl border border-gray-200 bg-gray-50/50 focus:bg-white focus:border-meteorite-500 focus:ring-2 focus:ring-meteorite-200 transition-all outline-none text-sm font-medium mb-2"
+                        className="w-full px-4 py-2 rounded-xl border border-gray-200 bg-gray-50/50 focus:bg-white focus:border-meteorite-500 focus:ring-2 focus:ring-meteorite-200 transition-all outline-none text-sm font-bold text-meteorite-900 mb-2 placeholder:text-gray-400"
                     />
                     <div className="max-h-40 overflow-y-auto rounded-xl border border-gray-200 bg-white divide-y divide-gray-100">
                         {filteredUsers.length === 0 ? (
