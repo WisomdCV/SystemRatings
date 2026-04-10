@@ -1037,9 +1037,14 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
                                         )
                                     })
                                 ) : (
-                                    <div className="flex flex-col items-center justify-center w-full h-full text-center opacity-80 p-6 min-h-[180px]">
-                                        <Calendar className="w-8 h-8 mb-2 opacity-50" />
-                                        <p className="text-sm font-bold">Sin eventos próximos</p>
+                                    <div className="flex flex-col items-center justify-center w-full h-full text-center p-8 min-h-[220px] animate-in fade-in zoom-in duration-700">
+                                        <div className="w-16 h-16 rounded-3xl bg-white/10 flex items-center justify-center backdrop-blur-md border border-white/20 mb-4 shadow-xl group-hover:scale-110 transition-transform">
+                                            <Calendar className="w-8 h-8 text-white/60" />
+                                        </div>
+                                        <h4 className="text-white font-black text-lg mb-1 tracking-tight">Sin eventos próximos</h4>
+                                        <p className="text-white/50 text-xs font-medium max-w-[200px] leading-relaxed">
+                                            Tu agenda está despejada por ahora. ¡Disfruta el descanso!
+                                        </p>
                                     </div>
                                 )}
                             </div>

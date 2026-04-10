@@ -44,19 +44,7 @@ import {
 import { isProjectWritable } from "@/server/services/project-cycle.service";
 import type { LinkStatus } from "@/lib/constants";
 
-async function getProjectMembershipWithPerms(userId: string, projectId: string) {
-  const membership = await db.query.projectMembers.findFirst({
-    where: and(
-      eq(projectMembers.projectId, projectId),
-      eq(projectMembers.userId, userId),
-    ),
-    with: {
-      projectRole: { with: { permissions: true } },
-      projectArea: true,
-    },
-  });
-  return membership ?? null;
-}
+import { getProjectMembershipWithPerms } from "@/server/services/project-membership.service";
 
 async function isUserAssignedToTask(userId: string, taskId: string) {
   const assignment = await db.query.taskAssignments.findFirst({

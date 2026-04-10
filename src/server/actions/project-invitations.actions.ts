@@ -33,19 +33,7 @@ const REJECTED: InvitationStatus = "REJECTED";
 const CANCELLED: InvitationStatus = "CANCELLED";
 const EXPIRED: InvitationStatus = "EXPIRED";
 
-async function getProjectMembershipWithPerms(userId: string, projectId: string) {
-  const membership = await db.query.projectMembers.findFirst({
-    where: and(
-      eq(projectMembers.projectId, projectId),
-      eq(projectMembers.userId, userId),
-    ),
-    with: {
-      projectRole: { with: { permissions: true } },
-      projectArea: true,
-    },
-  });
-  return membership ?? null;
-}
+import { getProjectMembershipWithPerms } from "@/server/services/project-membership.service";
 
 function revalidateInvitations(projectId?: string) {
   revalidatePath("/dashboard");

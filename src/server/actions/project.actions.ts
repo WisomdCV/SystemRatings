@@ -40,20 +40,7 @@ const TASK_DONE: TaskStatus = "DONE";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-/** Load membership with full permission set (projectRole.permissions + projectArea) */
-async function getProjectMembershipWithPerms(userId: string, projectId: string) {
-    const membership = await db.query.projectMembers.findFirst({
-        where: and(
-            eq(projectMembers.projectId, projectId),
-            eq(projectMembers.userId, userId),
-        ),
-        with: {
-            projectRole: { with: { permissions: true } },
-            projectArea: true,
-        },
-    });
-    return membership ?? null;
-}
+import { getProjectMembershipWithPerms } from "@/server/services/project-membership.service";
 
 const revalidateProjects = () => {
     revalidatePath("/dashboard/projects");
@@ -440,6 +427,12 @@ export async function archiveProjectCycleAction(projectId: string) {
         const session = await auth();
         if (!session?.user?.id) return { success: false as const, error: "No autorizado" };
 
+        const project = await db.query.projects.findFirst({
+            where: eq(projects.id, projectId),
+            columns: { id: true },
+        });
+        if (!project) return { success: false as const, error: "Proyecto no encontrado." };
+
         const iiseBypass = canBypassProjectPerms(session.user.role || "", session.user.customPermissions);
         if (!iiseBypass) {
             const membership = await getProjectMembershipWithPerms(session.user.id, projectId);
@@ -521,12 +514,11 @@ export async function updateProjectMemberRoleAction(input: UpdateProjectMemberRo
         const iiseBypass = canBypassProjectPerms(session.user.role || "", session.user.customPermissions);
         if (!iiseBypass) {
             const myMembership = await getProjectMembershipWithPerms(session.user.id, targetMember.projectId);
-            if (!hasProjectPermission(myMembership, "project:manage_members")) {
-                return { success: false as const, error: "No tienes permisos para gestionar miembros." };
-            }
-
             if (!myMembership) {
                 return { success: false as const, error: "No eres miembro del proyecto." };
+            }
+            if (!hasProjectPermission(myMembership, "project:manage_members")) {
+                return { success: false as const, error: "No tienes permisos para gestionar miembros." };
             }
 
             // Hierarchy guard: can't modify someone at or above your level
@@ -582,11 +574,14 @@ export async function removeProjectMemberAction(memberId: string) {
         const iiseBypass = canBypassProjectPerms(session.user.role || "", session.user.customPermissions);
         if (!iiseBypass) {
             const myMembership = await getProjectMembershipWithPerms(session.user.id, member.projectId);
+            if (!myMembership) {
+                return { success: false as const, error: "No eres miembro del proyecto." };
+            }
             if (!hasProjectPermission(myMembership, "project:manage_members")) {
                 return { success: false as const, error: "No tienes permisos para gestionar miembros." };
             }
             // Hierarchy guard
-            if (myMembership && member.projectRole.hierarchyLevel >= myMembership.projectRole.hierarchyLevel) {
+            if (member.projectRole.hierarchyLevel >= myMembership.projectRole.hierarchyLevel) {
                 return { success: false as const, error: "No puedes remover a un miembro de igual o mayor jerarquía." };
             }
         }

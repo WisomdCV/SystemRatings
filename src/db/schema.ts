@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, real, primaryKey, unique } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, real, primaryKey, unique, foreignKey } from "drizzle-orm/sqlite-core";
 import { relations, sql } from "drizzle-orm";
 import type { AdapterAccount } from "next-auth/adapters";
 
@@ -281,12 +281,14 @@ export const projectCycles = sqliteTable("project_cycle", {
   status: text("status").default("ACTIVE").notNull(),
   startedAt: integer("started_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
   endedAt: integer("ended_at", { mode: "timestamp" }),
-  // Self-reference kept at relation level to avoid TS self-initializer inference issues.
   extendedFromCycleId: text("extended_from_cycle_id"),
   extendedById: text("extended_by_id").references(() => users.id),
   notes: text("notes"),
 }, (table) => ({
   uniqueProjectSemester: unique().on(table.projectId, table.semesterId),
+  // Self-reference: links to the cycle this one was extended from
+  cycleLineageRef: foreignKey({ columns: [table.extendedFromCycleId], foreignColumns: [table.id] })
+    .onDelete("set null"),
 }));
 
 export const projectAreas = sqliteTable("project_area", {
@@ -318,7 +320,9 @@ export const projectMembers = sqliteTable("project_member", {
   projectAreaId: text("project_area_id").references(() => projectAreas.id), // Nulo significa "Coordinador General o sin área"
 
   joinedAt: integer("joined_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
-});
+}, (table) => ({
+  uniqueProjectUser: unique().on(table.projectId, table.userId),
+}));
 
 export const projectInvitations = sqliteTable("project_invitation", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
@@ -366,7 +370,9 @@ export const taskAssignments = sqliteTable("task_assignment", {
   taskId: text("task_id").references(() => projectTasks.id, { onDelete: "cascade" }).notNull(),
   userId: text("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
   assignedAt: integer("assigned_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
-});
+}, (table) => ({
+  uniqueTaskUser: unique().on(table.taskId, table.userId),
+}));
 
 export const taskComments = sqliteTable("task_comment", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
@@ -377,7 +383,10 @@ export const taskComments = sqliteTable("task_comment", {
   isEdited: integer("is_edited", { mode: "boolean" }).default(false),
   createdAt: integer("created_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
   updatedAt: integer("updated_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
-});
+}, (table) => ({
+  parentRef: foreignKey({ columns: [table.parentId], foreignColumns: [table.id] })
+    .onDelete("cascade"),
+}));
 
 export const projectRolePermissions = sqliteTable("project_role_permission", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
