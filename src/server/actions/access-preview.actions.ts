@@ -12,7 +12,7 @@ import {
   events,
   semesters,
 } from "@/db/schema";
-import { and, asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, ne } from "drizzle-orm";
 import { hasPermission, PERMISSIONS, ALL_PERMISSIONS, type Permission } from "@/lib/permissions";
 import {
   filterVisibleProjects,
@@ -134,7 +134,7 @@ interface SimulatedActorContext {
 
 interface EndpointDecision {
   key: string;
-  scope: "events" | "projects";
+  scope: "events" | "projects" | "grading";
   label: string;
   allowed: boolean;
   reason: string;
@@ -159,6 +159,32 @@ interface ProjectPreviewItem {
   name: string;
   status: string;
   visibilityRule: string;
+}
+
+interface GradingActorUserItem {
+  id: string;
+  name: string | null;
+  email: string;
+  role: string | null;
+  currentAreaId: string | null;
+  currentAreaName: string | null;
+  canAssign: boolean;
+  assignmentReason: string;
+}
+
+interface GradingPreview {
+  canAccessSection: boolean;
+  viewScope: "ALL" | "OWN_AREA" | "NONE";
+  assignScope: "ALL" | "OWN_AREA" | "NONE";
+  canViewOwnArea: boolean;
+  canViewAll: boolean;
+  canAssignOwnArea: boolean;
+  canAssignAll: boolean;
+  areaRequiredForOwnAreaScope: boolean;
+  visibleUsersCount: number;
+  assignableUsersCount: number;
+  summary: string;
+  actors: GradingActorUserItem[];
 }
 
 interface ProjectMembershipCheck {
@@ -214,6 +240,7 @@ export interface AccessPreviewResult {
     deniedCount: number;
     sample: ProjectPreviewItem[];
   };
+  grading: GradingPreview;
   projectMembershipChecks: ProjectMembershipCheck[];
   uiViews: UIViewPreview;
 }
@@ -237,7 +264,7 @@ function resolvePermissionOrigin(permission: Permission, role: string, customPer
 
 function permissionDecision(
   key: string,
-  scope: "events" | "projects",
+  scope: "events" | "projects" | "grading",
   label: string,
   permission: Permission,
   role: string,
@@ -258,7 +285,7 @@ function permissionDecision(
 
 function anyPermissionDecision(
   key: string,
-  scope: "events" | "projects",
+  scope: "events" | "projects" | "grading",
   label: string,
   permissions: Permission[],
   role: string,
@@ -639,6 +666,128 @@ function normalizeRoleName(value: string | null | undefined): string {
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .trim();
+}
+
+async function buildGradingPreview(params: {
+  actorUserId: string;
+  role: string;
+  areaId: string | null;
+  customPermissions: string[];
+}): Promise<GradingPreview> {
+  const {
+    actorUserId,
+    role,
+    areaId,
+    customPermissions,
+  } = params;
+
+  const canViewAll = hasPermission(role, "grade:view_all", customPermissions);
+  const canViewOwnArea = hasPermission(role, "grade:view_own_area", customPermissions);
+  const canAssignAll = hasPermission(role, "grade:assign_all", customPermissions);
+  const canAssignOwnArea = hasPermission(role, "grade:assign_own_area", customPermissions);
+
+  const areaRequiredForOwnAreaScope = (canViewOwnArea || canAssignOwnArea) && !areaId;
+
+  const viewScope: GradingPreview["viewScope"] = canViewAll
+    ? "ALL"
+    : (canViewOwnArea && areaId)
+      ? "OWN_AREA"
+      : "NONE";
+
+  const assignScope: GradingPreview["assignScope"] = canAssignAll
+    ? "ALL"
+    : (canAssignOwnArea && areaId)
+      ? "OWN_AREA"
+      : "NONE";
+
+  const canAccessSection = viewScope !== "NONE";
+
+  const visibleUsers = viewScope === "NONE"
+    ? []
+    : await db.query.users.findMany({
+      where: viewScope === "ALL"
+        ? and(
+          ne(users.role, "DEV"),
+          eq(users.status, "ACTIVE"),
+        )
+        : and(
+          eq(users.currentAreaId, areaId!),
+          ne(users.role, "DEV"),
+          eq(users.status, "ACTIVE"),
+          ne(users.id, actorUserId),
+        ),
+      columns: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        currentAreaId: true,
+      },
+      with: {
+        currentArea: {
+          columns: { name: true },
+        },
+      },
+      orderBy: [asc(users.currentAreaId), asc(users.name)],
+      limit: 200,
+    });
+
+  const actors: GradingActorUserItem[] = visibleUsers.slice(0, 50).map((targetUser) => {
+    let canAssign = false;
+    let assignmentReason = "Sin permiso de asignación";
+
+    if (assignScope === "ALL") {
+      canAssign = true;
+      assignmentReason = "Puede calificar globalmente (excepto usuarios DEV)";
+    } else if (assignScope === "OWN_AREA") {
+      const sameArea = !!areaId && targetUser.currentAreaId === areaId;
+      canAssign = sameArea;
+      assignmentReason = sameArea
+        ? "Puede calificar por coincidencia de área"
+        : "Visible pero fuera de su área para asignación";
+    }
+
+    return {
+      id: targetUser.id,
+      name: targetUser.name,
+      email: targetUser.email,
+      role: targetUser.role,
+      currentAreaId: targetUser.currentAreaId,
+      currentAreaName: targetUser.currentArea?.name || null,
+      canAssign,
+      assignmentReason,
+    };
+  });
+
+  const assignableUsersCount = actors.filter((actor) => actor.canAssign).length;
+
+  let summary = "Sin permisos para acceder al apartado de calificaciones";
+  if (canAccessSection && assignScope === "ALL") {
+    summary = "Puede ver la hoja y calificar globalmente";
+  } else if (canAccessSection && assignScope === "OWN_AREA") {
+    summary = "Puede ver la hoja y calificar solo miembros de su área";
+  } else if (canAccessSection) {
+    summary = "Puede ver la hoja de calificaciones, pero no asignar notas";
+  }
+
+  if (areaRequiredForOwnAreaScope) {
+    summary = `${summary}. Tiene permisos de área propia, pero sin área asignada no se pueden aplicar.`;
+  }
+
+  return {
+    canAccessSection,
+    viewScope,
+    assignScope,
+    canViewOwnArea,
+    canViewAll,
+    canAssignOwnArea,
+    canAssignAll,
+    areaRequiredForOwnAreaScope,
+    visibleUsersCount: visibleUsers.length,
+    assignableUsersCount,
+    summary,
+    actors,
+  };
 }
 
 async function getTreasurySpecialInvitees(projectId: string): Promise<string[]> {
@@ -1447,6 +1596,10 @@ export async function getAccessPreviewAction(
       permissionDecision("projects.view_any", "projects", "GET /projects (view_any)", "project:view_any", resolvedRole, extraPermissions),
       permissionDecision("projects.view_iise_area", "projects", "GET /projects (view_iise_area)", "project:view_iise_area", resolvedRole, extraPermissions),
       permissionDecision("projects.manage", "projects", "PATCH /projects/:id (global manage)", "project:manage", resolvedRole, extraPermissions),
+      anyPermissionDecision("grading.view_sheet", "grading", "GET /dashboard/management/grades", ["grade:view_own_area", "grade:view_all"], resolvedRole, extraPermissions),
+      anyPermissionDecision("grading.assign", "grading", "POST /grades (upsert)", ["grade:assign_own_area", "grade:assign_all"], resolvedRole, extraPermissions),
+      permissionDecision("grading.view_all", "grading", "Scope visualización global", "grade:view_all", resolvedRole, extraPermissions),
+      permissionDecision("grading.assign_all", "grading", "Scope asignación global", "grade:assign_all", resolvedRole, extraPermissions),
     ];
 
     const [canCreateGeneralIISE, canCreateAreaIISE, canCreateMeetingIISE] = await Promise.all([
@@ -1465,6 +1618,22 @@ export async function getAccessPreviewAction(
         permissionOrigin: "CONSOLIDATED",
       },
     );
+
+    const grading = await buildGradingPreview({
+      actorUserId: resolvedUserId,
+      role: resolvedRole,
+      areaId: resolvedAreaId,
+      customPermissions: extraPermissions,
+    });
+
+    endpointDecisions.push({
+      key: "grading.capabilities",
+      scope: "grading",
+      label: "Capacidad de calificaciones consolidada",
+      allowed: grading.canAccessSection,
+      reason: `${grading.summary}. Visibles=${grading.visibleUsersCount}, calificables=${grading.assignableUsersCount}`,
+      permissionOrigin: "CONSOLIDATED",
+    });
 
     const uiViews = buildUIViewPreview({
       role: resolvedRole,
@@ -1501,6 +1670,7 @@ export async function getAccessPreviewAction(
           deniedCount: Math.max(allProjects.length - visibleProjects.length, 0),
           sample: projectSample,
         },
+        grading,
         projectMembershipChecks,
         uiViews,
       },

@@ -21,6 +21,7 @@ export default function AccessPreviewView({ bootstrap }: Props) {
   const [preview, setPreview] = useState<AccessPreviewResult | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [gradingActorFilter, setGradingActorFilter] = useState<"ALL" | "ASSIGNABLE" | "READ_ONLY">("ALL");
 
   const selectedTargetUser = useMemo(
     () => bootstrap.users.find((user) => user.id === selectedUserId) || null,
@@ -28,10 +29,11 @@ export default function AccessPreviewView({ bootstrap }: Props) {
   );
 
   const groupedDecisions = useMemo(() => {
-    if (!preview) return { events: [], projects: [] };
+    if (!preview) return { events: [], projects: [], grading: [] };
     return {
       events: preview.endpointDecisions.filter((d) => d.scope === "events"),
       projects: preview.endpointDecisions.filter((d) => d.scope === "projects"),
+      grading: preview.endpointDecisions.filter((d) => d.scope === "grading"),
     };
   }, [preview]);
 
@@ -54,6 +56,13 @@ export default function AccessPreviewView({ bootstrap }: Props) {
       auth: preview.uiViews.items.filter((item) => item.group === "auth-flow"),
     };
   }, [preview]);
+
+  const filteredGradingActors = useMemo(() => {
+    if (!preview) return [];
+    if (gradingActorFilter === "ASSIGNABLE") return preview.grading.actors.filter((actor) => actor.canAssign);
+    if (gradingActorFilter === "READ_ONLY") return preview.grading.actors.filter((actor) => !actor.canAssign);
+    return preview.grading.actors;
+  }, [preview, gradingActorFilter]);
 
   const generatePreview = () => {
     setErrorMsg(null);
@@ -296,6 +305,109 @@ export default function AccessPreviewView({ bootstrap }: Props) {
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
             <DecisionCard title="Decisiones de Endpoints (Events)" decisions={groupedDecisions.events} />
             <DecisionCard title="Decisiones de Endpoints (Projects)" decisions={groupedDecisions.projects} />
+            <DecisionCard title="Decisiones de Endpoints (Calificaciones)" decisions={groupedDecisions.grading} />
+          </div>
+
+          <div className="rounded-2xl border border-meteorite-200 bg-white p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <Filter className="w-4 h-4 text-indigo-600" />
+              <h4 className="text-sm font-black text-meteorite-900">Matriz de Calificaciones</h4>
+            </div>
+
+            <p className="text-xs text-meteorite-600">
+              {preview.grading.summary}
+            </p>
+
+            <div className="flex flex-wrap gap-2 text-[11px]">
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full border border-indigo-200 bg-indigo-50 text-indigo-700 font-black">
+                Sección: {preview.grading.canAccessSection ? "VISIBLE" : "OCULTA"}
+              </span>
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full border border-sky-200 bg-sky-50 text-sky-700 font-black">
+                Alcance vista: {preview.grading.viewScope}
+              </span>
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700 font-black">
+                Alcance asignación: {preview.grading.assignScope}
+              </span>
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full border border-meteorite-200 bg-meteorite-50 text-meteorite-700 font-black">
+                Visibles: {preview.grading.visibleUsersCount}
+              </span>
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full border border-amber-200 bg-amber-50 text-amber-700 font-black">
+                Calificables: {preview.grading.assignableUsersCount}
+              </span>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-[11px] font-black text-meteorite-700 uppercase tracking-wide">Filtro usuarios:</p>
+              <button
+                type="button"
+                onClick={() => setGradingActorFilter("ALL")}
+                className={`px-2.5 py-1 rounded-full border text-[11px] font-black ${gradingActorFilter === "ALL" ? "bg-indigo-100 text-indigo-700 border-indigo-200" : "bg-white text-meteorite-600 border-meteorite-200"}`}
+              >
+                Todos
+              </button>
+              <button
+                type="button"
+                onClick={() => setGradingActorFilter("ASSIGNABLE")}
+                className={`px-2.5 py-1 rounded-full border text-[11px] font-black ${gradingActorFilter === "ASSIGNABLE" ? "bg-emerald-100 text-emerald-700 border-emerald-200" : "bg-white text-meteorite-600 border-meteorite-200"}`}
+              >
+                Solo calificables
+              </button>
+              <button
+                type="button"
+                onClick={() => setGradingActorFilter("READ_ONLY")}
+                className={`px-2.5 py-1 rounded-full border text-[11px] font-black ${gradingActorFilter === "READ_ONLY" ? "bg-amber-100 text-amber-700 border-amber-200" : "bg-white text-meteorite-600 border-meteorite-200"}`}
+              >
+                Solo lectura
+              </button>
+              <span className="text-[11px] text-meteorite-600 font-semibold">
+                Mostrando {filteredGradingActors.length} de {preview.grading.actors.length}
+              </span>
+            </div>
+
+            {preview.grading.areaRequiredForOwnAreaScope && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+                Tiene permisos de calificaciones por área propia, pero no hay área asignada al contexto simulado.
+              </div>
+            )}
+
+            <div className="max-h-96 overflow-y-auto rounded-xl border border-meteorite-100">
+              <table className="w-full text-xs">
+                <thead className="bg-meteorite-50 text-meteorite-700 font-black sticky top-0">
+                  <tr>
+                    <th className="text-left p-2">Usuario objetivo</th>
+                    <th className="text-left p-2">Rol / Área</th>
+                    <th className="text-left p-2">Acción</th>
+                    <th className="text-left p-2">Regla</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredGradingActors.length === 0 ? (
+                    <tr>
+                      <td className="p-3 text-meteorite-500" colSpan={4}>
+                        No hay usuarios para el filtro seleccionado.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredGradingActors.map((target) => (
+                      <tr key={target.id} className="border-t border-meteorite-100">
+                        <td className="p-2 align-top">
+                          <p className="font-bold text-meteorite-900">{target.name || "Sin nombre"}</p>
+                          <p className="text-[11px] text-meteorite-500">{target.email}</p>
+                        </td>
+                        <td className="p-2 align-top text-meteorite-700">
+                          <p>{target.role || "SIN_ROL"}</p>
+                          <p className="text-[11px] text-meteorite-500">{target.currentAreaName || "Sin área"}</p>
+                        </td>
+                        <td className="p-2 align-top">
+                          <BoolTag ok={target.canAssign} text={target.canAssign ? "PUEDE CALIFICAR" : "SOLO VER"} />
+                        </td>
+                        <td className="p-2 align-top text-[11px] text-meteorite-600">{target.assignmentReason}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
