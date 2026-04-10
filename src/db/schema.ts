@@ -318,7 +318,7 @@ export const projectMembers = sqliteTable("project_member", {
 
   // Novedad: En lugar de texto duro, usamos FKs al nuevo sistema local
   projectRoleId: text("project_role_id").references(() => projectRoles.id).notNull(),
-  projectAreaId: text("project_area_id").references(() => projectAreas.id), // Nulo significa "Coordinador General o sin área"
+  projectAreaId: text("project_area_id").references(() => projectAreas.id, { onDelete: "set null" }), // Nulo significa "Coordinador General o sin área"
 
   joinedAt: integer("joined_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
 }, (table) => ({
@@ -332,7 +332,7 @@ export const projectInvitations = sqliteTable("project_invitation", {
 
   // Snapshot of the proposed assignment at invite time.
   projectRoleId: text("project_role_id").references(() => projectRoles.id).notNull(),
-  projectAreaId: text("project_area_id").references(() => projectAreas.id),
+  projectAreaId: text("project_area_id").references(() => projectAreas.id, { onDelete: "set null" }),
 
   invitedById: text("invited_by_id").references(() => users.id).notNull(),
 
@@ -352,7 +352,7 @@ export const projectInvitations = sqliteTable("project_invitation", {
 export const projectTasks = sqliteTable("project_task", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
   projectId: text("project_id").references(() => projects.id, { onDelete: "cascade" }).notNull(),
-  projectAreaId: text("project_area_id").references(() => projectAreas.id), // Nulo significa area general
+  projectAreaId: text("project_area_id").references(() => projectAreas.id, { onDelete: "set null" }), // Nulo significa area general
   title: text("title").notNull(),
   description: text("description"),
   // TODO | IN_PROGRESS | REVIEW | DONE | BLOCKED

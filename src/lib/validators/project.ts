@@ -68,6 +68,42 @@ export const CancelInvitationSchema = z.object({
     invitationId: z.string().uuid(),
 });
 
+// ─── Project Area Schemas ─────────────────────────────────────────────────
+
+export const CreateProjectAreaSchema = z.object({
+    name: z.string().min(1, "Nombre requerido").max(100),
+    description: z.string().max(500).optional().nullable(),
+    color: z.string().regex(/^#[0-9a-fA-F]{6}$/, "Color hex inválido"),
+});
+
+export const UpdateProjectAreaSchema = z.object({
+    name: z.string().min(1, "Nombre requerido").max(100),
+    description: z.string().max(500).optional().nullable(),
+    color: z.string().regex(/^#[0-9a-fA-F]{6}$/, "Color hex inválido"),
+});
+
+// ─── Project Role Schemas ─────────────────────────────────────────────────
+
+export const CreateProjectRoleSchema = z.object({
+    name: z.string().min(1, "Nombre requerido").max(100),
+    description: z.string().max(500).optional().nullable(),
+    color: z.string().regex(/^#[0-9a-fA-F]{6}$/, "Color hex inválido"),
+    permissions: z.array(z.string()).optional(),
+});
+
+export const UpdateProjectRoleSchema = z.object({
+    name: z.string().min(1, "Nombre requerido").max(100),
+    description: z.string().max(500).optional().nullable(),
+    color: z.string().regex(/^#[0-9a-fA-F]{6}$/, "Color hex inválido"),
+    hierarchyLevel: z.number().int().min(1).max(100).optional(),
+    permissions: z.array(z.string()).optional(),
+});
+
+export const UpdateRoleHierarchySchema = z.object({
+    roleId: z.string().uuid(),
+    hierarchyLevel: z.number().int().min(1, "Mínimo 1").max(100, "Máximo 100"),
+});
+
 // ─── Resource Category Schemas ─────────────────────────────────────────────
 
 export const CreateResourceCategorySchema = z.object({
@@ -194,6 +230,11 @@ export const DeleteTaskCommentSchema = z.object({
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
+export type CreateProjectAreaDTO = z.infer<typeof CreateProjectAreaSchema>;
+export type UpdateProjectAreaDTO = z.infer<typeof UpdateProjectAreaSchema>;
+export type CreateProjectRoleDTO = z.infer<typeof CreateProjectRoleSchema>;
+export type UpdateProjectRoleDTO = z.infer<typeof UpdateProjectRoleSchema>;
+export type UpdateRoleHierarchyDTO = z.infer<typeof UpdateRoleHierarchySchema>;
 export type CreateProjectDTO = z.infer<typeof CreateProjectSchema>;
 export type UpdateProjectDTO = z.infer<typeof UpdateProjectSchema>;
 export type AddProjectMemberDTO = z.infer<typeof AddProjectMemberSchema>;

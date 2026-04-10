@@ -2,11 +2,17 @@
 
 import { auth } from "@/server/auth";
 import { db } from "@/db";
-import { projectAreas, projectRoles, projectRolePermissions } from "@/db/schema";
-import { eq, asc, desc, isNull } from "drizzle-orm";
+import { projectAreas, projectRoles, projectRolePermissions, projectMembers, projectInvitations } from "@/db/schema";
+import { eq, asc, desc, isNull, and } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { hasPermission } from "@/lib/permissions";
 import { PROJECT_PERMISSIONS, type ProjectPermission } from "@/lib/project-permissions";
+import {
+    CreateProjectAreaSchema, UpdateProjectAreaSchema,
+    CreateProjectRoleSchema, UpdateProjectRoleSchema, UpdateRoleHierarchySchema,
+    type CreateProjectAreaDTO, type UpdateProjectAreaDTO,
+    type CreateProjectRoleDTO, type UpdateProjectRoleDTO, type UpdateRoleHierarchyDTO,
+} from "@/lib/validators/project";
 
 /** Validates if the user can manage admin roles/settings */
 async function canManageProjectSettings() {
@@ -38,18 +44,20 @@ export async function getProjectAreasAction() {
     }
 }
 
-export async function createProjectAreaAction(data: { name: string; description?: string; color: string }) {
+export async function createProjectAreaAction(input: CreateProjectAreaDTO) {
     try {
         if (!(await canManageProjectSettings())) return { success: false as const, error: "No autorizado." };
-        if (!data.name.trim()) return { success: false as const, error: "El nombre es obligatorio." };
+
+        const validated = CreateProjectAreaSchema.safeParse(input);
+        if (!validated.success) return { success: false as const, error: validated.error.issues[0].message };
 
         const lastArea = await db.query.projectAreas.findFirst({ orderBy: [desc(projectAreas.position)] });
         const position = (lastArea?.position ?? 0) + 1;
 
         const [newArea] = await db.insert(projectAreas).values({
-            name: data.name.trim(),
-            description: data.description?.trim() || null,
-            color: data.color,
+            name: validated.data.name.trim(),
+            description: validated.data.description?.trim() || null,
+            color: validated.data.color,
             position,
         }).returning();
 
@@ -61,18 +69,20 @@ export async function createProjectAreaAction(data: { name: string; description?
     }
 }
 
-export async function updateProjectAreaAction(id: string, data: { name: string; description?: string; color: string }) {
+export async function updateProjectAreaAction(id: string, input: UpdateProjectAreaDTO) {
     try {
         if (!(await canManageProjectSettings())) return { success: false as const, error: "No autorizado." };
-        if (!data.name.trim()) return { success: false as const, error: "El nombre es obligatorio." };
+
+        const validated = UpdateProjectAreaSchema.safeParse(input);
+        if (!validated.success) return { success: false as const, error: validated.error.issues[0].message };
 
         const existing = await db.query.projectAreas.findFirst({ where: eq(projectAreas.id, id) });
         if (!existing) return { success: false as const, error: "Área no encontrada." };
 
         await db.update(projectAreas).set({
-            name: data.name.trim(),
-            description: data.description?.trim() || null,
-            color: data.color,
+            name: validated.data.name.trim(),
+            description: validated.data.description?.trim() || null,
+            color: validated.data.color,
         }).where(eq(projectAreas.id, id));
 
         revalidatePath("/admin/project-settings");
@@ -148,12 +158,14 @@ export async function getProjectRolesAction() {
     }
 }
 
-export async function createProjectRoleAction(data: { name: string; description?: string; color: string; permissions?: string[] }) {
+export async function createProjectRoleAction(input: CreateProjectRoleDTO) {
     try {
         if (!(await canManageProjectSettings())) return { success: false as const, error: "No autorizado." };
-        if (!data.name.trim()) return { success: false as const, error: "El nombre es obligatorio." };
 
-        // Auto calculate a hierarchy level: lowest existing - 10, minimum 0
+        const validated = CreateProjectRoleSchema.safeParse(input);
+        if (!validated.success) return { success: false as const, error: validated.error.issues[0].message };
+
+        // Auto calculate a hierarchy level: lowest existing - 10, minimum 1
         const roles = await db.query.projectRoles.findMany({ orderBy: [asc(projectRoles.hierarchyLevel)] });
         const lowestLevel = roles.length > 0 ? roles[0].hierarchyLevel : 100;
         const newLevel = Math.max(1, lowestLevel - 10);
@@ -162,15 +174,15 @@ export async function createProjectRoleAction(data: { name: string; description?
 
         const result = await db.transaction(async (tx) => {
             const [newRole] = await tx.insert(projectRoles).values({
-                name: data.name.trim(),
-                description: data.description?.trim() || null,
-                color: data.color,
+                name: validated.data.name.trim(),
+                description: validated.data.description?.trim() || null,
+                color: validated.data.color,
                 hierarchyLevel: newLevel,
                 displayOrder: newDisplayOrder,
             }).returning();
 
             // Insert permissions if provided
-            const validPerms = (data.permissions ?? []).filter(p =>
+            const validPerms = (validated.data.permissions ?? []).filter(p =>
                 (PROJECT_PERMISSIONS as readonly string[]).includes(p)
             );
             if (validPerms.length > 0) {
@@ -190,29 +202,28 @@ export async function createProjectRoleAction(data: { name: string; description?
     }
 }
 
-export async function updateProjectRoleAction(id: string, data: { name: string; description?: string; color: string; hierarchyLevel?: number; permissions?: string[] }) {
+export async function updateProjectRoleAction(id: string, input: UpdateProjectRoleDTO) {
     try {
         if (!(await canManageProjectSettings())) return { success: false as const, error: "No autorizado." };
-        if (!data.name.trim()) return { success: false as const, error: "El nombre es obligatorio." };
-        if (data.hierarchyLevel !== undefined && (data.hierarchyLevel < 1 || data.hierarchyLevel > 100)) {
-            return { success: false as const, error: "El nivel de autoridad debe estar entre 1 y 100." };
-        }
+
+        const validated = UpdateProjectRoleSchema.safeParse(input);
+        if (!validated.success) return { success: false as const, error: validated.error.issues[0].message };
 
         const existing = await db.query.projectRoles.findFirst({ where: eq(projectRoles.id, id) });
         if (!existing) return { success: false as const, error: "Rol no encontrado." };
 
         await db.transaction(async (tx) => {
             await tx.update(projectRoles).set({
-                name: data.name.trim(),
-                description: data.description?.trim() || null,
-                color: data.color,
-                hierarchyLevel: data.hierarchyLevel ?? existing.hierarchyLevel,
+                name: validated.data.name.trim(),
+                description: validated.data.description?.trim() || null,
+                color: validated.data.color,
+                hierarchyLevel: validated.data.hierarchyLevel ?? existing.hierarchyLevel,
             }).where(eq(projectRoles.id, id));
 
             // Update permissions: delete all + re-insert (same pattern as IISE area permissions)
-            if (data.permissions !== undefined) {
+            if (validated.data.permissions !== undefined) {
                 await tx.delete(projectRolePermissions).where(eq(projectRolePermissions.projectRoleId, id));
-                const validPerms = data.permissions.filter(p =>
+                const validPerms = validated.data.permissions.filter(p =>
                     (PROJECT_PERMISSIONS as readonly string[]).includes(p)
                 );
                 if (validPerms.length > 0) {
@@ -238,6 +249,26 @@ export async function deleteProjectRoleAction(id: string) {
         const existing = await db.query.projectRoles.findFirst({ where: eq(projectRoles.id, id) });
         if (!existing) return { success: false as const, error: "Rol no encontrado." };
         if (existing.isSystem) return { success: false as const, error: "Los roles de sistema no se pueden eliminar." };
+
+        // Pre-deletion check: projectRoleId is NOT NULL in members/invitations — cannot set null
+        const membersWithRole = await db.query.projectMembers.findFirst({
+            where: eq(projectMembers.projectRoleId, id),
+            columns: { id: true },
+        });
+        if (membersWithRole) {
+            return { success: false as const, error: "No se puede eliminar: hay miembros asignados a este rol. Reasígnalos primero." };
+        }
+
+        const invitationsWithRole = await db.query.projectInvitations.findFirst({
+            where: and(
+                eq(projectInvitations.projectRoleId, id),
+                eq(projectInvitations.status, "PENDING"),
+            ),
+            columns: { id: true },
+        });
+        if (invitationsWithRole) {
+            return { success: false as const, error: "No se puede eliminar: hay invitaciones pendientes con este rol. Cancélalas primero." };
+        }
 
         await db.delete(projectRoles).where(eq(projectRoles.id, id));
 
@@ -280,16 +311,16 @@ export async function reorderProjectRolesAction(orderedIds: string[]) {
 }
 
 /** Update only the authority level of a role (independent from visual order). */
-export async function updateProjectRoleHierarchyAction(roleId: string, hierarchyLevel: number) {
+export async function updateProjectRoleHierarchyAction(input: UpdateRoleHierarchyDTO) {
     try {
         if (!(await canManageProjectSettings())) {
             return { success: false as const, error: "No autorizado." };
         }
 
-        if (hierarchyLevel < 1 || hierarchyLevel > 100) {
-            return { success: false as const, error: "El nivel debe estar entre 1 y 100." };
-        }
+        const validated = UpdateRoleHierarchySchema.safeParse(input);
+        if (!validated.success) return { success: false as const, error: validated.error.issues[0].message };
 
+        const { roleId, hierarchyLevel } = validated.data;
         const existing = await db.query.projectRoles.findFirst({ where: eq(projectRoles.id, roleId) });
         if (!existing) return { success: false as const, error: "Rol no encontrado." };
 

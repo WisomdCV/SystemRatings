@@ -8,7 +8,7 @@ import { revalidatePath } from "next/cache";
 import { hasPermission } from "@/lib/permissions";
 import { createProjectInvitationAction } from "@/server/actions/project-invitations.actions";
 import {
-    hasProjectPermission, hasAnyProjectPermission, canBypassProjectPerms,
+    hasProjectPermission, canBypassProjectPerms,
 } from "@/lib/project-permissions";
 import {
     canAccessProject,
