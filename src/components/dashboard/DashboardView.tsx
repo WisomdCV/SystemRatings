@@ -1037,17 +1037,33 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
                                         )
                                     })
                                 ) : (
-                                    <div className="flex flex-col items-center justify-center w-full h-[220px] lg:h-[240px] text-center p-6 animate-in fade-in zoom-in duration-700 bg-gradient-to-br from-meteorite-50 via-white to-meteorite-100">
-                                        <span className="inline-flex items-center justify-center mb-3 text-[10px] font-bold px-2 py-1 rounded-lg bg-meteorite-100 text-meteorite-600 border border-meteorite-200 uppercase tracking-wide">
-                                            Agenda libre
-                                        </span>
-                                        <div className="w-16 h-16 rounded-3xl bg-meteorite-100 flex items-center justify-center border border-meteorite-200 mb-4 shadow-sm group-hover:scale-110 transition-transform">
-                                            <Calendar className="w-8 h-8 text-meteorite-500" />
+                                    <div
+                                        className="w-full h-full flex-shrink-0 snap-center p-5 lg:p-6 relative flex flex-col justify-between transition-all duration-700"
+                                        style={{
+                                            backgroundImage: "linear-gradient(140deg, rgba(71,85,105,0.96) 0%, rgba(100,116,139,0.86) 52%, #1f2937 100%)",
+                                        }}
+                                    >
+                                        <div className="absolute right-0 top-0 w-32 h-32 bg-white opacity-10 rounded-bl-full -mr-6 -mt-6 pointer-events-none"></div>
+                                        <div className="relative z-10 flex flex-col h-full justify-between text-left">
+                                            <div>
+                                                <span className="inline-flex items-center justify-center mb-3 text-[10px] font-bold px-2.5 py-1 rounded-lg bg-white/20 text-white border border-white/30 uppercase tracking-wide">
+                                                    Agenda libre
+                                                </span>
+                                                <h4 className="text-white font-black text-lg mb-1 tracking-tight">Sin eventos próximos</h4>
+                                                <p className="text-white/80 text-xs font-medium max-w-[230px] leading-relaxed">
+                                                    Tu agenda está despejada por ahora. Aprovecha para planificar tus próximas actividades.
+                                                </p>
+                                            </div>
+
+                                            <div className="flex items-center mt-3">
+                                                <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center backdrop-blur-sm border border-white/25">
+                                                    <Calendar className="w-4 h-4 text-white" />
+                                                </div>
+                                                <span className="ml-2 text-sm font-medium text-white/90 truncate">
+                                                    Sin pendientes inmediatos
+                                                </span>
+                                            </div>
                                         </div>
-                                        <h4 className="text-meteorite-900 font-black text-lg mb-1 tracking-tight">Sin eventos próximos</h4>
-                                        <p className="text-meteorite-500 text-xs font-medium max-w-[220px] leading-relaxed">
-                                            Tu agenda está despejada por ahora. ¡Disfruta el descanso!
-                                        </p>
                                     </div>
                                 )}
                             </div>
