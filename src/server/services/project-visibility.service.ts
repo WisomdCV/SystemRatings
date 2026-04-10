@@ -10,8 +10,9 @@
 
 import { hasPermission } from "@/lib/permissions";
 import { db } from "@/db";
-import { projectMembers, users } from "@/db/schema";
+import { projectMembers, projectTasks, projectResources, users } from "@/db/schema";
 import { and, eq } from "drizzle-orm";
+import { getAllExtraPermissionsForUser } from "@/server/data-access/custom-roles";
 
 export interface ProjectVisibilityContext {
   userId: string;
@@ -292,9 +293,8 @@ export function explainRule(rule: VisibilityRule): string {
  * Generate a visibility report for a target user on a specific project.
  * Useful for admin/audit panels to understand what a user can see.
  *
- * @todo tasksSample and resourcesSample are not yet implemented — they return
- * empty arrays. When needed, query tasks/resources and run them through
- * filterVisibleTasks/filterVisibleResources to populate samples.
+ * Returns project-level access decision plus a sample of up to 10 tasks and
+ * 10 resources showing what the target user can/cannot see and why.
  */
 export async function generateVisibilityReport(
   projectId: string,
@@ -318,17 +318,85 @@ export async function generateVisibilityReport(
   });
   if (!targetUser) return null;
 
+  // Mirror runtime permission layers (custom roles + area permissions) for the target user.
+  const targetCustomPermissions = await getAllExtraPermissionsForUser(targetUser.id);
+
   const targetCtx: ProjectVisibilityContext = {
     userId: targetUser.id,
     userRole: targetUser.role || "",
     userAreaId: targetUser.currentAreaId,
+    customPermissions: targetCustomPermissions,
   };
 
   const projectDecision = await canAccessProject(projectId, targetCtx);
 
+  // Build membership context for task/resource visibility
+  const targetMembership = await db.query.projectMembers.findFirst({
+    where: and(
+      eq(projectMembers.projectId, projectId),
+      eq(projectMembers.userId, targetUser.id),
+    ),
+    with: {
+      projectRole: { with: { permissions: true } },
+      projectArea: true,
+    },
+  });
+
+  const membershipCtx: MembershipContext | null = targetMembership
+    ? {
+        projectAreaId: targetMembership.projectAreaId,
+        projectPermissions: targetMembership.projectRole.permissions.map((p) => p.permission),
+      }
+    : null;
+
+  const isBypass = hasPermission(targetUser.role || "", "project:manage", targetCustomPermissions);
+
+  // Sample up to 10 tasks
+  const SAMPLE_LIMIT = 10;
+  const tasks = await db.query.projectTasks.findMany({
+    where: eq(projectTasks.projectId, projectId),
+    columns: { id: true, title: true, projectAreaId: true, createdById: true },
+    with: { assignments: { with: { user: { columns: { id: true } } } } },
+    limit: SAMPLE_LIMIT,
+  });
+
+  const visibleTasks = filterVisibleTasks(tasks, targetUser.id, membershipCtx, isBypass);
+  const visibleTaskIds = new Set(visibleTasks.map((t) => t.id));
+
+  const tasksSample = tasks.map((task) => {
+    const visible = visibleTasks.find((vt) => vt.id === task.id);
+    return {
+      taskId: task.id,
+      title: task.title,
+      decision: visible
+        ? { visible: true as const, rule: visible._visibilityRule }
+        : { visible: false as const, rule: "DENIED" as VisibilityRule },
+    };
+  });
+
+  // Sample up to 10 resources
+  const resources = await db.query.projectResources.findMany({
+    where: eq(projectResources.projectId, projectId),
+    columns: { id: true, name: true, projectAreaId: true, createdById: true, taskId: true },
+    limit: SAMPLE_LIMIT,
+  });
+
+  const visibleResources = filterVisibleResources(resources, targetUser.id, membershipCtx, isBypass, visibleTaskIds);
+
+  const resourcesSample = resources.map((resource) => {
+    const visible = visibleResources.find((vr) => vr.id === resource.id);
+    return {
+      resourceId: resource.id,
+      name: resource.name,
+      decision: visible
+        ? { visible: true as const, rule: visible._visibilityRule }
+        : { visible: false as const, rule: "DENIED" as VisibilityRule },
+    };
+  });
+
   return {
     project: projectDecision,
-    tasksSample: [],
-    resourcesSample: [],
+    tasksSample,
+    resourcesSample,
   };
 }

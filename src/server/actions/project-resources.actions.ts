@@ -10,7 +10,7 @@ import {
   projectTasks,
   taskAssignments,
 } from "@/db/schema";
-import { and, desc, eq, isNull, or } from "drizzle-orm";
+import { and, asc, desc, eq, isNull, or } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import {
   CreateResourceCategorySchema,
@@ -297,6 +297,21 @@ export async function deleteResourceCategoryAction(categoryId: string) {
 
     await db.delete(projectResourceCategories)
       .where(eq(projectResourceCategories.id, categoryId));
+
+    // Compact positions within the same scope (global or per-project)
+    const scopeFilter = category.projectId
+      ? eq(projectResourceCategories.projectId, category.projectId)
+      : isNull(projectResourceCategories.projectId);
+    const remaining = await db.query.projectResourceCategories.findMany({
+      where: scopeFilter,
+      orderBy: [asc(projectResourceCategories.position)],
+      columns: { id: true },
+    });
+    for (let i = 0; i < remaining.length; i++) {
+      await db.update(projectResourceCategories)
+        .set({ position: i })
+        .where(eq(projectResourceCategories.id, remaining[i].id));
+    }
 
     if (category.projectId) {
       revalidateResources(category.projectId);

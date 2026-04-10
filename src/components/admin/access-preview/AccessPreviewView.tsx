@@ -2,76 +2,15 @@
 
 import { useMemo, useState, useTransition } from "react";
 import type {
-  AccessDryRunResult,
   AccessPreviewBootstrapData,
   AccessPreviewResult,
 } from "@/server/actions/access-preview.actions";
-import { getAccessDryRunAction, getAccessPreviewAction } from "@/server/actions/access-preview.actions";
-import { Eye, ShieldCheck, UserRound, Filter, CalendarDays, FolderKanban, CheckCircle2, XCircle, FlaskConical } from "lucide-react";
+import { getAccessPreviewAction } from "@/server/actions/access-preview.actions";
+import { Eye, ShieldCheck, UserRound, Filter, CalendarDays, FolderKanban, CheckCircle2, XCircle } from "lucide-react";
 
 type Props = {
   bootstrap: AccessPreviewBootstrapData;
 };
-
-type DryRunScenarioType =
-  | "EVENT_CREATE"
-  | "EVENT_UPDATE"
-  | "EVENT_DELETE"
-  | "PROJECT_CREATE"
-  | "PROJECT_UPDATE"
-  | "PROJECT_DELETE";
-
-function getScenarioTemplate(type: DryRunScenarioType, projectId: string) {
-  if (type === "EVENT_CREATE") {
-    return {
-      title: "Simulación evento",
-      description: "Dry-run de creación",
-      eventScope: "IISE",
-      eventType: "GENERAL",
-      date: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-      startTime: "19:00",
-      endTime: "20:00",
-      isVirtual: true,
-      targetAreaId: null,
-      projectId: null,
-      targetProjectAreaId: null,
-      inviteeUserIds: [],
-    };
-  }
-
-  if (type === "EVENT_UPDATE") {
-    return {
-      title: "Título actualizado (simulación)",
-      description: "Cambio vía dry-run",
-    };
-  }
-
-  if (type === "PROJECT_CREATE") {
-    return {
-      name: "Proyecto Simulado",
-      description: "Creación dry-run",
-      priority: "MEDIUM",
-      color: "#3B82F6",
-      startDate: new Date().toISOString(),
-      deadline: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-    };
-  }
-
-  if (type === "PROJECT_UPDATE") {
-    return {
-      id: projectId || "",
-      name: "Proyecto Simulado Actualizado",
-      description: "Update dry-run",
-      color: "#3B82F6",
-      status: "ACTIVE",
-      priority: "HIGH",
-      startDate: new Date().toISOString(),
-      deadline: new Date(Date.now() + 40 * 24 * 60 * 60 * 1000).toISOString(),
-    };
-  }
-
-  return {};
-}
 
 export default function AccessPreviewView({ bootstrap }: Props) {
   const [mode, setMode] = useState<"USER" | "ROLE">("USER");
@@ -82,22 +21,6 @@ export default function AccessPreviewView({ bootstrap }: Props) {
   const [preview, setPreview] = useState<AccessPreviewResult | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
-
-  const initialProjectId = bootstrap.projects[0]?.id || "";
-  const initialEventId = bootstrap.events[0]?.id || "";
-  const [dryRunType, setDryRunType] = useState<DryRunScenarioType>("EVENT_CREATE");
-  const [dryRunProjectId, setDryRunProjectId] = useState<string>(initialProjectId);
-  const [dryRunEventId, setDryRunEventId] = useState<string>(initialEventId);
-  const [dryRunPayload, setDryRunPayload] = useState<string>(
-    JSON.stringify(getScenarioTemplate("EVENT_CREATE", initialProjectId), null, 2),
-  );
-  const [dryRunResult, setDryRunResult] = useState<AccessDryRunResult | null>(null);
-  const [dryRunError, setDryRunError] = useState<string | null>(null);
-  const [isDryRunPending, startDryRunTransition] = useTransition();
-
-  const scenarioNeedsPayload = dryRunType === "EVENT_CREATE" || dryRunType === "EVENT_UPDATE" || dryRunType === "PROJECT_CREATE" || dryRunType === "PROJECT_UPDATE";
-  const scenarioNeedsProject = dryRunType === "PROJECT_UPDATE" || dryRunType === "PROJECT_DELETE";
-  const scenarioNeedsEvent = dryRunType === "EVENT_UPDATE" || dryRunType === "EVENT_DELETE";
 
   const selectedTargetUser = useMemo(
     () => bootstrap.users.find((user) => user.id === selectedUserId) || null,
@@ -160,49 +83,6 @@ export default function AccessPreviewView({ bootstrap }: Props) {
         ? prev.filter((item) => item !== permission)
         : [...prev, permission],
     );
-  };
-
-  const resetScenarioPayload = (nextType: DryRunScenarioType, projectId = dryRunProjectId) => {
-    const template = getScenarioTemplate(nextType, projectId);
-    setDryRunPayload(JSON.stringify(template, null, 2));
-  };
-
-  const runDryRun = () => {
-    setDryRunError(null);
-
-    let parsedPayload: Record<string, unknown> | undefined = undefined;
-    if (scenarioNeedsPayload) {
-      try {
-        parsedPayload = JSON.parse(dryRunPayload);
-      } catch {
-        setDryRunError("El JSON del payload es inválido.");
-        return;
-      }
-    }
-
-    startDryRunTransition(async () => {
-      const result = await getAccessDryRunAction({
-        mode,
-        userId: mode === "USER" ? selectedUserId : undefined,
-        role: mode === "ROLE" ? selectedRole : undefined,
-        areaId: selectedAreaId || null,
-        extraPermissions: mode === "ROLE" ? selectedExtraPerms : undefined,
-        scenario: {
-          type: dryRunType,
-          eventId: scenarioNeedsEvent ? dryRunEventId : undefined,
-          projectId: scenarioNeedsProject ? dryRunProjectId : undefined,
-          payload: parsedPayload,
-        },
-      });
-
-      if (!result.success) {
-        setDryRunResult(null);
-        setDryRunError(result.error);
-        return;
-      }
-
-      setDryRunResult(result.data);
-    });
   };
 
   return (
@@ -373,154 +253,6 @@ export default function AccessPreviewView({ bootstrap }: Props) {
         {errorMsg && (
           <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-700">
             {errorMsg}
-          </div>
-        )}
-      </div>
-
-      <div className="rounded-2xl border border-cyan-200 bg-cyan-50/40 p-5">
-        <div className="flex items-center gap-2 mb-3">
-          <FlaskConical className="w-4 h-4 text-cyan-700" />
-          <h3 className="text-sm font-black text-cyan-900 uppercase tracking-wide">Fase 2: Simulación Dry-Run de Endpoints</h3>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div className="space-y-3">
-            <div>
-              <label className="block text-xs font-bold text-cyan-900 mb-1">Escenario</label>
-              <select
-                value={dryRunType}
-                onChange={(e) => {
-                  const nextType = e.target.value as DryRunScenarioType;
-                  setDryRunType(nextType);
-                  setDryRunResult(null);
-                  setDryRunError(null);
-                  resetScenarioPayload(nextType);
-                }}
-                className="w-full px-3 py-2 rounded-xl border border-cyan-200 bg-white text-sm text-meteorite-900"
-              >
-                <option value="EVENT_CREATE">POST /events (create)</option>
-                <option value="EVENT_UPDATE">PATCH /events/:id (update)</option>
-                <option value="EVENT_DELETE">DELETE /events/:id (delete)</option>
-                <option value="PROJECT_CREATE">POST /projects (create)</option>
-                <option value="PROJECT_UPDATE">PATCH /projects/:id (update)</option>
-                <option value="PROJECT_DELETE">DELETE /projects/:id (delete)</option>
-              </select>
-            </div>
-
-            {scenarioNeedsEvent && (
-              <div>
-                <label className="block text-xs font-bold text-cyan-900 mb-1">Evento objetivo</label>
-                <select
-                  value={dryRunEventId}
-                  onChange={(e) => setDryRunEventId(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-cyan-200 bg-white text-sm text-meteorite-900"
-                >
-                  <option value="">Selecciona evento</option>
-                  {bootstrap.events.map((event) => (
-                    <option key={event.id} value={event.id}>
-                      {event.title} • {event.eventScope || "-"}/{event.eventType || "-"}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            {scenarioNeedsProject && (
-              <div>
-                <label className="block text-xs font-bold text-cyan-900 mb-1">Proyecto objetivo</label>
-                <select
-                  value={dryRunProjectId}
-                  onChange={(e) => setDryRunProjectId(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-cyan-200 bg-white text-sm text-meteorite-900"
-                >
-                  <option value="">Selecciona proyecto</option>
-                  {bootstrap.projects.map((project) => (
-                    <option key={project.id} value={project.id}>
-                      {project.name} • {project.status}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-          </div>
-
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="block text-xs font-bold text-cyan-900">Payload JSON {scenarioNeedsPayload ? "(editable)" : "(no requerido)"}</label>
-              <button
-                type="button"
-                onClick={() => resetScenarioPayload(dryRunType, dryRunProjectId)}
-                className="text-[11px] font-black px-2 py-1 rounded-lg border border-cyan-200 text-cyan-800 hover:bg-cyan-100"
-              >
-                Cargar ejemplo
-              </button>
-            </div>
-            <textarea
-              value={dryRunPayload}
-              onChange={(e) => setDryRunPayload(e.target.value)}
-              disabled={!scenarioNeedsPayload}
-              className="w-full h-40 p-3 rounded-xl border border-cyan-200 bg-white font-mono text-[11px] text-meteorite-900 disabled:opacity-60"
-            />
-          </div>
-        </div>
-
-        <div className="mt-3 flex items-center justify-end gap-2">
-          <button
-            type="button"
-            onClick={() => {
-              setDryRunResult(null);
-              setDryRunError(null);
-            }}
-            className="px-4 py-2 text-xs font-black rounded-xl border border-cyan-200 text-cyan-800 hover:bg-cyan-100"
-          >
-            Limpiar resultado
-          </button>
-          <button
-            type="button"
-            onClick={runDryRun}
-            disabled={isDryRunPending || (scenarioNeedsEvent && !dryRunEventId) || (scenarioNeedsProject && !dryRunProjectId)}
-            className="px-4 py-2 text-xs font-black rounded-xl bg-cyan-700 text-white hover:bg-cyan-800 disabled:opacity-60"
-          >
-            {isDryRunPending ? "Simulando..." : "Simular endpoint"}
-          </button>
-        </div>
-
-        {dryRunError && (
-          <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-700">
-            {dryRunError}
-          </div>
-        )}
-
-        {dryRunResult && (
-          <div className="mt-4 rounded-xl border border-cyan-200 bg-white p-4 space-y-3">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-xs font-black text-cyan-900 uppercase tracking-wide">Resultado Dry-Run</p>
-                <p className="text-sm font-bold text-meteorite-900 mt-1">{dryRunResult.summary}</p>
-              </div>
-              <BoolTag ok={dryRunResult.allowed} text={dryRunResult.allowed ? "ALLOW" : "DENY"} />
-            </div>
-
-            <div className="space-y-2">
-              {dryRunResult.checks.map((check) => (
-                <div key={check.key} className="rounded-lg border border-meteorite-100 bg-meteorite-50/40 p-2">
-                  <div className="flex items-start justify-between gap-2">
-                    <p className="text-xs font-bold text-meteorite-900">{check.label}</p>
-                    <BoolTag ok={check.passed} text={check.passed ? "OK" : "FAIL"} />
-                  </div>
-                  <p className="text-[11px] text-meteorite-600 mt-1">{check.detail}</p>
-                </div>
-              ))}
-            </div>
-
-            {dryRunResult.normalizedPayload && (
-              <div>
-                <p className="text-xs font-black text-meteorite-700 uppercase tracking-wide mb-1">Payload normalizado que evaluó el backend</p>
-                <pre className="max-h-56 overflow-auto rounded-lg border border-meteorite-100 bg-meteorite-950 text-meteorite-100 text-[11px] p-3">
-                  {JSON.stringify(dryRunResult.normalizedPayload, null, 2)}
-                </pre>
-              </div>
-            )}
           </div>
         )}
       </div>
@@ -733,21 +465,54 @@ function BoolTag({ ok, text }: { ok: boolean; text: string }) {
 
 type DecisionProps = {
   title: string;
-  decisions: Array<{ key: string; label: string; allowed: boolean; reason: string }>;
+  decisions: Array<{
+    key: string;
+    label: string;
+    allowed: boolean;
+    reason: string;
+    permissionOrigin: "ROLE_BASE" | "EXTRA_PERMISSION" | "ROLE_AND_EXTRA" | "NONE" | "CONSOLIDATED";
+  }>;
 };
 
 function DecisionCard({ title, decisions }: DecisionProps) {
+  const originStyles: Record<DecisionProps["decisions"][number]["permissionOrigin"], string> = {
+    ROLE_BASE: "bg-indigo-100 text-indigo-700 border-indigo-200",
+    EXTRA_PERMISSION: "bg-cyan-100 text-cyan-700 border-cyan-200",
+    ROLE_AND_EXTRA: "bg-violet-100 text-violet-700 border-violet-200",
+    NONE: "bg-meteorite-100 text-meteorite-600 border-meteorite-200",
+    CONSOLIDATED: "bg-amber-100 text-amber-700 border-amber-200",
+  };
+
+  const originLabel: Record<DecisionProps["decisions"][number]["permissionOrigin"], string> = {
+    ROLE_BASE: "Rol base",
+    EXTRA_PERMISSION: "Permiso extra",
+    ROLE_AND_EXTRA: "Rol + extra",
+    NONE: "Sin origen",
+    CONSOLIDATED: "Consolidado",
+  };
+
   return (
     <div className="rounded-2xl border border-meteorite-200 bg-white p-4">
       <div className="flex items-center gap-2 mb-3">
         <Filter className="w-4 h-4 text-indigo-600" />
         <h4 className="text-sm font-black text-meteorite-900">{title}</h4>
       </div>
+      <div className="flex flex-wrap gap-1.5 mb-3">
+        <span className="inline-flex items-center px-2 py-0.5 rounded-full border text-[10px] font-black bg-indigo-100 text-indigo-700 border-indigo-200">Rol base</span>
+        <span className="inline-flex items-center px-2 py-0.5 rounded-full border text-[10px] font-black bg-cyan-100 text-cyan-700 border-cyan-200">Permiso extra</span>
+        <span className="inline-flex items-center px-2 py-0.5 rounded-full border text-[10px] font-black bg-violet-100 text-violet-700 border-violet-200">Rol + extra</span>
+        <span className="inline-flex items-center px-2 py-0.5 rounded-full border text-[10px] font-black bg-amber-100 text-amber-700 border-amber-200">Consolidado</span>
+      </div>
       <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
         {decisions.map((decision) => (
           <div key={decision.key} className="rounded-xl border border-meteorite-100 bg-meteorite-50/30 p-2.5">
             <div className="flex items-start justify-between gap-2">
-              <p className="text-xs font-bold text-meteorite-900">{decision.label}</p>
+              <div>
+                <p className="text-xs font-bold text-meteorite-900">{decision.label}</p>
+                <span className={`inline-flex items-center mt-1 px-2 py-0.5 rounded-full border text-[10px] font-black ${originStyles[decision.permissionOrigin]}`}>
+                  {originLabel[decision.permissionOrigin]}
+                </span>
+              </div>
               <BoolTag ok={decision.allowed} text={decision.allowed ? "ALLOW" : "DENY"} />
             </div>
             <p className="text-[11px] text-meteorite-500 mt-1">{decision.reason}</p>

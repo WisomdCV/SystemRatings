@@ -117,6 +117,11 @@ export type InvitationStatus = (typeof INVITATION_STATUSES)[number];
 
 export const INVITATION_EXPIRY_DAYS = 7;
 
+// ─── Comments ──────────────────────────────────────────────────────────────
+
+/** Maximum nesting depth for task comments (1 = replies allowed, no nested replies) */
+export const COMMENT_MAX_DEPTH = 1;
+
 // ─── Resource Links ─────────────────────────────────────────────────────────
 
 export const LINK_STATUSES = [

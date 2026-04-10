@@ -138,6 +138,7 @@ interface EndpointDecision {
   label: string;
   allowed: boolean;
   reason: string;
+  permissionOrigin: "ROLE_BASE" | "EXTRA_PERMISSION" | "ROLE_AND_EXTRA" | "NONE" | "CONSOLIDATED";
 }
 
 interface EventPreviewItem {
@@ -218,12 +219,20 @@ export interface AccessPreviewResult {
 }
 
 function describePermission(permission: Permission, role: string, customPermissions: string[]) {
+  const origin = resolvePermissionOrigin(permission, role, customPermissions);
+  if (origin === "ROLE_AND_EXTRA") return "Permitido por rol base y permisos extra";
+  if (origin === "ROLE_BASE") return "Permitido por rol base";
+  if (origin === "EXTRA_PERMISSION") return "Permitido por permisos extra";
+  return "No contiene el permiso requerido";
+}
+
+function resolvePermissionOrigin(permission: Permission, role: string, customPermissions: string[]) {
   const fromRole = (PERMISSIONS[permission] as readonly string[]).includes(role);
   const fromCustom = customPermissions.includes(permission);
-  if (fromRole && fromCustom) return "Permitido por rol base y permisos extra";
-  if (fromRole) return "Permitido por rol base";
-  if (fromCustom) return "Permitido por permisos extra";
-  return "No contiene el permiso requerido";
+  if (fromRole && fromCustom) return "ROLE_AND_EXTRA" as const;
+  if (fromRole) return "ROLE_BASE" as const;
+  if (fromCustom) return "EXTRA_PERMISSION" as const;
+  return "NONE" as const;
 }
 
 function permissionDecision(
@@ -241,6 +250,9 @@ function permissionDecision(
     label,
     allowed,
     reason: describePermission(permission, role, customPermissions),
+    permissionOrigin: allowed
+      ? resolvePermissionOrigin(permission, role, customPermissions)
+      : "NONE",
   };
 }
 
@@ -260,6 +272,7 @@ function anyPermissionDecision(
       label,
       allowed: false,
       reason: `Requiere alguno de: ${permissions.join(", ")}`,
+      permissionOrigin: "NONE",
     };
   }
 
@@ -268,7 +281,8 @@ function anyPermissionDecision(
     scope,
     label,
     allowed: true,
-    reason: `Permitido por ${matching}`,
+    reason: `Permitido por ${matching}. ${describePermission(matching, role, customPermissions)}`,
+    permissionOrigin: resolvePermissionOrigin(matching, role, customPermissions),
   };
 }
 
@@ -1448,6 +1462,7 @@ export async function getAccessPreviewAction(
         label: "Capacidad IISE consolidada",
         allowed: canCreateGeneralIISE || canCreateAreaIISE || canCreateMeetingIISE,
         reason: `GENERAL=${canCreateGeneralIISE ? "SI" : "NO"}, AREA=${canCreateAreaIISE ? "SI" : "NO"}, INDIVIDUAL=${canCreateMeetingIISE ? "SI" : "NO"}`,
+        permissionOrigin: "CONSOLIDATED",
       },
     );
 

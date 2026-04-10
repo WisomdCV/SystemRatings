@@ -12,6 +12,7 @@ import {
   type UpdateTaskCommentDTO,
 } from "@/lib/validators/project";
 import { hasProjectPermission, canBypassProjectPerms } from "@/lib/project-permissions";
+import { COMMENT_MAX_DEPTH } from "@/lib/constants";
 import { filterVisibleTasks, type MembershipContext } from "@/server/services/project-visibility.service";
 import { isProjectWritable } from "@/server/services/project-cycle.service";
 
@@ -91,8 +92,21 @@ export async function createTaskCommentAction(input: CreateTaskCommentDTO) {
         columns: { id: true, parentId: true },
       });
       if (!parent) return { success: false as const, error: "Comentario padre no encontrado." };
-      if (parent.parentId) {
-        return { success: false as const, error: "No se puede responder a una respuesta." };
+
+      // Walk up the ancestor chain to enforce max nesting depth
+      let depth = 1;
+      let currentParentId = parent.parentId;
+      while (currentParentId) {
+        if (depth >= COMMENT_MAX_DEPTH) {
+          return { success: false as const, error: `No se permiten respuestas con más de ${COMMENT_MAX_DEPTH} nivel(es) de anidamiento.` };
+        }
+        const ancestor = await db.query.taskComments.findFirst({
+          where: eq(taskComments.id, currentParentId),
+          columns: { parentId: true },
+        });
+        if (!ancestor) break;
+        currentParentId = ancestor.parentId;
+        depth++;
       }
     }
 

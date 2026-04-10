@@ -3,7 +3,7 @@
 import { auth } from "@/server/auth";
 import { db } from "@/db";
 import { projectAreas, projectRoles, projectRolePermissions } from "@/db/schema";
-import { eq, asc, desc } from "drizzle-orm";
+import { eq, asc, desc, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { hasPermission } from "@/lib/permissions";
 import { PROJECT_PERMISSIONS, type ProjectPermission } from "@/lib/project-permissions";
@@ -92,6 +92,16 @@ export async function deleteProjectAreaAction(id: string) {
         if (existing.isSystem) return { success: false as const, error: "Las áreas de sistema no se pueden eliminar." };
 
         await db.delete(projectAreas).where(eq(projectAreas.id, id));
+
+        // Compact positions to eliminate gaps
+        const remaining = await db.query.projectAreas.findMany({
+            orderBy: [asc(projectAreas.position)],
+            columns: { id: true },
+        });
+        for (let i = 0; i < remaining.length; i++) {
+            await db.update(projectAreas).set({ position: i }).where(eq(projectAreas.id, remaining[i].id));
+        }
+
         revalidatePath("/admin/project-settings");
         return { success: true as const, message: "Área eliminada exitosamente." };
     } catch (error) {
@@ -230,6 +240,16 @@ export async function deleteProjectRoleAction(id: string) {
         if (existing.isSystem) return { success: false as const, error: "Los roles de sistema no se pueden eliminar." };
 
         await db.delete(projectRoles).where(eq(projectRoles.id, id));
+
+        // Compact display order to eliminate gaps
+        const remaining = await db.query.projectRoles.findMany({
+            orderBy: [asc(projectRoles.displayOrder)],
+            columns: { id: true },
+        });
+        for (let i = 0; i < remaining.length; i++) {
+            await db.update(projectRoles).set({ displayOrder: i }).where(eq(projectRoles.id, remaining[i].id));
+        }
+
         revalidatePath("/admin/project-settings");
         return { success: true as const, message: "Rol eliminado exitosamente." };
     } catch (error) {
