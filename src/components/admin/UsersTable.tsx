@@ -336,13 +336,17 @@ export default function UsersTable({
     };
 
     useEffect(() => {
-        const handleDocumentClick = () => {
+        const handleDocumentClick = (event: MouseEvent) => {
+            const target = event.target as HTMLElement | null;
+            if (target?.closest('[data-user-actions-menu="true"]')) {
+                return;
+            }
             setActiveMenu(null);
         };
 
-        document.addEventListener("click", handleDocumentClick);
+        document.addEventListener("pointerdown", handleDocumentClick);
         return () => {
-            document.removeEventListener("click", handleDocumentClick);
+            document.removeEventListener("pointerdown", handleDocumentClick);
         };
     }, []);
 
@@ -468,7 +472,7 @@ export default function UsersTable({
                                     )}
                                 </td>
                                 <td className="px-6 py-4 text-right">
-                                    <div className="relative inline-block text-left">
+                                    <div className="relative inline-block text-left" data-user-actions-menu="true">
                                         <button
                                             onClick={(e) => toggleMenu(user.id, e)}
                                             className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-meteorite-400 hover:text-meteorite-700 hover:bg-meteorite-100 transition-all focus:outline-none focus:ring-2 focus:ring-meteorite-500"
