@@ -67,6 +67,56 @@ function canViewCrossArea(membership: Awaited<ReturnType<typeof getProjectMember
     || hasProjectPermission(membership, "project:view_all_areas");
 }
 
+type LinkPermAction = "add" | "edit" | "delete";
+
+/**
+ * Unified permission check for resource link operations.
+ *
+ * Rules (evaluated in order, first match grants access):
+ *  1. Link owner (edit/delete only — add has no link yet)
+ *  2. Resource owner + resource_edit_own (add/edit) or resource_delete_own (delete)
+ *  3. resource_edit_any (add/edit) or resource_delete_any (delete)
+ *  4. If resource is attached to a task:
+ *     a. User is assigned to the task
+ *     b. task_manage_any
+ *     c. task_manage_own (user created the task)
+ */
+function canModifyResourceLink(opts: {
+  action: LinkPermAction;
+  userId: string;
+  membership: NonNullable<Awaited<ReturnType<typeof getProjectMembershipWithPerms>>>;
+  resource: { createdById: string; taskId: string | null; task?: { createdById: string } | null };
+  linkOwnerId?: string | null;
+  isAssignedToTask?: boolean;
+}): boolean {
+  const { action, userId, membership, resource, linkOwnerId, isAssignedToTask } = opts;
+
+  // 1. Link owner can always edit/delete their own link
+  if (action !== "add" && linkOwnerId === userId) return true;
+
+  // 2. Resource owner + own-level permission
+  if (resource.createdById === userId) {
+    const ownPerm = action === "delete" ? "project:resource_delete_own" : "project:resource_edit_own";
+    if (hasProjectPermission(membership, ownPerm)) return true;
+  }
+
+  // 3. Broad edit/delete any permission
+  const anyPerm = action === "delete" ? "project:resource_delete_any" : "project:resource_edit_any";
+  if (hasProjectPermission(membership, anyPerm)) return true;
+
+  // 4. Task-level permissions (only when resource is attached to a task)
+  if (resource.taskId) {
+    if (isAssignedToTask) return true;
+    if (hasProjectPermission(membership, "project:task_manage_any")) return true;
+    if (
+      hasProjectPermission(membership, "project:task_manage_own")
+      && resource.task?.createdById === userId
+    ) return true;
+  }
+
+  return false;
+}
+
 // =============================================================================
 // Resource Categories
 // =============================================================================
@@ -595,27 +645,14 @@ export async function addResourceLinkAction(input: AddResourceLinkDTO) {
       const membership = await getProjectMembershipWithPerms(session.user.id, resource.projectId);
       if (!membership) return { success: false as const, error: "No eres miembro del proyecto." };
 
-      if (resource.taskId) {
-        const isAssigned = await isUserAssignedToTask(session.user.id, resource.taskId);
-        const canManageTaskAny = hasProjectPermission(membership, "project:task_manage_any");
-        const canManageTaskOwn = hasProjectPermission(membership, "project:task_manage_own")
-          && resource.task?.createdById === session.user.id;
-        const isOwnerWithEdit = resource.createdById === session.user.id
-          && hasProjectPermission(membership, "project:resource_edit_own");
-        const canEditAny = hasProjectPermission(membership, "project:resource_edit_any");
+      const isAssigned = resource.taskId
+        ? await isUserAssignedToTask(session.user.id, resource.taskId)
+        : false;
 
-        if (!isAssigned && !canManageTaskAny && !canManageTaskOwn && !isOwnerWithEdit && !canEditAny) {
-          return { success: false as const, error: "No tienes permisos para agregar links a este adjunto." };
-        }
-      } else {
-        const isOwner = resource.createdById === session.user.id;
-        if (isOwner) {
-          if (!hasProjectPermission(membership, "project:resource_edit_own")) {
-            return { success: false as const, error: "Sin permisos." };
-          }
-        } else if (!hasProjectPermission(membership, "project:resource_edit_any")) {
-          return { success: false as const, error: "Sin permisos para editar recursos de otros." };
-        }
+      if (!canModifyResourceLink({
+        action: "add", userId: session.user.id, membership, resource, isAssignedToTask: isAssigned,
+      })) {
+        return { success: false as const, error: "No tienes permisos para agregar links a este recurso." };
       }
     }
 
@@ -681,15 +718,10 @@ export async function updateResourceLinkAction(input: UpdateResourceLinkDTO) {
       const membership = await getProjectMembershipWithPerms(session.user.id, link.resource.projectId);
       if (!membership) return { success: false as const, error: "No eres miembro del proyecto." };
 
-      const isLinkOwner = link.addedById === session.user.id;
-      const isResourceOwnerWithEditOwn = link.resource.createdById === session.user.id
-        && hasProjectPermission(membership, "project:resource_edit_own");
-      const canEditAny = hasProjectPermission(membership, "project:resource_edit_any");
-      const canManageTaskAny = hasProjectPermission(membership, "project:task_manage_any");
-      const canManageTaskOwn = hasProjectPermission(membership, "project:task_manage_own")
-        && link.resource.task?.createdById === session.user.id;
-
-      if (!isLinkOwner && !isResourceOwnerWithEditOwn && !canEditAny && !canManageTaskAny && !canManageTaskOwn) {
+      if (!canModifyResourceLink({
+        action: "edit", userId: session.user.id, membership,
+        resource: link.resource, linkOwnerId: link.addedById,
+      })) {
         return { success: false as const, error: "Sin permisos para editar este link." };
       }
     }
@@ -761,17 +793,14 @@ export async function deleteResourceLinkAction(input: DeleteResourceLinkDTO) {
         return { success: false as const, error: "Este proyecto está en modo solo lectura para este ciclo." };
       }
 
-      const isLinkOwner = link.addedById === session.user.id;
-      if (!isLinkOwner) {
-        const membership = await getProjectMembershipWithPerms(session.user.id, link.resource.projectId);
-        const canDeleteAny = hasProjectPermission(membership, "project:resource_delete_any");
-        const canManageTaskAny = hasProjectPermission(membership, "project:task_manage_any");
-        const canManageTaskOwn = hasProjectPermission(membership, "project:task_manage_own")
-          && link.resource.task?.createdById === session.user.id;
+      const membership = await getProjectMembershipWithPerms(session.user.id, link.resource.projectId);
+      if (!membership) return { success: false as const, error: "No eres miembro del proyecto." };
 
-        if (!canDeleteAny && !canManageTaskAny && !canManageTaskOwn) {
-          return { success: false as const, error: "Solo puedes eliminar links que tú añadiste." };
-        }
+      if (!canModifyResourceLink({
+        action: "delete", userId: session.user.id, membership,
+        resource: link.resource, linkOwnerId: link.addedById,
+      })) {
+        return { success: false as const, error: "No tienes permisos para eliminar este link." };
       }
     }
 

@@ -2,8 +2,8 @@
 
 import { auth } from "@/server/auth";
 import { db } from "@/db";
-import { projects, projectMembers, projectTasks, taskAssignments, projectRoles, taskComments, projectCycles } from "@/db/schema";
-import { eq, and, asc, desc } from "drizzle-orm";
+import { projects, projectMembers, projectTasks, taskAssignments, projectRoles, projectAreas, taskComments, projectCycles } from "@/db/schema";
+import { eq, and, asc, desc, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { hasPermission } from "@/lib/permissions";
 import { createProjectInvitationAction } from "@/server/actions/project-invitations.actions";
@@ -540,6 +540,17 @@ export async function updateProjectMemberRoleAction(input: UpdateProjectMemberRo
             }
         }
 
+        // Validate area exists (if provided)
+        if (validated.data.projectAreaId) {
+            const area = await db.query.projectAreas.findFirst({
+                where: eq(projectAreas.id, validated.data.projectAreaId),
+                columns: { id: true },
+            });
+            if (!area) {
+                return { success: false as const, error: "Área de proyecto no encontrada." };
+            }
+        }
+
         await db.update(projectMembers).set({
             projectRoleId: validated.data.projectRoleId,
             projectAreaId: validated.data.projectAreaId || null,
@@ -564,6 +575,11 @@ export async function removeProjectMemberAction(memberId: string) {
             with: { projectRole: true },
         });
         if (!member) return { success: false as const, error: "Miembro no encontrado." };
+
+        // Prevent self-removal (could cause lock-out if no other manager exists)
+        if (member.userId === session.user.id) {
+            return { success: false as const, error: "No puedes removerte a ti mismo del proyecto." };
+        }
 
         const writable = await isProjectWritable(member.projectId);
         if (!writable) {
@@ -817,6 +833,21 @@ export async function reorderTasksAction(input: {
             }
         }
 
+        // Verify all taskIds belong to this project before updating
+        const taskIds = input.updates.map((u) => u.taskId);
+        const existingTasks = await db.query.projectTasks.findMany({
+            where: and(
+                inArray(projectTasks.id, taskIds),
+                eq(projectTasks.projectId, input.projectId),
+            ),
+            columns: { id: true },
+        });
+        const existingIds = new Set(existingTasks.map((t) => t.id));
+        const invalidIds = taskIds.filter((id) => !existingIds.has(id));
+        if (invalidIds.length > 0) {
+            return { success: false as const, error: "Algunas tareas no pertenecen a este proyecto." };
+        }
+
         for (const update of input.updates) {
             const setData: Record<string, any> = {
                 position: update.position,
@@ -829,10 +860,7 @@ export async function reorderTasksAction(input: {
 
             await db.update(projectTasks)
                 .set(setData)
-                .where(and(
-                    eq(projectTasks.id, update.taskId),
-                    eq(projectTasks.projectId, input.projectId),
-                ));
+                .where(eq(projectTasks.id, update.taskId));
         }
 
         revalidateProjects();

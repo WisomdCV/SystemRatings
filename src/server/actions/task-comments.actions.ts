@@ -2,7 +2,7 @@
 
 import { auth } from "@/server/auth";
 import { db } from "@/db";
-import { taskComments, projectTasks, projectMembers } from "@/db/schema";
+import { taskComments, projectTasks } from "@/db/schema";
 import { and, asc, desc, eq, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import {
@@ -15,19 +15,7 @@ import { hasProjectPermission, canBypassProjectPerms } from "@/lib/project-permi
 import { filterVisibleTasks, type MembershipContext } from "@/server/services/project-visibility.service";
 import { isProjectWritable } from "@/server/services/project-cycle.service";
 
-async function getProjectMembershipWithPerms(userId: string, projectId: string) {
-  const membership = await db.query.projectMembers.findFirst({
-    where: and(
-      eq(projectMembers.projectId, projectId),
-      eq(projectMembers.userId, userId),
-    ),
-    with: {
-      projectRole: { with: { permissions: true } },
-      projectArea: true,
-    },
-  });
-  return membership ?? null;
-}
+import { getProjectMembershipWithPerms } from "@/server/services/project-membership.service";
 
 async function canUserViewTask(
   user: { id: string; role?: string | null; customPermissions?: string[] },
