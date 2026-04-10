@@ -5,6 +5,7 @@ import { MoreVertical, Edit, ChevronLeft, ChevronRight, Copy, ArrowUpDown, Arrow
 import { UserAvatar } from "@/components/ui/user-avatar";
 import UserEditDrawer from "./UserEditDrawer";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
+import { createPortal } from "react-dom";
 
 type User = {
     id: string;
@@ -366,6 +367,76 @@ export default function UsersTable({
         };
     }, []);
 
+    const mobileActionsSheet =
+        mobileActionUser && typeof document !== "undefined"
+            ? createPortal(
+                <div className="md:hidden fixed inset-0 z-[250]" data-user-actions-menu="true">
+                    <div
+                        className="absolute inset-0 bg-black/35"
+                        onPointerDown={() => setMobileActionUser(null)}
+                    />
+                    <div
+                        className="absolute bottom-0 left-0 right-0 bg-white rounded-t-3xl border-t border-meteorite-200 shadow-2xl p-4 space-y-2"
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="w-10 h-1 bg-meteorite-200 rounded-full mx-auto mb-2" />
+                        <p className="text-sm font-black text-meteorite-900 px-1">
+                            {mobileActionUser.name || "Sin Nombre"}
+                        </p>
+                        <p className="text-xs text-meteorite-500 px-1 pb-1">
+                            {mobileActionUser.email}
+                        </p>
+
+                        <button
+                            type="button"
+                            onClick={() => {
+                                handleEditClick(mobileActionUser);
+                                setMobileActionUser(null);
+                            }}
+                            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-meteorite-200 text-left font-bold text-meteorite-800 hover:bg-meteorite-50"
+                        >
+                            <Edit className="w-4 h-4" />
+                            Editar usuario
+                        </button>
+
+                        <button
+                            type="button"
+                            onClick={() => {
+                                void handleCopy(mobileActionUser.email, "Email");
+                                setMobileActionUser(null);
+                            }}
+                            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-meteorite-200 text-left font-semibold text-meteorite-700 hover:bg-meteorite-50"
+                        >
+                            <Copy className="w-4 h-4" />
+                            Copiar email
+                        </button>
+
+                        <button
+                            type="button"
+                            onClick={() => {
+                                void handleCopy(formatCUI(mobileActionUser), "CUI");
+                                setMobileActionUser(null);
+                            }}
+                            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-meteorite-200 text-left font-semibold text-meteorite-700 hover:bg-meteorite-50"
+                        >
+                            <Copy className="w-4 h-4" />
+                            Copiar CUI
+                        </button>
+
+                        <button
+                            type="button"
+                            onClick={() => setMobileActionUser(null)}
+                            className="w-full px-4 py-3 rounded-xl bg-meteorite-900 text-white font-bold"
+                        >
+                            Cerrar
+                        </button>
+                    </div>
+                </div>,
+                document.body,
+            )
+            : null;
+
     return (
         <div className="bg-white/90 backdrop-blur-md rounded-3xl shadow-sm border border-meteorite-100 overflow-visible flex flex-col relative">
 
@@ -678,72 +749,7 @@ export default function UsersTable({
                 )}
             </div>
 
-            {/* Mobile Actions Bottom Sheet */}
-            {mobileActionUser && (
-                <div className="md:hidden fixed inset-0 z-[250]" data-user-actions-menu="true">
-                    <div
-                        className="absolute inset-0 bg-black/35"
-                        onPointerDown={() => setMobileActionUser(null)}
-                    />
-                    <div
-                        className="absolute bottom-0 left-0 right-0 bg-white rounded-t-3xl border-t border-meteorite-200 shadow-2xl p-4 space-y-2"
-                        onPointerDown={(e) => e.stopPropagation()}
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        <div className="w-10 h-1 bg-meteorite-200 rounded-full mx-auto mb-2" />
-                        <p className="text-sm font-black text-meteorite-900 px-1">
-                            {mobileActionUser.name || "Sin Nombre"}
-                        </p>
-                        <p className="text-xs text-meteorite-500 px-1 pb-1">
-                            {mobileActionUser.email}
-                        </p>
-
-                        <button
-                            type="button"
-                            onClick={() => {
-                                handleEditClick(mobileActionUser);
-                                setMobileActionUser(null);
-                            }}
-                            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-meteorite-200 text-left font-bold text-meteorite-800 hover:bg-meteorite-50"
-                        >
-                            <Edit className="w-4 h-4" />
-                            Editar usuario
-                        </button>
-
-                        <button
-                            type="button"
-                            onClick={() => {
-                                void handleCopy(mobileActionUser.email, "Email");
-                                setMobileActionUser(null);
-                            }}
-                            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-meteorite-200 text-left font-semibold text-meteorite-700 hover:bg-meteorite-50"
-                        >
-                            <Copy className="w-4 h-4" />
-                            Copiar email
-                        </button>
-
-                        <button
-                            type="button"
-                            onClick={() => {
-                                void handleCopy(formatCUI(mobileActionUser), "CUI");
-                                setMobileActionUser(null);
-                            }}
-                            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-meteorite-200 text-left font-semibold text-meteorite-700 hover:bg-meteorite-50"
-                        >
-                            <Copy className="w-4 h-4" />
-                            Copiar CUI
-                        </button>
-
-                        <button
-                            type="button"
-                            onClick={() => setMobileActionUser(null)}
-                            className="w-full px-4 py-3 rounded-xl bg-meteorite-900 text-white font-bold"
-                        >
-                            Cerrar
-                        </button>
-                    </div>
-                </div>
-            )}
+            {mobileActionsSheet}
 
             {/* Pagination Helper */}
             {pagination && (
