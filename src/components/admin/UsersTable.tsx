@@ -313,10 +313,26 @@ export default function UsersTable({
         setActiveMenu(null);
     };
 
-    const handleCopy = (text: string, label: string) => {
-        navigator.clipboard.writeText(text);
-        setActiveMenu(null);
-        showFeedback("success", `${label} copiado al portapapeles.`);
+    const handleCopy = async (text: string, label: string) => {
+        try {
+            if (navigator.clipboard?.writeText) {
+                await navigator.clipboard.writeText(text);
+            } else {
+                const temp = document.createElement("textarea");
+                temp.value = text;
+                temp.style.position = "fixed";
+                temp.style.opacity = "0";
+                document.body.appendChild(temp);
+                temp.focus();
+                temp.select();
+                document.execCommand("copy");
+                document.body.removeChild(temp);
+            }
+            setActiveMenu(null);
+            showFeedback("success", `${label} copiado al portapapeles.`);
+        } catch {
+            showFeedback("error", `No se pudo copiar ${label}.`);
+        }
     };
 
     const handleCloseDrawer = () => {
@@ -474,6 +490,7 @@ export default function UsersTable({
                                 <td className="px-6 py-4 text-right">
                                     <div className="relative inline-block text-left" data-user-actions-menu="true">
                                         <button
+                                            type="button"
                                             onClick={(e) => toggleMenu(user.id, e)}
                                             className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-meteorite-400 hover:text-meteorite-700 hover:bg-meteorite-100 transition-all focus:outline-none focus:ring-2 focus:ring-meteorite-500"
                                         >
@@ -486,6 +503,7 @@ export default function UsersTable({
                                                 <div className="py-1">
                                                     <button
                                                         onClick={(e) => { e.stopPropagation(); handleEditClick(user); }}
+                                                        type="button"
                                                         className="group flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-meteorite-50 hover:text-meteorite-900 w-full text-left font-medium transition-colors"
                                                     >
                                                         <Edit className="mr-3 h-4 w-4 text-gray-400 group-hover:text-meteorite-500" />
@@ -494,14 +512,16 @@ export default function UsersTable({
                                                 </div>
                                                 <div className="py-1">
                                                     <button
-                                                        onClick={(e) => { e.stopPropagation(); handleCopy(user.email, "Email"); }}
+                                                        onClick={(e) => { e.stopPropagation(); void handleCopy(user.email, "Email"); }}
+                                                        type="button"
                                                         className="group flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-meteorite-50 hover:text-meteorite-900 w-full text-left transition-colors"
                                                     >
                                                         <Copy className="mr-3 h-4 w-4 text-gray-400 group-hover:text-meteorite-500" />
                                                         Copiar Email
                                                     </button>
                                                     <button
-                                                        onClick={(e) => { e.stopPropagation(); handleCopy(formatCUI(user), "CUI"); }}
+                                                        onClick={(e) => { e.stopPropagation(); void handleCopy(formatCUI(user), "CUI"); }}
+                                                        type="button"
                                                         className="group flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-meteorite-50 hover:text-meteorite-900 w-full text-left transition-colors"
                                                     >
                                                         <Copy className="mr-3 h-4 w-4 text-gray-400 group-hover:text-meteorite-500" />
@@ -595,10 +615,12 @@ export default function UsersTable({
                             {/* Mobile Actions */}
                             <div className="relative">
                                 <button
+                                    type="button"
                                     onClick={(e) => {
                                         e.stopPropagation();
                                         setMobileActionUser(user);
                                     }}
+                                    onPointerDown={(e) => e.stopPropagation()}
                                     className="p-1.5 text-gray-400 hover:text-meteorite-600 bg-gray-50 rounded-lg"
                                 >
                                     <MoreVertical className="w-5 h-5" />
@@ -658,10 +680,14 @@ export default function UsersTable({
 
             {/* Mobile Actions Bottom Sheet */}
             {mobileActionUser && (
-                <div className="md:hidden fixed inset-0 z-[250]" onClick={() => setMobileActionUser(null)}>
-                    <div className="absolute inset-0 bg-black/35" />
+                <div className="md:hidden fixed inset-0 z-[250]" data-user-actions-menu="true">
+                    <div
+                        className="absolute inset-0 bg-black/35"
+                        onPointerDown={() => setMobileActionUser(null)}
+                    />
                     <div
                         className="absolute bottom-0 left-0 right-0 bg-white rounded-t-3xl border-t border-meteorite-200 shadow-2xl p-4 space-y-2"
+                        onPointerDown={(e) => e.stopPropagation()}
                         onClick={(e) => e.stopPropagation()}
                     >
                         <div className="w-10 h-1 bg-meteorite-200 rounded-full mx-auto mb-2" />
@@ -673,6 +699,7 @@ export default function UsersTable({
                         </p>
 
                         <button
+                            type="button"
                             onClick={() => {
                                 handleEditClick(mobileActionUser);
                                 setMobileActionUser(null);
@@ -684,8 +711,9 @@ export default function UsersTable({
                         </button>
 
                         <button
+                            type="button"
                             onClick={() => {
-                                handleCopy(mobileActionUser.email, "Email");
+                                void handleCopy(mobileActionUser.email, "Email");
                                 setMobileActionUser(null);
                             }}
                             className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-meteorite-200 text-left font-semibold text-meteorite-700 hover:bg-meteorite-50"
@@ -695,8 +723,9 @@ export default function UsersTable({
                         </button>
 
                         <button
+                            type="button"
                             onClick={() => {
-                                handleCopy(formatCUI(mobileActionUser), "CUI");
+                                void handleCopy(formatCUI(mobileActionUser), "CUI");
                                 setMobileActionUser(null);
                             }}
                             className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-meteorite-200 text-left font-semibold text-meteorite-700 hover:bg-meteorite-50"
@@ -706,6 +735,7 @@ export default function UsersTable({
                         </button>
 
                         <button
+                            type="button"
                             onClick={() => setMobileActionUser(null)}
                             className="w-full px-4 py-3 rounded-xl bg-meteorite-900 text-white font-bold"
                         >
