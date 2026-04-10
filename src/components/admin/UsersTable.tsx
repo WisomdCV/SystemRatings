@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
-import Image from "next/image";
+import { useEffect, useRef, useState } from "react";
 import { MoreVertical, Edit, ChevronLeft, ChevronRight, Copy, ArrowUpDown, ArrowUp, ArrowDown, Search, CheckCircle2, XCircle } from "lucide-react";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import UserEditDrawer from "./UserEditDrawer";
@@ -21,7 +20,7 @@ type User = {
     phone: string | null;
     category: string | null;
     moderationReason: string | null;
-    suspendedUntil: Date | null;
+    suspendedUntil: Date | string | null;
     currentArea: {
         id: string;
         name: string;
@@ -87,6 +86,45 @@ const getRoleColor = (role: string | null) => {
     }
 };
 
+const getRoleCardStyle = (role: string | null) => {
+    switch (role) {
+        case "DEV":
+            return "border-purple-200 bg-gradient-to-br from-purple-50 via-white to-white";
+        case "PRESIDENT":
+            return "border-yellow-200 bg-gradient-to-br from-yellow-50 via-white to-white";
+        case "VICEPRESIDENT":
+            return "border-orange-200 bg-gradient-to-br from-orange-50 via-white to-white";
+        case "DIRECTOR":
+            return "border-blue-200 bg-gradient-to-br from-blue-50 via-white to-white";
+        case "SUBDIRECTOR":
+            return "border-sky-200 bg-gradient-to-br from-sky-50 via-white to-white";
+        case "SECRETARY":
+            return "border-pink-200 bg-gradient-to-br from-pink-50 via-white to-white";
+        case "TREASURER":
+            return "border-emerald-200 bg-gradient-to-br from-emerald-50 via-white to-white";
+        case "MEMBER":
+            return "border-indigo-200 bg-gradient-to-br from-indigo-50 via-white to-white";
+        default:
+            return "border-gray-200 bg-gradient-to-br from-gray-50 via-white to-white";
+    }
+};
+
+const getAreaChipStyle = (areaCode: string | null | undefined) => {
+    if (!areaCode) return "bg-gray-100 text-gray-700 border-gray-200";
+    const palette = [
+        "bg-cyan-100 text-cyan-800 border-cyan-200",
+        "bg-teal-100 text-teal-800 border-teal-200",
+        "bg-lime-100 text-lime-800 border-lime-200",
+        "bg-fuchsia-100 text-fuchsia-800 border-fuchsia-200",
+        "bg-rose-100 text-rose-800 border-rose-200",
+        "bg-violet-100 text-violet-800 border-violet-200",
+    ];
+    const idx = areaCode
+        .split("")
+        .reduce((acc, ch) => acc + ch.charCodeAt(0), 0) % palette.length;
+    return palette[idx];
+};
+
 const getRoleLabel = (role: string | null) => {
     if (!role) return "Voluntario";
     const labels: Record<string, string> = {
@@ -111,6 +149,79 @@ const formatCUI = (user: User) => {
     return `${rolePrefix}${areaCode}-${last4}`;
 };
 
+type ModerationMeta = {
+    show: boolean;
+    label: string;
+    detail: string | null;
+    badgeClass: string;
+    dotClass: string;
+    stripClass: string;
+    avatarBorderClass: string;
+};
+
+const toDate = (value: Date | string | null | undefined): Date | null => {
+    if (!value) return null;
+    const parsed = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(parsed.getTime())) return null;
+    return parsed;
+};
+
+const getRemainingTimeLabel = (suspendedUntil: Date | string | null | undefined): string | null => {
+    const endDate = toDate(suspendedUntil);
+    if (!endDate) return null;
+
+    const diffMs = endDate.getTime() - Date.now();
+    if (diffMs <= 0) return "suspensión vencida";
+
+    const totalMinutes = Math.floor(diffMs / (1000 * 60));
+    const days = Math.floor(totalMinutes / (60 * 24));
+    const hours = Math.floor((totalMinutes % (60 * 24)) / 60);
+    const minutes = totalMinutes % 60;
+
+    if (days > 0) return `${days}d ${hours}h restantes`;
+    if (hours > 0) return `${hours}h ${minutes}m restantes`;
+    return `${Math.max(minutes, 1)}m restantes`;
+};
+
+const getModerationMeta = (user: User): ModerationMeta => {
+    const status = (user.status || "").toUpperCase();
+
+    if (status === "SUSPENDED") {
+        const remaining = getRemainingTimeLabel(user.suspendedUntil);
+        return {
+            show: true,
+            label: "Suspendido",
+            detail: remaining ? `Tiempo: ${remaining}` : "Sin fecha límite definida",
+            badgeClass: "bg-yellow-100 text-yellow-800 border-yellow-200",
+            dotClass: "bg-yellow-500",
+            stripClass: "bg-yellow-500",
+            avatarBorderClass: "border-yellow-200",
+        };
+    }
+
+    if (status === "BANNED") {
+        return {
+            show: true,
+            label: "Baneado",
+            detail: user.moderationReason ? `Motivo: ${user.moderationReason}` : "Acceso bloqueado",
+            badgeClass: "bg-red-100 text-red-800 border-red-200",
+            dotClass: "bg-red-500",
+            stripClass: "bg-red-500",
+            avatarBorderClass: "border-red-200",
+        };
+    }
+
+    return {
+        show: false,
+        label: "",
+        detail: null,
+        badgeClass: "",
+        dotClass: "bg-meteorite-300",
+        stripClass: "bg-meteorite-200",
+        avatarBorderClass: "border-white group-hover:border-meteorite-200",
+    };
+};
+
 export default function UsersTable({
     users,
     areas,
@@ -122,6 +233,7 @@ export default function UsersTable({
     pagination,
 }: UsersTableProps) {
     const [selectedUser, setSelectedUser] = useState<User | null>(null);
+    const [mobileActionUser, setMobileActionUser] = useState<User | null>(null);
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
     const [activeMenu, setActiveMenu] = useState<string | null>(null);
     const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
@@ -187,12 +299,16 @@ export default function UsersTable({
         setActiveMenu(activeMenu === id ? null : id);
     };
 
-    // Close menu when clicking outside
-    if (typeof window !== 'undefined') {
-        window.onclick = () => {
-            if (activeMenu) setActiveMenu(null);
-        }
-    }
+    useEffect(() => {
+        const handleDocumentClick = () => {
+            setActiveMenu(null);
+        };
+
+        document.addEventListener("click", handleDocumentClick);
+        return () => {
+            document.removeEventListener("click", handleDocumentClick);
+        };
+    }, []);
 
     return (
         <div className="bg-white/90 backdrop-blur-md rounded-3xl shadow-sm border border-meteorite-100 overflow-visible flex flex-col relative">
@@ -230,19 +346,21 @@ export default function UsersTable({
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-meteorite-50 relative">
-                        {users.map((user) => (
+                        {users.map((user) => {
+                            const moderation = getModerationMeta(user);
+                            return (
                             <tr key={user.id} className="hover:bg-meteorite-50/50 transition-colors group">
                                 <th scope="row" className="flex items-center px-6 py-4 text-gray-900 whitespace-nowrap">
                                     <div className="relative">
-                                        <div className={`w-11 h-11 rounded-full overflow-hidden bg-meteorite-100 flex items-center justify-center text-meteorite-600 font-bold border-2 shadow-sm ${user.status === 'SUSPENDED' ? 'border-red-200' : 'border-white group-hover:border-meteorite-200'} transition-all`}>
+                                        <div className={`w-11 h-11 rounded-full overflow-hidden bg-meteorite-100 flex items-center justify-center text-meteorite-600 font-bold border-2 shadow-sm ${moderation.avatarBorderClass} transition-all`}>
                                             {user.image ? (
                                                 <UserAvatar src={user.image} name={user.name || user.email} alt={user.name || "User"} className="w-full h-full" />
                                             ) : (
                                                 <span>{(user.name || user.email || "?").charAt(0).toUpperCase()}</span>
                                             )}
                                         </div>
-                                        {user.status === 'ACTIVE' && (
-                                            <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></div>
+                                        {moderation.show && (
+                                            <div className={`absolute bottom-0 right-0 w-3 h-3 ${moderation.dotClass} border-2 border-white rounded-full`}></div>
                                         )}
                                     </div>
                                     <div className="pl-4">
@@ -298,12 +416,20 @@ export default function UsersTable({
                                     </span>
                                 </td>
                                 <td className="px-6 py-4">
-                                    <div className="flex items-center">
-                                        <div className={`h-2.5 w-2.5 rounded-full mr-2 ${user.status === 'ACTIVE' ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]' : user.status === 'SUSPENDED' ? 'bg-orange-500' : 'bg-red-500'}`}></div>
-                                        <span className={`text-xs font-bold ${user.status === 'ACTIVE' ? 'text-green-700' : user.status === 'SUSPENDED' ? 'text-orange-700' : 'text-red-700'}`}>
-                                            {user.status || "UNKNOWN"}
-                                        </span>
-                                    </div>
+                                    {moderation.show ? (
+                                        <div className="space-y-1">
+                                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full border text-xs font-bold ${moderation.badgeClass}`}>
+                                                {moderation.label}
+                                            </span>
+                                            {moderation.detail && (
+                                                <p className="text-[11px] text-meteorite-600 max-w-[220px] truncate" title={moderation.detail}>
+                                                    {moderation.detail}
+                                                </p>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <span className="text-xs font-semibold text-meteorite-400">-</span>
+                                    )}
                                 </td>
                                 <td className="px-6 py-4 text-right">
                                     <div className="relative inline-block text-left">
@@ -347,7 +473,7 @@ export default function UsersTable({
                                     </div>
                                 </td>
                             </tr>
-                        ))}
+                        );})}
                         {users.length === 0 && (
                             <tr>
                                 <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
@@ -382,10 +508,12 @@ export default function UsersTable({
                     </select>
                 </div>
 
-                {users.map((user) => (
-                    <div key={user.id} className="bg-white rounded-2xl border border-meteorite-100 shadow-sm p-4 relative flex flex-col overflow-hidden">
+                {users.map((user) => {
+                    const moderation = getModerationMeta(user);
+                    return (
+                    <div key={user.id} className={`rounded-2xl border shadow-sm p-4 relative flex flex-col overflow-visible ${getRoleCardStyle(user.role)}`}>
                         {/* Status Indicator Strip */}
-                        <div className={`absolute top-0 left-0 w-1 h-full ${user.status === 'ACTIVE' ? 'bg-green-500' : user.status === 'SUSPENDED' ? 'bg-orange-500' : 'bg-red-500'}`}></div>
+                        <div className={`absolute top-0 left-0 w-1 h-full ${moderation.stripClass}`}></div>
 
                         <div className="flex justify-between items-start mb-3 pl-2">
                             <div className="flex items-center gap-3">
@@ -401,41 +529,40 @@ export default function UsersTable({
                                 <div>
                                     <h3 className="font-bold text-meteorite-950 leading-tight">{user.name || "Sin Nombre"}</h3>
                                     <p className="text-xs text-gray-500 mt-0.5 break-all pr-2">{user.email}</p>
+                                    <div className="mt-1.5 flex flex-wrap gap-1">
+                                        {moderation.show && (
+                                            <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-black border ${moderation.badgeClass}`}>
+                                                {moderation.label}
+                                            </span>
+                                        )}
+                                        <span className="px-1.5 py-0.5 rounded-md text-[10px] font-black border bg-meteorite-100 text-meteorite-700 border-meteorite-200">
+                                            {user.category || "Trainee"}
+                                        </span>
+                                        {user.currentArea?.code && (
+                                            <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-black border ${getAreaChipStyle(user.currentArea.code)}`}>
+                                                {user.currentArea.code}
+                                            </span>
+                                        )}
+                                    </div>
+                                    {moderation.show && moderation.detail && (
+                                        <p className="text-[10px] text-meteorite-500 mt-1 max-w-[220px] truncate" title={moderation.detail}>
+                                            {moderation.detail}
+                                        </p>
+                                    )}
                                 </div>
                             </div>
 
                             {/* Mobile Actions */}
                             <div className="relative">
                                 <button
-                                    onClick={(e) => toggleMenu(`mobile-${user.id}`, e)}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setMobileActionUser(user);
+                                    }}
                                     className="p-1.5 text-gray-400 hover:text-meteorite-600 bg-gray-50 rounded-lg"
                                 >
                                     <MoreVertical className="w-5 h-5" />
                                 </button>
-
-                                {/* Dropdown Menu */}
-                                {activeMenu === `mobile-${user.id}` && (
-                                    <div className="absolute right-0 mt-2 w-48 rounded-xl shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-20 py-1 divide-y divide-gray-100 border border-gray-100">
-                                        <div className="py-1">
-                                            <button
-                                                onClick={(e) => { e.stopPropagation(); handleEditClick(user); }}
-                                                className="group flex items-center px-4 py-3 text-sm text-gray-700 hover:bg-meteorite-50 w-full text-left font-bold"
-                                            >
-                                                <Edit className="mr-3 h-4 w-4 text-gray-400" />
-                                                Editar Usuario
-                                            </button>
-                                        </div>
-                                        <div className="py-1">
-                                            <button
-                                                onClick={(e) => { e.stopPropagation(); handleCopy(formatCUI(user), "CUI"); }}
-                                                className="group flex items-center px-4 py-3 text-sm text-gray-700 hover:bg-meteorite-50 w-full text-left"
-                                            >
-                                                <Copy className="mr-3 h-4 w-4 text-gray-400" />
-                                                Copiar CUI
-                                            </button>
-                                        </div>
-                                    </div>
-                                )}
                             </div>
                         </div>
 
@@ -445,7 +572,9 @@ export default function UsersTable({
                                 <span className={`w-fit px-2 py-0.5 text-[11px] font-bold rounded border ${getRoleColor(user.role)} mb-1`}>
                                     {getRoleLabel(user.role)}
                                 </span>
-                                <span className="text-xs font-semibold text-meteorite-700">{user.currentArea?.name || "Sin Área"}</span>
+                                <span className={`w-fit text-[11px] font-bold px-2 py-0.5 rounded border ${getAreaChipStyle(user.currentArea?.code)}`}>
+                                    {user.currentArea?.name || "Sin Área"}
+                                </span>
                             </div>
 
                             <div className="flex flex-col">
@@ -454,8 +583,31 @@ export default function UsersTable({
                                 <span className="text-xs text-gray-500 font-medium">{user.phone || "Sin celular"}</span>
                             </div>
                         </div>
+
+                        {user.customRoles && user.customRoles.length > 0 && (
+                            <div className="pl-2 mt-3 flex flex-wrap gap-1.5">
+                                {user.customRoles.slice(0, 3).map((ur) => (
+                                    <span
+                                        key={ur.customRole.id}
+                                        className="px-2 py-0.5 rounded text-[10px] font-bold border whitespace-nowrap shadow-sm"
+                                        style={{
+                                            backgroundColor: `${ur.customRole.color}15`,
+                                            color: ur.customRole.color,
+                                            borderColor: `${ur.customRole.color}30`,
+                                        }}
+                                    >
+                                        {ur.customRole.name}
+                                    </span>
+                                ))}
+                                {user.customRoles.length > 3 && (
+                                    <span className="px-2 py-0.5 rounded text-[10px] font-bold border border-meteorite-200 text-meteorite-600 bg-white">
+                                        +{user.customRoles.length - 3}
+                                    </span>
+                                )}
+                            </div>
+                        )}
                     </div>
-                ))}
+                );})}
 
                 {users.length === 0 && (
                     <div className="py-8 text-center text-gray-500 bg-white rounded-2xl border border-meteorite-100">
@@ -463,6 +615,65 @@ export default function UsersTable({
                     </div>
                 )}
             </div>
+
+            {/* Mobile Actions Bottom Sheet */}
+            {mobileActionUser && (
+                <div className="md:hidden fixed inset-0 z-[250]" onClick={() => setMobileActionUser(null)}>
+                    <div className="absolute inset-0 bg-black/35" />
+                    <div
+                        className="absolute bottom-0 left-0 right-0 bg-white rounded-t-3xl border-t border-meteorite-200 shadow-2xl p-4 space-y-2"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="w-10 h-1 bg-meteorite-200 rounded-full mx-auto mb-2" />
+                        <p className="text-sm font-black text-meteorite-900 px-1">
+                            {mobileActionUser.name || "Sin Nombre"}
+                        </p>
+                        <p className="text-xs text-meteorite-500 px-1 pb-1">
+                            {mobileActionUser.email}
+                        </p>
+
+                        <button
+                            onClick={() => {
+                                handleEditClick(mobileActionUser);
+                                setMobileActionUser(null);
+                            }}
+                            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-meteorite-200 text-left font-bold text-meteorite-800 hover:bg-meteorite-50"
+                        >
+                            <Edit className="w-4 h-4" />
+                            Editar usuario
+                        </button>
+
+                        <button
+                            onClick={() => {
+                                handleCopy(mobileActionUser.email, "Email");
+                                setMobileActionUser(null);
+                            }}
+                            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-meteorite-200 text-left font-semibold text-meteorite-700 hover:bg-meteorite-50"
+                        >
+                            <Copy className="w-4 h-4" />
+                            Copiar email
+                        </button>
+
+                        <button
+                            onClick={() => {
+                                handleCopy(formatCUI(mobileActionUser), "CUI");
+                                setMobileActionUser(null);
+                            }}
+                            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-meteorite-200 text-left font-semibold text-meteorite-700 hover:bg-meteorite-50"
+                        >
+                            <Copy className="w-4 h-4" />
+                            Copiar CUI
+                        </button>
+
+                        <button
+                            onClick={() => setMobileActionUser(null)}
+                            className="w-full px-4 py-3 rounded-xl bg-meteorite-900 text-white font-bold"
+                        >
+                            Cerrar
+                        </button>
+                    </div>
+                </div>
+            )}
 
             {/* Pagination Helper */}
             {pagination && (
