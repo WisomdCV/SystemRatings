@@ -5,7 +5,7 @@ import { db } from "@/db";
 import { users } from "@/db/schema";
 import { sql } from "drizzle-orm";
 import Link from "next/link";
-import { ArrowLeft, Users, MapPin, Shield, RefreshCcw, Settings, ShieldCheck, UserCheck } from "lucide-react";
+import { ArrowLeft, Users, MapPin, Shield, RefreshCcw, Settings, ShieldCheck, UserCheck, Eye } from "lucide-react";
 
 export default async function AdminHubPage() {
     const session = await authFresh();
@@ -22,6 +22,7 @@ export default async function AdminHubPage() {
     const canManageUsers = canManageUserRoles || canManageUserData || canModerateUsers;
     const canManageAdminRoles = hasPermission(role, "admin:roles", customPermissions);
     const canViewAdminAudit = hasPermission(role, "admin:audit", customPermissions);
+    const canViewAccessPreview = canViewAdminAudit || canManageAdminRoles;
 
     // El usuario debe tener al menos permiso básico de acceso al panel admin
     if (!hasPermission(role, "admin:access", session.user.customPermissions)) {
@@ -103,6 +104,15 @@ export default async function AdminHubPage() {
             colorClass: "from-rose-500 to-rose-700",
             shadowClass: "shadow-rose-500/30",
             hasAccess: canViewAdminAudit
+        },
+        {
+            title: "Vista Previa de Accesos",
+            description: "Simula por usuario o rol qué verá y qué acciones podrá ejecutar en módulos como Events y Projects.",
+            href: "/admin/access-preview",
+            icon: <Eye className="w-8 h-8 text-white" />,
+            colorClass: "from-indigo-500 to-violet-700",
+            shadowClass: "shadow-indigo-500/30",
+            hasAccess: canViewAccessPreview
         }
     ];
 
