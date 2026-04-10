@@ -1037,7 +1037,7 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
                                         )
                                     })
                                 ) : (
-                                    <div className="flex flex-col items-center justify-center w-full h-full text-center p-8 min-h-[220px] animate-in fade-in zoom-in duration-700 bg-gradient-to-br from-meteorite-50 via-white to-meteorite-100">
+                                    <div className="flex flex-col items-center justify-center w-full h-[220px] lg:h-[240px] text-center p-6 animate-in fade-in zoom-in duration-700 bg-gradient-to-br from-meteorite-50 via-white to-meteorite-100">
                                         <span className="inline-flex items-center justify-center mb-3 text-[10px] font-bold px-2 py-1 rounded-lg bg-meteorite-100 text-meteorite-600 border border-meteorite-200 uppercase tracking-wide">
                                             Agenda libre
                                         </span>
