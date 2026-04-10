@@ -170,10 +170,22 @@ const getRemainingTimeLabel = (suspendedUntil: Date | string | null | undefined)
     const endDate = toDate(suspendedUntil);
     if (!endDate) return null;
 
-    const diffMs = endDate.getTime() - Date.now();
+    const now = new Date();
+    const diffMs = endDate.getTime() - now.getTime();
     if (diffMs <= 0) return "suspensión vencida";
 
     const totalMinutes = Math.floor(diffMs / (1000 * 60));
+    if (totalMinutes < 24 * 60) {
+        const isSameDay = endDate.toDateString() === now.toDateString();
+        const dayLabel = isSameDay ? "hoy" : "mañana";
+        const hourLabel = endDate.toLocaleTimeString("es-PE", {
+            hour: "2-digit",
+            minute: "2-digit",
+            hour12: false,
+        });
+        return `vence ${dayLabel} a las ${hourLabel}`;
+    }
+
     const days = Math.floor(totalMinutes / (60 * 24));
     const hours = Math.floor((totalMinutes % (60 * 24)) / 60);
     const minutes = totalMinutes % 60;
@@ -185,6 +197,18 @@ const getRemainingTimeLabel = (suspendedUntil: Date | string | null | undefined)
 
 const getModerationMeta = (user: User): ModerationMeta => {
     const status = (user.status || "").toUpperCase();
+
+    if (status === "ACTIVE") {
+        return {
+            show: true,
+            label: "Activo",
+            detail: "Sin restricciones",
+            badgeClass: "bg-emerald-100 text-emerald-800 border-emerald-200",
+            dotClass: "bg-emerald-500",
+            stripClass: "bg-emerald-500",
+            avatarBorderClass: "border-emerald-200",
+        };
+    }
 
     if (status === "SUSPENDED") {
         const remaining = getRemainingTimeLabel(user.suspendedUntil);
@@ -208,6 +232,18 @@ const getModerationMeta = (user: User): ModerationMeta => {
             dotClass: "bg-red-500",
             stripClass: "bg-red-500",
             avatarBorderClass: "border-red-200",
+        };
+    }
+
+    if (status === "WARNED") {
+        return {
+            show: true,
+            label: "Advertido",
+            detail: user.moderationReason ? `Motivo: ${user.moderationReason}` : "Advertencia registrada",
+            badgeClass: "bg-orange-100 text-orange-800 border-orange-200",
+            dotClass: "bg-orange-500",
+            stripClass: "bg-orange-500",
+            avatarBorderClass: "border-orange-200",
         };
     }
 
