@@ -218,6 +218,32 @@ export const gradeDefinitions = sqliteTable("grade_definition", {
   isDirectorOnly: integer("is_director_only", { mode: "boolean" }).default(false),
 });
 
+// Pillar Grading Permissions — controls WHO can grade WHICH pillar for WHOM
+// Each row is a grant: "role/permission X can grade pillar Y with scope Z"
+export const pillarGradingPermissions = sqliteTable("pillar_grading_permission", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  definitionId: text("definition_id").references(() => gradeDefinitions.id, { onDelete: "cascade" }).notNull(),
+
+  // Scope: who can the grader assign grades TO?
+  //   "ALL"      → any user in the system
+  //   "OWN_AREA" → only users in the grader's IISE area
+  scope: text("scope").notNull(), // "ALL" | "OWN_AREA"
+
+  // How the grant is evaluated:
+  //   "ROLE"       → grantValue is a system role name (e.g. "DIRECTOR")
+  //   "PERMISSION" → grantValue is a permission string resolved via hasPermission()
+  grantType: text("grant_type").notNull(), // "ROLE" | "PERMISSION"
+
+  // The value to match against (role name or permission string)
+  grantValue: text("grant_value").notNull(),
+
+  createdAt: integer("created_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
+}, (table) => ({
+  idxGrantDefinition: index("idx_pgp_definition").on(table.definitionId),
+  // Prevent duplicate grants for the same pillar/type/value/scope
+  uniqueGrant: unique().on(table.definitionId, table.grantType, table.grantValue, table.scope),
+}));
+
 export const grades = sqliteTable("grade", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
   definitionId: text("definition_id").references(() => gradeDefinitions.id).notNull(),
@@ -569,6 +595,11 @@ export const attendanceRecordsRelations = relations(attendanceRecords, ({ one })
 export const gradeDefinitionsRelations = relations(gradeDefinitions, ({ one, many }) => ({
   semester: one(semesters, { fields: [gradeDefinitions.semesterId], references: [semesters.id] }),
   grades: many(grades),
+  gradingPermissions: many(pillarGradingPermissions),
+}));
+
+export const pillarGradingPermissionsRelations = relations(pillarGradingPermissions, ({ one }) => ({
+  definition: one(gradeDefinitions, { fields: [pillarGradingPermissions.definitionId], references: [gradeDefinitions.id] }),
 }));
 
 export const gradesRelations = relations(grades, ({ one }) => ({

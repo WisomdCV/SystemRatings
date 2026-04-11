@@ -77,9 +77,13 @@ export const PERMISSIONS = {
     "attendance:review_all":      ["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER"],
 
     // --- Calificaciones ---
+    // Super-permission: bypasses per-pillar grants, can grade any pillar for anyone
+    "grade:assign_all_pillars": ["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER"],
+    // Legacy permissions (kept for backward compatibility during transition)
     "grade:assign_own_area": ["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER"],
     "grade:assign_all":      ["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER"],
-    "grade:view_own_area":   ["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER"],
+    // View permissions
+    "grade:view_own_area":   ["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER", "DIRECTOR", "SUBDIRECTOR"],
     "grade:view_all":        ["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER"],
 
     // --- Pilares ---

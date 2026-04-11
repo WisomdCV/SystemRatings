@@ -2,10 +2,10 @@
 
 import { auth } from "@/server/auth";
 import { db } from "@/db";
-import { gradeDefinitions, semesters, grades } from "@/db/schema";
+import { gradeDefinitions, semesters, grades, pillarGradingPermissions } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { UpsertPillarSchema } from "@/lib/validators/pillar"; // Assume this path exists or check file structure if unsure
+import { UpsertPillarSchema, PillarGrantSchema, BulkPillarGrantsSchema } from "@/lib/validators/pillar";
 import { z } from "zod";
 import { hasPermission } from "@/lib/permissions";
 
@@ -185,9 +185,10 @@ export async function clonePillarsAction(sourceSemesterId: string, targetSemeste
             return { success: false, error: "No autorizado" };
         }
 
-        // 1. Get Source Pillars
+        // 1. Get Source Pillars (with grading permissions)
         const sourcePillars = await db.query.gradeDefinitions.findMany({
-            where: eq(gradeDefinitions.semesterId, sourceSemesterId)
+            where: eq(gradeDefinitions.semesterId, sourceSemesterId),
+            with: { gradingPermissions: true },
         });
 
         if (sourcePillars.length === 0) {
@@ -203,22 +204,14 @@ export async function clonePillarsAction(sourceSemesterId: string, targetSemeste
         if (targetPillars.length > 0) {
             const targetPillarIds = targetPillars.map(p => p.id);
 
-            // Check for any grades in target pillars
-            const existingGrade = await db.query.grades.findFirst({
-                where: eq(grades.definitionId, targetPillarIds[0]) // Check first one
-            });
-
-            // If first has no grades, check all others
-            let hasGrades = !!existingGrade;
-            if (!hasGrades) {
-                for (const pillarId of targetPillarIds) {
-                    const grade = await db.query.grades.findFirst({
-                        where: eq(grades.definitionId, pillarId)
-                    });
-                    if (grade) {
-                        hasGrades = true;
-                        break;
-                    }
+            let hasGrades = false;
+            for (const pillarId of targetPillarIds) {
+                const grade = await db.query.grades.findFirst({
+                    where: eq(grades.definitionId, pillarId)
+                });
+                if (grade) {
+                    hasGrades = true;
+                    break;
                 }
             }
 
@@ -228,34 +221,189 @@ export async function clonePillarsAction(sourceSemesterId: string, targetSemeste
                     error: "No se puede clonar porque el ciclo destino ya tiene pilares con calificaciones asignadas. Primero elimina las calificaciones existentes."
                 };
             }
-
-            // Safe to delete target pillars (no grades)
         }
 
-        // 4. Clone atomically: delete old + insert new in one transaction
-        const clones = sourcePillars.map(p => ({
-            semesterId: targetSemesterId,
-            name: p.name,
-            weight: p.weight,
-            directorWeight: p.directorWeight,
-            maxScore: p.maxScore,
-            isDirectorOnly: p.isDirectorOnly
-        }));
-
+        // 4. Clone atomically: delete old + insert new pillars + their grading permissions
         await db.transaction(async (tx) => {
             if (targetPillars.length > 0) {
                 await tx.delete(gradeDefinitions).where(eq(gradeDefinitions.semesterId, targetSemesterId));
             }
-            await tx.insert(gradeDefinitions).values(clones);
+
+            for (const p of sourcePillars) {
+                const [newPillar] = await tx.insert(gradeDefinitions).values({
+                    semesterId: targetSemesterId,
+                    name: p.name,
+                    weight: p.weight,
+                    directorWeight: p.directorWeight,
+                    maxScore: p.maxScore,
+                    isDirectorOnly: p.isDirectorOnly,
+                }).returning({ id: gradeDefinitions.id });
+
+                // Clone grading permissions for this pillar
+                if (p.gradingPermissions.length > 0) {
+                    await tx.insert(pillarGradingPermissions).values(
+                        p.gradingPermissions.map(gp => ({
+                            definitionId: newPillar.id,
+                            scope: gp.scope,
+                            grantType: gp.grantType,
+                            grantValue: gp.grantValue,
+                        }))
+                    );
+                }
+            }
         });
 
         revalidatePath(`/admin/cycles/${targetSemesterId}`);
         revalidatePath(`/admin/cycles/${targetSemesterId}/pillars`);
-        return { success: true, message: `Se clonaron ${clones.length} pilares exitosamente.` };
+        return { success: true, message: `Se clonaron ${sourcePillars.length} pilares exitosamente.` };
 
     } catch (error: any) {
         console.error("Clone Error:", error);
         return { success: false, error: "Error al clonar pilares. Intenta nuevamente." };
+    }
+}
+
+// =============================================================================
+// Pillar Grading Permission Grants — CRUD
+// =============================================================================
+
+/**
+ * Get all grading permission grants for a specific pillar.
+ */
+export async function getPillarGrantsAction(definitionId: string) {
+    try {
+        const session = await auth();
+        if (!session?.user || !hasPermission(session.user.role, "pillar:manage", session.user.customPermissions)) {
+            return { success: false, error: "No autorizado" };
+        }
+
+        const grants = await db.query.pillarGradingPermissions.findMany({
+            where: eq(pillarGradingPermissions.definitionId, definitionId),
+        });
+
+        return { success: true, data: grants };
+    } catch (error) {
+        console.error("Error getting pillar grants:", error);
+        return { success: false, error: "Error al cargar permisos del pilar" };
+    }
+}
+
+/**
+ * Add a single grading permission grant for a pillar.
+ */
+export async function addPillarGrantAction(data: z.infer<typeof PillarGrantSchema>) {
+    try {
+        const session = await auth();
+        if (!session?.user || !hasPermission(session.user.role, "pillar:manage", session.user.customPermissions)) {
+            return { success: false, error: "No autorizado" };
+        }
+
+        const validated = PillarGrantSchema.safeParse(data);
+        if (!validated.success) {
+            return { success: false, error: validated.error.issues[0].message };
+        }
+
+        const { definitionId, scope, grantType, grantValue } = validated.data;
+
+        // Verify pillar exists
+        const pillar = await db.query.gradeDefinitions.findFirst({
+            where: eq(gradeDefinitions.id, definitionId),
+        });
+        if (!pillar) return { success: false, error: "Pilar no encontrado." };
+
+        await db.insert(pillarGradingPermissions).values({
+            definitionId,
+            scope,
+            grantType,
+            grantValue,
+        });
+
+        revalidatePath(`/admin/cycles/${pillar.semesterId}/pillars`);
+        return { success: true, message: "Permiso agregado correctamente." };
+    } catch (error: any) {
+        if (error?.message?.includes("UNIQUE")) {
+            return { success: false, error: "Este permiso ya existe para este pilar." };
+        }
+        console.error("Error adding pillar grant:", error);
+        return { success: false, error: "Error al agregar permiso." };
+    }
+}
+
+/**
+ * Remove a specific grading permission grant.
+ */
+export async function removePillarGrantAction(grantId: string) {
+    try {
+        const session = await auth();
+        if (!session?.user || !hasPermission(session.user.role, "pillar:manage", session.user.customPermissions)) {
+            return { success: false, error: "No autorizado" };
+        }
+
+        const grant = await db.query.pillarGradingPermissions.findFirst({
+            where: eq(pillarGradingPermissions.id, grantId),
+            with: { definition: true },
+        });
+
+        if (!grant) return { success: false, error: "Permiso no encontrado." };
+
+        await db.delete(pillarGradingPermissions).where(eq(pillarGradingPermissions.id, grantId));
+
+        revalidatePath(`/admin/cycles/${grant.definition.semesterId}/pillars`);
+        return { success: true, message: "Permiso eliminado correctamente." };
+    } catch (error) {
+        console.error("Error removing pillar grant:", error);
+        return { success: false, error: "Error al eliminar permiso." };
+    }
+}
+
+/**
+ * Replace all grading permission grants for a pillar (delete + re-insert).
+ * Used when the admin configures permissions from the UI.
+ */
+export async function updatePillarGrantsAction(data: z.infer<typeof BulkPillarGrantsSchema>) {
+    try {
+        const session = await auth();
+        if (!session?.user || !hasPermission(session.user.role, "pillar:manage", session.user.customPermissions)) {
+            return { success: false, error: "No autorizado" };
+        }
+
+        const validated = BulkPillarGrantsSchema.safeParse(data);
+        if (!validated.success) {
+            return { success: false, error: validated.error.issues[0].message };
+        }
+
+        const { definitionId, grants } = validated.data;
+
+        // Verify pillar exists
+        const pillar = await db.query.gradeDefinitions.findFirst({
+            where: eq(gradeDefinitions.id, definitionId),
+        });
+        if (!pillar) return { success: false, error: "Pilar no encontrado." };
+
+        await db.transaction(async (tx) => {
+            // Delete all existing grants for this pillar
+            await tx.delete(pillarGradingPermissions).where(
+                eq(pillarGradingPermissions.definitionId, definitionId)
+            );
+
+            // Insert new grants (if any)
+            if (grants.length > 0) {
+                await tx.insert(pillarGradingPermissions).values(
+                    grants.map(g => ({
+                        definitionId,
+                        scope: g.scope,
+                        grantType: g.grantType,
+                        grantValue: g.grantValue,
+                    }))
+                );
+            }
+        });
+
+        revalidatePath(`/admin/cycles/${pillar.semesterId}/pillars`);
+        return { success: true, message: `Permisos del pilar "${pillar.name}" actualizados.` };
+    } catch (error) {
+        console.error("Error updating pillar grants:", error);
+        return { success: false, error: "Error al actualizar permisos." };
     }
 }
 

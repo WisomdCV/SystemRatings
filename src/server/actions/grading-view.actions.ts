@@ -5,6 +5,7 @@ import { db } from "@/db";
 import { hasPermission } from "@/lib/permissions";
 import { users, gradeDefinitions, grades, semesters, kpiMonthlySummaries } from "@/db/schema";
 import { eq, and, ne, asc, inArray } from "drizzle-orm";
+import { resolveAllPillarPermissions, type GraderContext, type GradingScope } from "@/server/services/grading-permissions.service";
 
 export async function getGradingSheetAction() {
     try {
@@ -16,8 +17,6 @@ export async function getGradingSheetAction() {
         const userId = session.user.id;
         const canViewOwnArea = hasPermission(role, "grade:view_own_area", session.user.customPermissions);
         const canViewAll = hasPermission(role, "grade:view_all", session.user.customPermissions);
-        const canAssignOwnArea = hasPermission(role, "grade:assign_own_area", session.user.customPermissions);
-        const canAssignAll = hasPermission(role, "grade:assign_all", session.user.customPermissions);
 
         if (!canViewOwnArea && !canViewAll) {
             return { success: false, error: "No tienes permisos para ver calificaciones." };
@@ -37,14 +36,30 @@ export async function getGradingSheetAction() {
         }
 
         // 2. Get Grade Definitions (Pillars) for this Semester
-        // Sorted by name or weight logic? Let's sort manually if needed or name.
-        // Usually we want a specific order: Reunion, Staff, Proyectos, Area, CD. 
-        // We can sort in frontend or here.
         const pillars = await db.query.gradeDefinitions.findMany({
             where: eq(gradeDefinitions.semesterId, activeSemester.id),
         });
 
-        // 3. Get members to grade
+        // 3. Resolve per-pillar grading permissions for the current user
+        const graderCtx: GraderContext = {
+            userId,
+            userRole: role,
+            userAreaId: currentAreaId,
+            customPermissions: session.user.customPermissions,
+        };
+
+        const pillarIds = pillars.map(p => p.id);
+        const pillarPermissions: Record<string, GradingScope> = pillarIds.length > 0
+            ? await resolveAllPillarPermissions(graderCtx, pillarIds)
+            : {};
+
+        // Determine if user can grade at least one pillar (for any scope)
+        const canGradeAny = Object.values(pillarPermissions).some(scope => scope !== "NONE");
+
+        // 4. Get members to grade/view
+        // Visibility: if can view all → all active non-DEV users
+        //             if can view own area → only own area members
+        // Grading scope is per-pillar (handled in frontend + enforced in upsertGradeAction)
         let targetUsers: Awaited<ReturnType<typeof db.query.users.findMany>>;
 
         if (canViewAll) {
@@ -59,10 +74,9 @@ export async function getGradingSheetAction() {
         } else {
             targetUsers = await db.query.users.findMany({
                 where: and(
-                    eq(users.currentAreaId, currentAreaId!), // Validated above
+                    eq(users.currentAreaId, currentAreaId!),
                     ne(users.role, "DEV"),
                     eq(users.status, "ACTIVE"),
-                    // Optional: Exclude myself? 
                     ne(users.id, userId)
                 ),
                 with: { currentArea: true },
@@ -72,18 +86,13 @@ export async function getGradingSheetAction() {
 
         const visibleUserIds = targetUsers.map(u => u.id);
 
-        // 4. Get Existing Grades for the visible users in this semester
-        // We can optimize this by fetching only grades of these users
-        // But for < 100 users, finding all grades in semester is fine.
+        // 5. Get Existing Grades
         const existingGrades = visibleUserIds.length === 0
             ? []
             : await db.query.grades.findMany({
-                with: {
-                    definition: true
-                },
+                with: { definition: true },
                 where: (grades, { exists, and, eq, inArray }) => and(
                     inArray(grades.userId, visibleUserIds),
-                    // Filter grades only for the active semester's pillars
                     exists(
                         db.select()
                             .from(gradeDefinitions)
@@ -95,11 +104,7 @@ export async function getGradingSheetAction() {
                 )
             });
 
-        // 5. Get KPI Summaries
-        // We want the LATEST summary for this semester (or current month? The requirement implies "The KPI").
-        // Since we are creating one-per-month logic in service, let's just grab the one with highest ID or check logical grouping.
-        // Actually, for "Semester Grading", we might want the accumulative. But for V1, we saved to `month: currentMonth`.
-        // Let's fetch ALL summaries for this semester and these users, and maybe map them.
+        // 6. Get KPI Summaries
         const kpis = visibleUserIds.length === 0
             ? []
             : await db.query.kpiMonthlySummaries.findMany({
@@ -111,22 +116,13 @@ export async function getGradingSheetAction() {
 
         const kpiMap: Record<string, number> = {};
         kpis.forEach(k => {
-            // If multiple months exists, what do we show? 
-            // We show the latest update or sum?
-            // Given the instructions, we overwrite the record. So there should be one main record per month.
-            // Let's take the one with highest month or latest update.
-            // Ideally we filter by current month/year if that's the view context.
-            // Simplification: Last updated score.
             kpiMap[k.userId] = k.finalKpiScore || 0;
         });
 
-        // 5. Structure Data for Grid
-        // We need mapped grades: { [userId]: { [pillarId]: GradeObject } }
+        // 7. Structure grades map
         const gradesMap: Record<string, Record<string, any>> = {};
-
         existingGrades.forEach(g => {
             if (!gradesMap[g.userId]) gradesMap[g.userId] = {};
-            // If the pillar belongs to active semester (double check logic)
             if (g.definition.semesterId === activeSemester.id) {
                 gradesMap[g.userId][g.definitionId] = g;
             }
@@ -144,8 +140,9 @@ export async function getGradingSheetAction() {
                 permissions: {
                     canViewOwnArea,
                     canViewAll,
-                    canAssignOwnArea,
-                    canAssignAll,
+                    canGradeAny,
+                    // Per-pillar scope map: { [pillarId]: "ALL" | "OWN_AREA" | "NONE" }
+                    pillarPermissions,
                 }
             }
         };

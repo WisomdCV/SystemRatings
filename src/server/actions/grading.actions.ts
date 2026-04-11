@@ -8,20 +8,12 @@ import { UpsertGradeDTO, UpsertGradeSchema } from "@/lib/validators/grading";
 import { recalculateUserKPI } from "@/server/services/kpi.service";
 import { recalculateAreaKPIForUser } from "@/server/services/area-kpi.service";
 import { revalidatePath } from "next/cache";
-import { hasPermission } from "@/lib/permissions";
+import { canGradePillarForUser, type GraderContext } from "@/server/services/grading-permissions.service";
 
 export async function upsertGradeAction(input: UpsertGradeDTO) {
     try {
         const session = await auth();
         if (!session?.user) return { success: false, error: "No autorizado" };
-
-        const currentRole = session.user.role || "";
-        const canAssignOwnArea = hasPermission(currentRole, "grade:assign_own_area", session.user.customPermissions);
-        const canAssignAll = hasPermission(currentRole, "grade:assign_all", session.user.customPermissions);
-
-        if (!canAssignOwnArea && !canAssignAll) {
-            return { success: false, error: "No tienes permisos para calificar." };
-        }
 
         // 1. Validate Input Structure
         const validated = UpsertGradeSchema.safeParse(input);
@@ -31,41 +23,48 @@ export async function upsertGradeAction(input: UpsertGradeDTO) {
 
         const { targetUserId, definitionId, score, feedback } = validated.data;
 
-        // 2. Validate target user scope and DEV exclusion
-        const targetUser = await db.query.users.findFirst({
-            where: eq(users.id, targetUserId),
-            columns: {
-                role: true,
-                currentAreaId: true,
-            },
-        });
-
-        if (!targetUser) {
-            return { success: false, error: "Usuario objetivo no encontrado." };
-        }
-
-        if (targetUser.role === "DEV") {
-            return { success: false, error: "No se puede calificar a usuarios DEV." };
-        }
-
-        if (!canAssignAll) {
-            if (!session.user.currentAreaId) {
-                return { success: false, error: "No tienes un área asignada para calificar." };
-            }
-
-            if (targetUser.currentAreaId !== session.user.currentAreaId) {
-                return { success: false, error: "Solo puedes calificar miembros de tu área." };
-            }
-        }
-
-        // 3. Fetch pillar definition to check max score
+        // 2. Fetch pillar definition
         const pillar = await db.query.gradeDefinitions.findFirst({
             where: eq(gradeDefinitions.id, definitionId)
         });
 
         if (!pillar) return { success: false, error: "Pilar de evaluación no encontrado." };
 
-        // 4. HARD VALIDATION: Score <= MaxScore
+        // 3. Fetch target user
+        const targetUser = await db.query.users.findFirst({
+            where: eq(users.id, targetUserId),
+            columns: { role: true, currentAreaId: true },
+        });
+
+        if (!targetUser) return { success: false, error: "Usuario objetivo no encontrado." };
+
+        if (targetUser.role === "DEV") {
+            return { success: false, error: "No se puede calificar a usuarios DEV." };
+        }
+
+        // 4. isDirectorOnly server-side enforcement
+        if (pillar.isDirectorOnly) {
+            const directorLevelRoles = ["DIRECTOR", "SUBDIRECTOR", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER"];
+            if (!targetUser.role || !directorLevelRoles.includes(targetUser.role)) {
+                return { success: false, error: `El pilar "${pillar.name}" solo aplica a roles directivos.` };
+            }
+        }
+
+        // 5. Permission check via canGradePillarForUser (flexible, DB-driven)
+        const graderCtx: GraderContext = {
+            userId: session.user.id,
+            userRole: session.user.role || "",
+            userAreaId: session.user.currentAreaId,
+            customPermissions: session.user.customPermissions,
+        };
+
+        const canGrade = await canGradePillarForUser(graderCtx, definitionId, targetUser.currentAreaId);
+
+        if (!canGrade) {
+            return { success: false, error: "No tienes permisos para calificar este pilar para este usuario." };
+        }
+
+        // 6. HARD VALIDATION: Score <= MaxScore
         const maxScore = pillar.maxScore || 5;
         if (score > maxScore) {
             return {
@@ -74,7 +73,7 @@ export async function upsertGradeAction(input: UpsertGradeDTO) {
             };
         }
 
-        // 5. Upsert Grade atomically (prevents race condition on concurrent grading)
+        // 7. Upsert Grade atomically
         await db.transaction(async (tx) => {
             const existingGrade = await tx.query.grades.findFirst({
                 where: and(
@@ -100,10 +99,10 @@ export async function upsertGradeAction(input: UpsertGradeDTO) {
             }
         });
 
-        // 6. TRIGGER USER KPI RECALCULATION
+        // 8. TRIGGER USER KPI RECALCULATION
         const newKpi = await recalculateUserKPI(targetUserId, pillar.semesterId);
 
-        // 7. TRIGGER AREA KPI RECALCULATION (non-blocking, wrapped in try-catch)
+        // 9. TRIGGER AREA KPI RECALCULATION (non-blocking)
         try {
             const now = new Date();
             await recalculateAreaKPIForUser(
@@ -114,7 +113,6 @@ export async function upsertGradeAction(input: UpsertGradeDTO) {
             );
         } catch (areaError) {
             console.error("Error calculating area KPI (non-critical):", areaError);
-            // Don't fail the main operation
         }
 
         revalidatePath("/dashboard/management/grades");
@@ -126,4 +124,3 @@ export async function upsertGradeAction(input: UpsertGradeDTO) {
         return { success: false, error: "Error al guardar la calificación." };
     }
 }
-
