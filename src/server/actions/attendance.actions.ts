@@ -314,9 +314,10 @@ export async function acknowledgeRejectionAction(recordId: string) {
             return { success: false, error: "No autorizado" };
         }
 
-        // Only REJECTED justifications can be acknowledged
-        if (record.justificationStatus !== ("REJECTED" satisfies JustificationStatus)) {
-            return { success: false, error: "Solo se pueden reconocer justificaciones rechazadas." };
+        // Only resolved justifications (REJECTED or APPROVED) can be acknowledged/dismissed
+        if (record.justificationStatus !== ("REJECTED" satisfies JustificationStatus)
+            && record.justificationStatus !== ("APPROVED" satisfies JustificationStatus)) {
+            return { success: false, error: "Solo se pueden reconocer justificaciones ya resueltas." };
         }
 
         await updateAttendanceRecordDAO(recordId, {

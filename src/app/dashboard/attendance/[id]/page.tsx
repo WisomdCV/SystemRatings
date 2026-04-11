@@ -38,7 +38,7 @@ export default async function DashboardAttendancePage({ params }: AttendancePage
         );
     }
 
-    const { success, data, error } = await getAttendanceSheetAction(eventId);
+    const { success, data, error, editable } = await getAttendanceSheetAction(eventId);
 
     if (!success || !data) {
         return (
@@ -104,7 +104,7 @@ export default async function DashboardAttendancePage({ params }: AttendancePage
                     </div>
                 </div>
 
-                <AttendanceTracker eventId={eventId} initialSheet={data} />
+                <AttendanceTracker eventId={eventId} initialSheet={data} editable={editable ?? true} />
             </div>
         </div>
     );

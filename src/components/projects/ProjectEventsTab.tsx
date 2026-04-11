@@ -64,7 +64,11 @@ export default function ProjectEventsTab({
         setDeletingId(eventId);
         startTransition(async () => {
             const res = await deleteEventAction(eventId);
-            if (res.success) router.refresh();
+            if (res.success) {
+                router.refresh();
+            } else {
+                alert("Error: " + res.error);
+            }
             setDeletingId(null);
         });
     };

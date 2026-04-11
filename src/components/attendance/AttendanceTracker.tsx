@@ -11,9 +11,11 @@ import { useRouter } from "next/navigation";
 interface AttendanceTrackerProps {
     eventId: string;
     initialSheet: AttendanceSheetItem[];
+    /** When false, the sheet is read-only (event is outside the attendance window) */
+    editable?: boolean;
 }
 
-export default function AttendanceTracker({ eventId, initialSheet }: AttendanceTrackerProps) {
+export default function AttendanceTracker({ eventId, initialSheet, editable = true }: AttendanceTrackerProps) {
     const router = useRouter();
     const [sheet, setSheet] = useState<AttendanceSheetItem[]>(initialSheet);
     const [isPending, startTransition] = useTransition();
@@ -83,6 +85,17 @@ export default function AttendanceTracker({ eventId, initialSheet }: AttendanceT
 
     return (
         <div className="space-y-6">
+            {/* Read-only banner when outside attendance window */}
+            {!editable && (
+                <div className="flex items-center gap-3 p-4 bg-amber-50 border border-amber-200 rounded-2xl">
+                    <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
+                    <div>
+                        <p className="text-sm font-bold text-amber-800">Modo solo lectura</p>
+                        <p className="text-xs text-amber-600">El periodo de edición de asistencia para este evento ha finalizado. Solo puedes consultar los registros.</p>
+                    </div>
+                </div>
+            )}
+
             {/* Stats Bar */}
             <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
                 <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex flex-col items-center">
@@ -161,10 +174,11 @@ export default function AttendanceTracker({ eventId, initialSheet }: AttendanceT
                                                     {/* Present */}
                                                     <button
                                                         onClick={() => handleStatusChange(item.user.id, "PRESENT")}
+                                                        disabled={!editable}
                                                         className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all ${status === "PRESENT"
                                                             ? "bg-green-500 text-white shadow-lg shadow-green-500/30 scale-105"
                                                             : "bg-gray-100 text-gray-400 hover:bg-green-100 hover:text-green-600"
-                                                            }`}
+                                                            } disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-gray-100 disabled:hover:text-gray-400`}
                                                         title="Presente"
                                                     >
                                                         <Check className="w-5 h-5" />
@@ -173,10 +187,11 @@ export default function AttendanceTracker({ eventId, initialSheet }: AttendanceT
                                                     {/* Late */}
                                                     <button
                                                         onClick={() => handleStatusChange(item.user.id, "LATE")}
+                                                        disabled={!editable}
                                                         className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all ${status === "LATE"
                                                             ? "bg-yellow-500 text-white shadow-lg shadow-yellow-500/30 scale-105"
                                                             : "bg-gray-100 text-gray-400 hover:bg-yellow-100 hover:text-yellow-600"
-                                                            }`}
+                                                            } disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-gray-100 disabled:hover:text-gray-400`}
                                                         title="Tardanza"
                                                     >
                                                         <Clock className="w-5 h-5" />
@@ -185,10 +200,11 @@ export default function AttendanceTracker({ eventId, initialSheet }: AttendanceT
                                                     {/* Absent */}
                                                     <button
                                                         onClick={() => handleStatusChange(item.user.id, "ABSENT")}
+                                                        disabled={!editable}
                                                         className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all ${status === "ABSENT"
                                                             ? "bg-red-500 text-white shadow-lg shadow-red-500/30 scale-105"
                                                             : "bg-gray-100 text-gray-400 hover:bg-red-100 hover:text-red-600"
-                                                            }`}
+                                                            } disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-gray-100 disabled:hover:text-gray-400`}
                                                         title="Falta"
                                                     >
                                                         <X className="w-5 h-5" />

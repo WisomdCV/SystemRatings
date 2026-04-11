@@ -514,8 +514,8 @@ export default function CreateEventForm({
                         <div>
                             <p className="text-xs font-black uppercase tracking-wide">Reunión especial de tesorería</p>
                             <p className="text-xs mt-1 leading-relaxed">
-                                Los invitados se asignan automáticamente con los directores de área del proyecto.
-                                La asistencia permanece activa para este tipo de evento.
+                                Los invitados se asignan automáticamente según los roles del proyecto con el permiso
+                                &quot;Convocado a reuniones de tesorería&quot;. La asistencia permanece activa para este tipo de evento.
                             </p>
                         </div>
                     </div>
