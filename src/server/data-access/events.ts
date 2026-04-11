@@ -172,19 +172,36 @@ export async function updateEventDAO(eventId: string, data: Partial<CreateEventD
             updatedAt: new Date()
         }).where(eq(events.id, eventId)).returning();
 
-        // 2. Update invitees if provided (replace strategy)
+        // 2. Update invitees if provided (merge strategy: preserve existing statuses)
         if (data.inviteeUserIds !== undefined) {
-            // Delete old invitees
-            await tx.delete(eventInvitees).where(eq(eventInvitees.eventId, eventId));
-
-            // Insert new invitees for invitee-based event types
             const isInviteeBasedEvent = data.eventType === ("INDIVIDUAL_GROUP" satisfies EventType) || data.eventType === ("TREASURY_SPECIAL" satisfies EventType);
             if (isInviteeBasedEvent) {
                 const event = result[0];
-                const inviteeRows = buildInviteeRows(eventId, data.inviteeUserIds, event?.createdById);
-                if (inviteeRows.length > 0) {
-                    await tx.insert(eventInvitees).values(inviteeRows);
+                const newRows = buildInviteeRows(eventId, data.inviteeUserIds, event?.createdById);
+                const newUserIds = new Set(newRows.map((r) => r.userId));
+
+                // Fetch existing invitees to preserve their response status
+                const existing = await tx.query.eventInvitees.findMany({
+                    where: eq(eventInvitees.eventId, eventId),
+                    columns: { id: true, userId: true, status: true },
+                });
+                const existingMap = new Map(existing.map((e) => [e.userId, e]));
+
+                // Remove invitees no longer in the list
+                const toRemove = existing.filter((e) => !newUserIds.has(e.userId));
+                for (const inv of toRemove) {
+                    await tx.delete(eventInvitees).where(eq(eventInvitees.id, inv.id));
                 }
+
+                // Add new invitees that weren't previously invited
+                const toAdd = newRows.filter((r) => !existingMap.has(r.userId));
+                if (toAdd.length > 0) {
+                    await tx.insert(eventInvitees).values(toAdd);
+                }
+                // Existing invitees that remain keep their current status (ACCEPTED, PENDING, etc.)
+            } else {
+                // Non-invitee event type: clear all invitees
+                await tx.delete(eventInvitees).where(eq(eventInvitees.eventId, eventId));
             }
         }
 

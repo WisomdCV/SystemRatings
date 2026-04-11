@@ -6,7 +6,7 @@ import { createGoogleMeeting } from "@/server/services/google-calendar.service";
 import { createEventDAO, getEventByIdDAO, updateEventDAO, deleteEventDAO } from "@/server/data-access/events";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db";
-import { projectMembers } from "@/db/schema";
+import { projectMembers, attendanceRecords } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import {
     canCreateIISEEvent,
@@ -33,25 +33,28 @@ function mapEventMutationError(error: unknown): string {
     return raw || "Error interno del servidor";
 }
 
-function normalizeRoleName(value: string | null | undefined): string {
-    return (value || "")
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .toLowerCase()
-        .trim();
-}
-
+/**
+ * Returns user IDs of project members whose role has the `project:event_treasury_target`
+ * permission. These are the auto-invitees for TREASURY_SPECIAL events.
+ *
+ * Previously this compared role names ("director de area"), which broke if the admin
+ * renamed the role. Now it uses a dynamic permission check — fully configurable.
+ */
 async function getTreasurySpecialInvitees(projectId: string): Promise<string[]> {
     const members = await db.query.projectMembers.findMany({
         where: eq(projectMembers.projectId, projectId),
         with: {
-            projectRole: { columns: { name: true } },
+            projectRole: { with: { permissions: true } },
             user: { columns: { id: true } },
         },
     });
 
     return members
-        .filter((member) => normalizeRoleName(member.projectRole?.name) === "director de area")
+        .filter((member) =>
+            member.projectRole?.permissions.some(
+                (p) => p.permission === "project:event_treasury_target",
+            ),
+        )
         .map((member) => member.user.id);
 }
 
@@ -209,6 +212,20 @@ export async function deleteEventAction(eventId: string) {
 
         if (!canManage) {
             return { success: false, error: "No tienes permisos para eliminar este evento." };
+        }
+
+        // Prevent deletion if event has attendance records (preserves historical data)
+        if (event.tracksAttendance !== false) {
+            const hasRecords = await db.query.attendanceRecords.findFirst({
+                where: eq(attendanceRecords.eventId, eventId),
+                columns: { id: true },
+            });
+            if (hasRecords) {
+                return {
+                    success: false,
+                    error: "No se puede eliminar un evento que ya tiene registros de asistencia. Puedes cancelarlo en su lugar.",
+                };
+            }
         }
 
         // Google Sync (Delete)

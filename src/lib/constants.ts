@@ -7,6 +7,14 @@
 // Regla: si necesitas comparar contra un status/type/scope, debe venir de aquí.
 // =============================================================================
 
+// ─── Timezone ──────────────────────────────────────────────────────────────
+
+/** UTC offset for event time calculations (Peru = UTC-5) */
+export const APP_TIMEZONE_OFFSET = "-05:00";
+
+/** IANA timezone identifier for Google Calendar & display */
+export const APP_TIMEZONE = "America/Lima";
+
 // ─── User ───────────────────────────────────────────────────────────────────
 
 export const USER_STATUSES = [
@@ -116,6 +124,11 @@ export const INVITATION_STATUSES = [
 export type InvitationStatus = (typeof INVITATION_STATUSES)[number];
 
 export const INVITATION_EXPIRY_DAYS = 7;
+
+// ─── Attendance ────────────────────────────────────────────────────────────
+
+/** Maximum days after an event during which attendance can still be taken/modified */
+export const ATTENDANCE_WINDOW_DAYS = 30;
 
 // ─── Comments ──────────────────────────────────────────────────────────────
 

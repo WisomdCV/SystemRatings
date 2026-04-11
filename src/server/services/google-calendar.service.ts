@@ -1,4 +1,5 @@
 import { CreateEventDTO } from "@/lib/validators/event";
+import { APP_TIMEZONE_OFFSET, APP_TIMEZONE } from "@/lib/constants";
 
 export async function createGoogleMeeting(accessToken: string, eventData: CreateEventDTO) {
     // 1. Construir fechas ISO (Date + Time)
@@ -21,23 +22,16 @@ export async function createGoogleMeeting(accessToken: string, eventData: Create
     }
     const endDateTime = `${endDateStr}T${eventData.endTime}:00`;
 
-    // Nota: Es mejor manejar Timezones, pero por simplicidad asumiremos local/UTC handling básico
-    // Google API espera formato ISO con timezone o "Z". 
-    // Para evitar líos de hora, lo enviaremos con el Timezone del usuario o UTC si es posible.
-    // Aquí asumiremos que el navegador envía la hora correcta o que manejaremos -5h (Peru).
-    // Pro tip: En producción real, usar 'date-fns-tz'. Aca haremos un append simple de "-05:00" si es Perú.
-    const timeZoneOffset = "-05:00";
-
     const body = {
         summary: eventData.title,
         description: eventData.description,
         start: {
-            dateTime: `${startDateTime}${timeZoneOffset}`,
-            timeZone: "America/Lima"
+            dateTime: `${startDateTime}${APP_TIMEZONE_OFFSET}`,
+            timeZone: APP_TIMEZONE
         },
         end: {
-            dateTime: `${endDateTime}${timeZoneOffset}`,
-            timeZone: "America/Lima"
+            dateTime: `${endDateTime}${APP_TIMEZONE_OFFSET}`,
+            timeZone: APP_TIMEZONE
         },
         conferenceData: {
             createRequest: {
@@ -114,7 +108,6 @@ export async function updateGoogleEvent(accessToken: string, googleEventId: stri
         // Pero si vamos a permitir partial, entonces:
 
         if (dateStr && eventData.startTime && eventData.endTime) {
-            const timeZoneOffset = "-05:00";
             // Overnight support
             const [sh2, sm2] = eventData.startTime.split(":").map(Number);
             const [eh2, em2] = eventData.endTime.split(":").map(Number);
@@ -126,12 +119,12 @@ export async function updateGoogleEvent(accessToken: string, googleEventId: stri
                 endDateStrUpdate = nextDay.toISOString().split('T')[0];
             }
             body.start = {
-                dateTime: `${dateStr}T${eventData.startTime}:00${timeZoneOffset}`,
-                timeZone: "America/Lima"
+                dateTime: `${dateStr}T${eventData.startTime}:00${APP_TIMEZONE_OFFSET}`,
+                timeZone: APP_TIMEZONE
             };
             body.end = {
-                dateTime: `${endDateStrUpdate}T${eventData.endTime}:00${timeZoneOffset}`,
-                timeZone: "America/Lima"
+                dateTime: `${endDateStrUpdate}T${eventData.endTime}:00${APP_TIMEZONE_OFFSET}`,
+                timeZone: APP_TIMEZONE
             };
         }
     }

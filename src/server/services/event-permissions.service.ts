@@ -235,3 +235,82 @@ export async function canManageEvent(
 export function shouldTrackAttendance(eventType: EventType): boolean {
     return eventType !== "INDIVIDUAL_GROUP";
 }
+
+// =============================================================================
+// Attendance Permission — Single Source of Truth
+// =============================================================================
+
+interface AttendancePermContext {
+    userRole: string | null;
+    userId: string;
+    userAreaId: string | null;
+    customPermissions?: string[];
+}
+
+interface EventForAttendance {
+    createdById: string | null;
+    eventScope: string;
+    eventType: string;
+    targetAreaId: string | null;
+    projectId: string | null;
+    targetProjectAreaId: string | null;
+}
+
+/**
+ * Canonical check: can this user take/view attendance for this event?
+ *
+ * Rules:
+ * - TREASURY_SPECIAL: delegates to canManageEvent
+ * - attendance:take_all → any event
+ * - attendance:take_own_area → IISE: targetAreaId matches user's area
+ *                             → PROJECT: targetProjectAreaId matches user's project area
+ *
+ * Consumed by attendance.actions.ts AND event-visibility.service.ts
+ */
+export async function canTakeAttendance(
+    ctx: AttendancePermContext,
+    event: EventForAttendance,
+): Promise<boolean> {
+    const { userRole, userId, userAreaId, customPermissions } = ctx;
+    const eventOwnership = {
+        createdById: event.createdById,
+        eventScope: event.eventScope,
+        eventType: event.eventType,
+        targetAreaId: event.targetAreaId,
+        projectId: event.projectId,
+        targetProjectAreaId: event.targetProjectAreaId,
+    };
+
+    // TREASURY_SPECIAL: delegated entirely to canManageEvent
+    if (event.eventScope === "PROJECT" && event.eventType === "TREASURY_SPECIAL") {
+        return canManageEvent({ userRole, userId, userAreaId, customPermissions }, eventOwnership);
+    }
+
+    // take_all → can take attendance on any event
+    if (hasPermission(userRole, "attendance:take_all", customPermissions)) return true;
+
+    // take_own_area → events targeting user's area (IISE or PROJECT scope)
+    if (hasPermission(userRole, "attendance:take_own_area", customPermissions)) {
+        // PROJECT scope AREA events: check targetProjectAreaId via project membership
+        if (event.eventScope === "PROJECT" && event.projectId && event.targetProjectAreaId) {
+            const membership = await db.query.projectMembers.findFirst({
+                where: and(
+                    eq(projectMembers.projectId, event.projectId),
+                    eq(projectMembers.userId, userId),
+                ),
+                columns: { projectAreaId: true },
+            });
+            if (!membership || membership.projectAreaId !== event.targetProjectAreaId) return false;
+
+            return canManageEvent({ userRole, userId, userAreaId, customPermissions }, eventOwnership);
+        }
+
+        // IISE scope AREA events: check targetAreaId
+        if (!event.targetAreaId) return false;
+        if (event.targetAreaId !== userAreaId) return false;
+
+        return canManageEvent({ userRole, userId, userAreaId, customPermissions }, eventOwnership);
+    }
+
+    return false;
+}

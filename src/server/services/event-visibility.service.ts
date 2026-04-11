@@ -9,8 +9,7 @@
  * The client NEVER recalculates permissions — it reads pre-computed booleans.
  */
 
-import { canManageEvent as serverCanManage } from "./event-permissions.service";
-import { hasPermission } from "@/lib/permissions";
+import { canManageEvent as serverCanManage, canTakeAttendance } from "./event-permissions.service";
 import type { EventScope, EventType } from "@/lib/constants";
 
 // =============================================================================
@@ -131,34 +130,28 @@ export async function enrichEventsWithPermissions<T extends {
     const result: (T & { _permissions: EventPermissions })[] = [];
 
     for (const event of events) {
-        const canManage = await serverCanManage(
-            {
-                userRole: ctx.userRole,
-                userId: ctx.userId,
-                userAreaId: ctx.userAreaId,
-                customPermissions: ctx.customPermissions,
-            },
-            {
-                createdById: event.createdById ?? null,
-                eventScope: event.eventScope || ("IISE" satisfies EventScope),
-                eventType: event.eventType || ("GENERAL" satisfies EventType),
-                targetAreaId: event.targetAreaId ?? null,
-                projectId: event.projectId ?? null,
-                targetProjectAreaId: event.targetProjectAreaId ?? null,
-            }
-        );
+        const eventOwnership = {
+            createdById: event.createdById ?? null,
+            eventScope: event.eventScope || ("IISE" satisfies EventScope),
+            eventType: event.eventType || ("GENERAL" satisfies EventType),
+            targetAreaId: event.targetAreaId ?? null,
+            projectId: event.projectId ?? null,
+            targetProjectAreaId: event.targetProjectAreaId ?? null,
+        };
 
-        let canTakeAtt = false;
-        if (event.tracksAttendance !== false) {
-            if (hasPermission(ctx.userRole, "attendance:take_all", ctx.customPermissions)) {
-                canTakeAtt = true;
-            } else if (hasPermission(ctx.userRole, "attendance:take_own_area", ctx.customPermissions)) {
-                // Keep aligned with attendance.actions.ts own-area constraints.
-                if (event.targetAreaId && event.targetAreaId === ctx.userAreaId && canManage) {
-                    canTakeAtt = true;
-                }
-            }
-        }
+        const userContext = {
+            userRole: ctx.userRole,
+            userId: ctx.userId,
+            userAreaId: ctx.userAreaId,
+            customPermissions: ctx.customPermissions,
+        };
+
+        const canManage = await serverCanManage(userContext, eventOwnership);
+
+        // Delegate to canonical canTakeAttendance (single source of truth)
+        const canTakeAtt = event.tracksAttendance !== false
+            ? await canTakeAttendance(userContext, eventOwnership)
+            : false;
 
         result.push({
             ...event,

@@ -23,6 +23,7 @@ export const PROJECT_PERMISSIONS = [
   "project:event_create_any",
   "project:event_create_own_area",
   "project:event_create_treasury_special",
+  "project:event_treasury_target",
   "project:event_manage_any",
   "project:event_manage_own",
   "project:event_view_all",
@@ -203,6 +204,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, ProjectPermission[]> = {
   "Director de Área": [
     "project:event_create_own_area",
     "project:event_manage_own",
+    "project:event_treasury_target",
     "project:task_create_own_area",
     "project:task_manage_own",
     "project:task_update_status",

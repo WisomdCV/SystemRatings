@@ -135,6 +135,9 @@ export async function getAttendanceSheetDAO(eventId: string): Promise<Attendance
         }
     });
 
+    // Sort eligible users by name for consistent display across all scopes
+    eligibleUsers.sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
+
     // 4. Map and Merge
     // Create a Map for faster lookup
     const recordsMap = new Map(existingRecords.map(r => [r.userId, r]));
@@ -176,9 +179,18 @@ export async function batchUpsertAttendanceDAO(eventId: string, records: { userI
             });
 
             if (existing) {
-                // Update
+                // Update status and reset justification fields when status changes
+                // (prevents orphaned justifications from a previous status)
                 await tx.update(attendanceRecords)
-                    .set({ status: rec.status })
+                    .set({
+                        status: rec.status,
+                        justificationStatus: "NONE",
+                        justificationReason: null,
+                        justificationLink: null,
+                        justificationNote: null,
+                        adminFeedback: null,
+                        reviewedById: null,
+                    })
                     .where(eq(attendanceRecords.id, existing.id));
             } else {
                 // Insert
@@ -195,10 +207,10 @@ export async function batchUpsertAttendanceDAO(eventId: string, records: { userI
 }
 
 export async function getUserAttendanceHistoryDAO(userId: string) {
-    // Fetch records with event details
-    // We want records where user was ABSENT, LATE, or EXCUSED (or even PRESENT to show history)
-    // Ordered by event date descending
-    return await db.query.attendanceRecords.findMany({
+    // Fetch records with event details, then sort by event date descending in JS.
+    // Drizzle relational queries can't ORDER BY a joined column, and data volume
+    // per user is low (~20 events/semester), so JS sort is perfectly fine here.
+    const records = await db.query.attendanceRecords.findMany({
         where: eq(attendanceRecords.userId, userId),
         with: {
             event: {
@@ -224,12 +236,12 @@ export async function getUserAttendanceHistoryDAO(userId: string) {
                 }
             }
         },
-        // orderBy: [desc(events.date)] // Cannot sort by joined table easily in query builder without raw sql or careful relations
-        // We'll sort in JS or use records ID if they are chronological (they aren't)
-        // Actually, Drizzle allows sorting by relation fields in findMany sometimes, but let's just fetch and sort in JS for safety or use simple ID sort if UUID (random).
-        // Let's explicitly try to order by event date if possible using raw query style if builder fails. 
-        // For simplicity: Fetch all, sort in JS. Data volume per user is low (~20 events/semester).
     });
+
+    // Centralized sort: newest events first — callers no longer need to re-sort
+    records.sort((a, b) => new Date(b.event.date).getTime() - new Date(a.event.date).getTime());
+
+    return records;
 }
 
 export async function updateAttendanceRecordDAO(recordId: string, data: {

@@ -5,136 +5,89 @@ import { getAttendanceSheetDAO, batchUpsertAttendanceDAO } from "@/server/data-a
 import { getEventByIdDAO } from "@/server/data-access/events";
 import { revalidatePath } from "next/cache";
 import { hasPermission } from "@/lib/permissions";
-import { canManageEvent } from "@/server/services/event-permissions.service";
+import { canTakeAttendance, canManageEvent } from "@/server/services/event-permissions.service";
 import { getUserAttendanceHistoryDAO, updateAttendanceRecordDAO, getAttendanceRecordByIdDAO } from "@/server/data-access/attendance";
 import type { AttendanceStatus, JustificationStatus } from "@/lib/constants";
+import { ATTENDANCE_WINDOW_DAYS } from "@/lib/constants";
 
 // =============================================================================
-// Helpers — attendance permission check (shared by get & save)
+// Helpers
 // =============================================================================
 
-async function canTakeAttendanceForEvent(
-    role: string | null,
-    userId: string,
-    userAreaId: string | null,
-    customPermissions: string[] | undefined,
-    event: {
-        createdById: string | null;
-        eventScope: string;
-        eventType: string;
-        targetAreaId: string | null;
-        projectId: string | null;
-        targetProjectAreaId: string | null;
-    },
+/** Builds the event context object consumed by canTakeAttendance / canManageEvent */
+function eventCtx(event: {
+    createdById: string | null;
+    eventScope: string;
+    eventType: string;
+    targetAreaId: string | null;
+    projectId: string | null;
+    targetProjectAreaId: string | null;
+}) {
+    return {
+        createdById: event.createdById,
+        eventScope: event.eventScope,
+        eventType: event.eventType,
+        targetAreaId: event.targetAreaId,
+        projectId: event.projectId,
+        targetProjectAreaId: event.targetProjectAreaId,
+    };
+}
+
+/** Builds the user context object consumed by canTakeAttendance / canManageEvent */
+function userCtx(session: {
+    user: { id: string; role: string | null; currentAreaId: string | null; customPermissions?: string[] };
+}) {
+    return {
+        userRole: session.user.role,
+        userId: session.user.id,
+        userAreaId: session.user.currentAreaId,
+        customPermissions: session.user.customPermissions,
+    };
+}
+
+/**
+ * Can this user review justifications for this event?
+ * Uses the same base logic as canTakeAttendance but checks `attendance:review_*` permissions.
+ */
+async function canReviewJustificationForEvent(
+    ctx: { userRole: string | null; userId: string; userAreaId: string | null; customPermissions?: string[] },
+    event: { createdById: string | null; eventScope: string; eventType: string; targetAreaId: string | null; projectId: string | null; targetProjectAreaId: string | null },
 ): Promise<boolean> {
-    if (event.eventScope === "PROJECT" && event.eventType === "TREASURY_SPECIAL") {
-        return canManageEvent(
-            {
-                userRole: role,
-                userId,
-                userAreaId,
-                customPermissions,
-            },
-            {
-                createdById: event.createdById,
-                eventScope: event.eventScope,
-                eventType: event.eventType,
-                targetAreaId: event.targetAreaId,
-                projectId: event.projectId,
-                targetProjectAreaId: event.targetProjectAreaId,
-            }
-        );
-    }
+    // review_all → can review justifications for any event
+    if (hasPermission(ctx.userRole, "attendance:review_all", ctx.customPermissions)) return true;
 
-    // take_all → can take attendance on any event
-    if (hasPermission(role, "attendance:take_all", customPermissions)) return true;
-
-    // take_own_area → only events targeting user's area and that the user can manage
-    if (hasPermission(role, "attendance:take_own_area", customPermissions)) {
-        if (!event.targetAreaId) return false;
-        if (event.targetAreaId !== userAreaId) return false;
-
-        return canManageEvent(
-            {
-                userRole: role,
-                userId,
-                userAreaId,
-                customPermissions,
-            },
-            {
-                createdById: event.createdById,
-                eventScope: event.eventScope,
-                eventType: event.eventType,
-                targetAreaId: event.targetAreaId,
-                projectId: event.projectId,
-                targetProjectAreaId: event.targetProjectAreaId,
-            }
-        );
+    // review_own_area → same logic as attendance:take_own_area (area match + manage)
+    if (hasPermission(ctx.userRole, "attendance:review_own_area", ctx.customPermissions)) {
+        return canTakeAttendance(ctx, event);
     }
 
     return false;
 }
 
-async function canReviewJustificationForEvent(
-    role: string | null,
-    userId: string,
-    userAreaId: string | null,
-    customPermissions: string[] | undefined,
-    event: {
-        createdById: string | null;
-        eventScope: string;
-        eventType: string;
-        targetAreaId: string | null;
-        projectId: string | null;
-        targetProjectAreaId: string | null;
-    },
-): Promise<boolean> {
-    if (event.eventScope === "PROJECT" && event.eventType === "TREASURY_SPECIAL") {
-        return canManageEvent(
-            {
-                userRole: role,
-                userId,
-                userAreaId,
-                customPermissions,
-            },
-            {
-                createdById: event.createdById,
-                eventScope: event.eventScope,
-                eventType: event.eventType,
-                targetAreaId: event.targetAreaId,
-                projectId: event.projectId,
-                targetProjectAreaId: event.targetProjectAreaId,
-            }
-        );
+/**
+ * Validates that an event is within the allowed attendance window.
+ * - Cannot take attendance for future events (event must have started).
+ * - Cannot modify attendance after ATTENDANCE_WINDOW_DAYS days.
+ */
+function validateAttendanceWindow(eventDate: Date | string): { ok: boolean; error?: string } {
+    const now = new Date();
+    const evDate = new Date(eventDate);
+
+    // Cannot take attendance for future events
+    const eventDay = new Date(evDate.getFullYear(), evDate.getMonth(), evDate.getDate());
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    if (eventDay > today) {
+        return { ok: false, error: "No se puede registrar asistencia para eventos futuros." };
     }
 
-    // review_all → can review justifications for any event
-    if (hasPermission(role, "attendance:review_all", customPermissions)) return true;
-
-    // review_own_area → only events targeting user's area and that the user can manage
-    if (hasPermission(role, "attendance:review_own_area", customPermissions)) {
-        if (!event.targetAreaId) return false;
-        if (event.targetAreaId !== userAreaId) return false;
-
-        return canManageEvent(
-            {
-                userRole: role,
-                userId,
-                userAreaId,
-                customPermissions,
-            },
-            {
-                createdById: event.createdById,
-                eventScope: event.eventScope,
-                eventType: event.eventType,
-                targetAreaId: event.targetAreaId,
-                projectId: event.projectId,
-                targetProjectAreaId: event.targetProjectAreaId,
-            }
-        );
+    // Cannot modify attendance after window expires
+    const diffMs = today.getTime() - eventDay.getTime();
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    if (diffDays > ATTENDANCE_WINDOW_DAYS) {
+        return { ok: false, error: `No se puede modificar la asistencia después de ${ATTENDANCE_WINDOW_DAYS} días del evento.` };
     }
 
-    return false;
+    return { ok: true };
 }
 
 // =============================================================================
@@ -153,27 +106,17 @@ export async function getAttendanceSheetAction(eventId: string) {
             return { success: false, error: "Este evento no tiene seguimiento de asistencia." };
         }
 
-        const canTake = await canTakeAttendanceForEvent(
-            session.user.role,
-            session.user.id,
-            session.user.currentAreaId,
-            session.user.customPermissions,
-            {
-                createdById: event.createdById,
-                eventScope: event.eventScope,
-                eventType: event.eventType,
-                targetAreaId: event.targetAreaId,
-                projectId: event.projectId,
-                targetProjectAreaId: event.targetProjectAreaId,
-            },
-        );
+        const canTake = await canTakeAttendance(userCtx(session), eventCtx(event));
 
         if (!canTake) {
             return { success: false, error: "No tienes permisos para ver la asistencia de este evento." };
         }
 
+        // Time window: read-only view is always allowed, but we include the flag
+        const windowCheck = validateAttendanceWindow(event.date);
+
         const sheet = await getAttendanceSheetDAO(eventId);
-        return { success: true, data: sheet };
+        return { success: true, data: sheet, editable: windowCheck.ok };
 
     } catch (error) {
         console.error("Error fetching attendance sheet:", error);
@@ -193,23 +136,16 @@ export async function saveAttendanceAction(eventId: string, records: { userId: s
             return { success: false, error: "Este evento no tiene seguimiento de asistencia." };
         }
 
-        const canTake = await canTakeAttendanceForEvent(
-            session.user.role,
-            session.user.id,
-            session.user.currentAreaId,
-            session.user.customPermissions,
-            {
-                createdById: event.createdById,
-                eventScope: event.eventScope,
-                eventType: event.eventType,
-                targetAreaId: event.targetAreaId,
-                projectId: event.projectId,
-                targetProjectAreaId: event.targetProjectAreaId,
-            },
-        );
+        const canTake = await canTakeAttendance(userCtx(session), eventCtx(event));
 
         if (!canTake) {
             return { success: false, error: "No tienes permisos para registrar asistencia en este evento." };
+        }
+
+        // Time window validation: block writes outside the allowed window
+        const windowCheck = validateAttendanceWindow(event.date);
+        if (!windowCheck.ok) {
+            return { success: false, error: windowCheck.error! };
         }
 
         await batchUpsertAttendanceDAO(eventId, records);
@@ -231,12 +167,7 @@ export async function getMyAttendanceHistoryAction() {
 
     try {
         const history = await getUserAttendanceHistoryDAO(session.user.id);
-        history.sort((a, b) => {
-            const dateA = new Date(a.event.date).getTime();
-            const dateB = new Date(b.event.date).getTime();
-            return dateB - dateA;
-        });
-
+        // Already sorted by event date descending in DAO
         return { success: true, data: history };
     } catch (error) {
         console.error("Error fetching history:", error);
@@ -254,6 +185,11 @@ export async function submitJustificationAction(recordId: string, reason: string
 
         if (record.userId !== session.user.id) {
             return { success: false, error: "No puedes justificar la asistencia de otro usuario" };
+        }
+
+        // Only ABSENT or LATE records can be justified
+        if (record.status === ("PRESENT" satisfies AttendanceStatus) || record.status === ("EXCUSED" satisfies AttendanceStatus)) {
+            return { success: false, error: "Solo se pueden justificar faltas o tardanzas." };
         }
 
         if (record.justificationStatus === ("APPROVED" satisfies JustificationStatus)) {
@@ -288,10 +224,7 @@ export async function reviewJustificationAction(
         if (!record) return { success: false, error: "Registro no encontrado" };
 
         const canReview = await canReviewJustificationForEvent(
-            session.user.role,
-            session.user.id,
-            session.user.currentAreaId,
-            session.user.customPermissions,
+            userCtx(session),
             {
                 createdById: record.event?.createdById ?? null,
                 eventScope: record.event?.eventScope ?? "IISE",
@@ -331,27 +264,43 @@ export async function reviewJustificationAction(
     }
 }
 
-export async function getPendingJustificationsAction() {
+/**
+ * Returns attendance records relevant to the user's justification dashboard:
+ * - `actionable`: ABSENT/LATE with no justification yet or rejected (user can re-submit)
+ * - `resolved`: EXCUSED with approved justification (informational, no action needed)
+ *
+ * @deprecated alias `getPendingJustificationsAction` kept for backward compatibility
+ */
+export async function getMyJustificationsAction() {
     const session = await auth();
     if (!session?.user) return { success: false, error: "No autorizado" };
 
     try {
         const history = await getUserAttendanceHistoryDAO(session.user.id);
 
-        const pending = history.filter(record =>
-            ((record.status === ("ABSENT" satisfies AttendanceStatus) || record.status === ("LATE" satisfies AttendanceStatus)) &&
-                (record.justificationStatus === ("NONE" satisfies JustificationStatus) || record.justificationStatus === ("REJECTED" satisfies JustificationStatus))) ||
-            (record.status === ("EXCUSED" satisfies AttendanceStatus) && record.justificationStatus === ("APPROVED" satisfies JustificationStatus))
+        // Records where the user CAN submit/re-submit a justification
+        const actionable = history.filter(record =>
+            (record.status === ("ABSENT" satisfies AttendanceStatus) || record.status === ("LATE" satisfies AttendanceStatus)) &&
+            (record.justificationStatus === ("NONE" satisfies JustificationStatus) || record.justificationStatus === ("REJECTED" satisfies JustificationStatus))
         );
 
-        pending.sort((a, b) => new Date(b.event.date).getTime() - new Date(a.event.date).getTime());
+        // Records already resolved (approved) — shown as informational
+        const resolved = history.filter(record =>
+            record.status === ("EXCUSED" satisfies AttendanceStatus) && record.justificationStatus === ("APPROVED" satisfies JustificationStatus)
+        );
 
-        return { success: true, data: pending };
+        const combined = [...actionable, ...resolved];
+        combined.sort((a, b) => new Date(b.event.date).getTime() - new Date(a.event.date).getTime());
+
+        return { success: true, data: combined };
     } catch (error) {
-        console.error("Error fetching pending justifications:", error);
-        return { success: false, error: "Error al obtener justificaciones pendientes" };
+        console.error("Error fetching justifications:", error);
+        return { success: false, error: "Error al obtener justificaciones" };
     }
 }
+
+/** @deprecated Use `getMyJustificationsAction` instead */
+export const getPendingJustificationsAction = getMyJustificationsAction;
 
 export async function acknowledgeRejectionAction(recordId: string) {
     const session = await auth();
@@ -363,6 +312,11 @@ export async function acknowledgeRejectionAction(recordId: string) {
 
         if (record.userId !== session.user.id) {
             return { success: false, error: "No autorizado" };
+        }
+
+        // Only REJECTED justifications can be acknowledged
+        if (record.justificationStatus !== ("REJECTED" satisfies JustificationStatus)) {
+            return { success: false, error: "Solo se pueden reconocer justificaciones rechazadas." };
         }
 
         await updateAttendanceRecordDAO(recordId, {

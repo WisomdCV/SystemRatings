@@ -127,7 +127,7 @@ export const semesterAreas = sqliteTable("semester_area", {
 export const events = sqliteTable("event", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
   semesterId: text("semester_id").references(() => semesters.id).notNull(),
-  createdById: text("created_by_id").references(() => users.id),
+  createdById: text("created_by_id").references(() => users.id, { onDelete: "set null" }),
 
   title: text("title").notNull(),
   description: text("description"),
@@ -137,13 +137,13 @@ export const events = sqliteTable("event", {
   eventType: text("event_type").notNull().default("GENERAL"),          // "GENERAL" | "AREA" | "INDIVIDUAL_GROUP" | "TREASURY_SPECIAL"
 
   // IISE target
-  targetAreaId: text("target_area_id").references(() => areas.id),
+  targetAreaId: text("target_area_id").references(() => areas.id, { onDelete: "set null" }),
 
   // PROJECT target
-  projectId: text("project_id").references(() => projects.id),
+  projectId: text("project_id").references(() => projects.id, { onDelete: "set null" }),
   // Explicit project-cycle linkage for cross-cycle traceability
-  projectCycleId: text("project_cycle_id").references(() => projectCycles.id),
-  targetProjectAreaId: text("target_project_area_id").references(() => projectAreas.id),
+  projectCycleId: text("project_cycle_id").references(() => projectCycles.id, { onDelete: "set null" }),
+  targetProjectAreaId: text("target_project_area_id").references(() => projectAreas.id, { onDelete: "set null" }),
 
   date: integer("date", { mode: "timestamp" }).notNull(),
   startTime: text("start_time"),
@@ -160,7 +160,12 @@ export const events = sqliteTable("event", {
 
   createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
   updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
-});
+}, (table) => ({
+  idxEventSemester: index("idx_event_semester").on(table.semesterId),
+  idxEventProject: index("idx_event_project").on(table.projectId),
+  idxEventTargetArea: index("idx_event_target_area").on(table.targetAreaId),
+  idxEventCreatedBy: index("idx_event_created_by").on(table.createdById),
+}));
 
 export const attendanceRecords = sqliteTable("attendance_record", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
@@ -175,8 +180,12 @@ export const attendanceRecords = sqliteTable("attendance_record", {
   justificationNote: text("justification_note"),
 
   adminFeedback: text("admin_feedback"),
-  reviewedById: text("reviewed_by_id").references(() => users.id),
-});
+  reviewedById: text("reviewed_by_id").references(() => users.id, { onDelete: "set null" }),
+}, (table) => ({
+  uniqueEventUser: unique().on(table.eventId, table.userId),
+  idxAttendanceEvent: index("idx_attendance_event").on(table.eventId),
+  idxAttendanceUser: index("idx_attendance_user").on(table.userId),
+}));
 
 // Event Invitees (for invitee-targeted events, e.g. INDIVIDUAL_GROUP/TREASURY_SPECIAL)
 export const eventInvitees = sqliteTable("event_invitee", {
@@ -187,6 +196,8 @@ export const eventInvitees = sqliteTable("event_invitee", {
   createdAt: integer("created_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
 }, (table) => ({
   uniqueInvite: unique().on(table.eventId, table.userId),
+  idxInviteeEvent: index("idx_invitee_event").on(table.eventId),
+  idxInviteeUser: index("idx_invitee_user").on(table.userId),
 }));
 
 // =============================================================================

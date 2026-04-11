@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { APP_TIMEZONE_OFFSET } from "@/lib/constants";
 
 export const CreateEventSchema = z.object({
     title: z.string().min(3, "El título debe tener al menos 3 caracteres"),
@@ -37,7 +38,7 @@ export const CreateEventSchema = z.object({
     // --- Time validations ---
     // Use Peru time (UTC-5) consistently — Vercel runs in UTC so we
     // must explicitly anchor both "now" and the event time to the same TZ.
-    const PERU_OFFSET = "-05:00";
+    const PERU_OFFSET = APP_TIMEZONE_OFFSET;
     const dateStr = data.date.toISOString().split('T')[0];
     const eventDateTime = new Date(`${dateStr}T${data.startTime}:00${PERU_OFFSET}`);
     const nowUtc = Date.now();
@@ -122,7 +123,7 @@ export const UpdateEventSchema = CreateEventSchema.partial().superRefine((data, 
             return;
         }
 
-        const PERU_OFFSET = "-05:00";
+        const PERU_OFFSET = APP_TIMEZONE_OFFSET;
         const dateStr = data.date.toISOString().split('T')[0];
         const eventDateTime = new Date(`${dateStr}T${data.startTime}:00${PERU_OFFSET}`);
         const nowUtc = Date.now();
