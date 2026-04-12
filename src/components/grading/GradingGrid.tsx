@@ -47,8 +47,8 @@ export default function GradingGrid({ initialData, currentUserRole }: GradingGri
     const pillarPermissions = permissions?.pillarPermissions ?? {};
     const canGradeAny = permissions?.canGradeAny ?? true; // backward compat
 
-    // Filters State
-    const hasFilters = ["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER"].includes(currentUserRole);
+    // Filters visible when user can view all areas (server-computed, no hardcoded roles)
+    const hasFilters = permissions?.canViewAll ?? false;
     const [searchTerm, setSearchTerm] = useState("");
     const [filterRole, setFilterRole] = useState("ALL");
     const [filterArea, setFilterArea] = useState("ALL");

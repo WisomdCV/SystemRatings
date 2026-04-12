@@ -23,6 +23,7 @@ import { deleteEventAction } from "@/server/actions/event.actions";
 import { getAreaColorStyle } from "@/lib/utils/area-colors";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { toast } from "sonner";
 
 type EventItem = {
     id: string;
@@ -160,12 +161,13 @@ export default function EventsView({
         try {
             const result = await deleteEventAction(eventId);
             if (result.success) {
+                toast.success("Evento eliminado correctamente.");
                 router.refresh();
             } else {
-                alert("Error: " + result.error);
+                toast.error(result.error || "Error al eliminar evento.");
             }
         } catch {
-            alert("Error al eliminar el evento.");
+            toast.error("Error al eliminar el evento.");
         } finally {
             setIsDeleting(null);
         }

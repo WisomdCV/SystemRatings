@@ -4,6 +4,7 @@ import { useState } from "react";
 import { X, Check, XCircle, FileText, ExternalLink } from "lucide-react";
 import { reviewJustificationAction } from "@/server/actions/attendance.actions";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 
 interface ReviewJustificationModalProps {
     recordId: string;
@@ -28,14 +29,14 @@ export default function ReviewJustificationModal({ recordId, isOpen, onClose, st
         try {
             const result = await reviewJustificationAction(recordId, verdict, feedback);
             if (result.success) {
-                // alert(result.message);
+                toast.success(verdict === "APPROVED" ? "Justificación aprobada." : "Justificación rechazada.");
                 router.refresh();
                 onClose();
             } else {
-                alert("Error: " + result.error);
+                toast.error(result.error || "Error al procesar.");
             }
         } catch (error) {
-            alert("Error al procesar.");
+            toast.error("Error inesperado al procesar.");
         } finally {
             setIsSubmitting(false);
         }

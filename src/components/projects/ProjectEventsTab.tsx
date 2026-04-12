@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { CalendarCheck, Plus, ChevronDown, ChevronUp, Clock, MapPin, Users, Trash2, Loader2, FolderKanban } from "lucide-react";
 import { deleteEventAction } from "@/server/actions/event.actions";
+import { toast } from "sonner";
 import CreateEventForm from "@/components/events/CreateEventForm";
 import { UserAvatar } from "@/components/ui/user-avatar";
 
@@ -65,9 +66,10 @@ export default function ProjectEventsTab({
         startTransition(async () => {
             const res = await deleteEventAction(eventId);
             if (res.success) {
+                toast.success("Evento eliminado correctamente.");
                 router.refresh();
             } else {
-                alert("Error: " + res.error);
+                toast.error(res.error || "Error al eliminar evento.");
             }
             setDeletingId(null);
         });

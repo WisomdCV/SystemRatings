@@ -4,6 +4,7 @@ import { Zap, Video, Calendar, MapPin, MoreVertical, Edit, Trash2, X, Clock } fr
 import { useState } from "react";
 import { deleteEventAction } from "@/server/actions/event.actions";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import CreateEventForm from "./CreateEventForm";
 
 type EventItem = {
@@ -53,14 +54,13 @@ export default function EventsList({ events, userRole, userAreaId, userAreaName,
         try {
             const result = await deleteEventAction(eventId);
             if (result.success) {
-                // Toast or alert? Simple alert for now as requested
-                // alert(result.message); 
+                toast.success("Evento eliminado correctamente.");
                 router.refresh();
             } else {
-                alert("Error: " + result.error);
+                toast.error(result.error || "Error al eliminar evento.");
             }
         } catch (error) {
-            alert("Error al eliminar el evento.");
+            toast.error("Error al eliminar el evento.");
         } finally {
             setIsDeleting(null);
         }

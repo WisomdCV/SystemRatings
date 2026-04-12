@@ -7,6 +7,7 @@ import { UserAvatar } from "@/components/ui/user-avatar";
 import { saveAttendanceAction } from "@/server/actions/attendance.actions";
 import { useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 
 interface AttendanceTrackerProps {
     eventId: string;
@@ -65,11 +66,11 @@ export default function AttendanceTracker({ eventId, initialSheet, editable = tr
             const result = await saveAttendanceAction(eventId, payload);
 
             if (result.success) {
-                alert("Asistencia guardada correctamente");
+                toast.success("Asistencia guardada correctamente.");
                 setHasChanges(false);
                 router.refresh();
             } else {
-                alert(`Error: ${result.error}`);
+                toast.error(result.error || "Error al guardar asistencia.");
             }
         });
     };

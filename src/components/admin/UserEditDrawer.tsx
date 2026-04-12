@@ -9,6 +9,7 @@ import {
 } from "@/server/actions/user.actions";
 import { assignCustomRoleAction, removeCustomRoleAction } from "@/server/actions/custom-role.actions";
 import { STATUSES, CATEGORIES, ROLES } from "@/lib/validators/user";
+import { toast } from "sonner";
 
 const ROLE_LABELS_ES: Record<string, string> = {
     DEV: "Desarrollador",
@@ -201,7 +202,8 @@ export default function UserEditDrawer({
 
     const notify = (type: "success" | "error", msg: string) => {
         if (onShowFeedback) onShowFeedback(type, msg);
-        else alert(msg);
+        else if (type === "success") toast.success(msg);
+        else toast.error(msg);
     };
 
     const handleSaveProfile = () => {

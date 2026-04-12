@@ -4,6 +4,7 @@ import { useState } from "react";
 import { X, Send, Link as LinkIcon } from "lucide-react";
 import { submitJustificationAction } from "@/server/actions/attendance.actions";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 
 interface JustificationModalProps {
     recordId: string;
@@ -28,14 +29,14 @@ export default function JustificationModal({ recordId, isOpen, onClose, eventNam
         try {
             const result = await submitJustificationAction(recordId, reason, link);
             if (result.success) {
-                alert("Justificación enviada correctamente.");
-                router.refresh(); // Refresh data to show Pending status
+                toast.success("Justificación enviada correctamente.");
+                router.refresh();
                 onClose();
             } else {
-                alert("Error: " + result.error);
+                toast.error(result.error || "Error al enviar justificación.");
             }
         } catch (error) {
-            alert("Error inesperado al enviar.");
+            toast.error("Error inesperado al enviar.");
         } finally {
             setIsSubmitting(false);
         }
