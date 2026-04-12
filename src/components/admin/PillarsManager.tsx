@@ -5,11 +5,12 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Loader2, Plus, Trash2, Copy, X, Edit } from "lucide-react";
+import { Loader2, Plus, Trash2, Copy, X, Edit, Shield, ChevronDown, ChevronUp } from "lucide-react";
 import {
     Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { upsertPillarAction, deletePillarAction, clonePillarsAction, PillarInput } from "@/server/actions/pillar.actions";
+import { upsertPillarAction, deletePillarAction, clonePillarsAction, PillarInput, getPillarGrantsAction, addPillarGrantAction, removePillarGrantAction } from "@/server/actions/pillar.actions";
+import { ROLES } from "@/lib/permissions";
 import { useRouter } from "next/navigation";
 
 // --- Types ---
@@ -23,11 +24,41 @@ type Pillar = {
     isDirectorOnly: boolean;
 };
 
+type PillarGrant = {
+    id: string;
+    definitionId: string;
+    scope: string;
+    grantType: string;
+    grantValue: string;
+    createdAt: Date | null;
+};
+
 interface PillarsManagerProps {
     semesterId: string;
     initialPillars: Pillar[];
     otherSemesters: { id: string, name: string }[];
 }
+
+// --- Grant type/permission labels ---
+const SCOPE_LABELS: Record<string, string> = {
+    "ALL": "Todos los usuarios",
+    "OWN_AREA": "Solo su área",
+};
+
+const GRANT_TYPE_LABELS: Record<string, string> = {
+    "ROLE": "Rol del sistema",
+    "PERMISSION": "Permiso del sistema",
+};
+
+// Relevant permissions for grading grants
+const GRADING_PERMISSIONS = [
+    "grade:assign_all_pillars",
+    "grade:assign_own_area",
+    "grade:assign_all",
+    "grade:view_own_area",
+    "grade:view_all",
+    "pillar:manage",
+] as const;
 
 export function PillarsManager({ semesterId, initialPillars, otherSemesters }: PillarsManagerProps) {
     const [pillars, setPillars] = useState<Pillar[]>(initialPillars);
@@ -47,6 +78,13 @@ export function PillarsManager({ semesterId, initialPillars, otherSemesters }: P
     });
 
     const [cloneSourceId, setCloneSourceId] = useState<string>("");
+
+    // --- Grants State ---
+    const [expandedPillarId, setExpandedPillarId] = useState<string | null>(null);
+    const [grants, setGrants] = useState<PillarGrant[]>([]);
+    const [grantsLoading, setGrantsLoading] = useState(false);
+    const [addingGrant, setAddingGrant] = useState(false);
+    const [newGrant, setNewGrant] = useState({ grantType: "ROLE" as "ROLE" | "PERMISSION", grantValue: "", scope: "OWN_AREA" as "ALL" | "OWN_AREA" });
 
     // --- Stats Calculation ---
     const sumMember = pillars
@@ -142,6 +180,80 @@ export function PillarsManager({ semesterId, initialPillars, otherSemesters }: P
         setIsOpen(true);
     };
 
+    // --- Grants Handlers ---
+    const toggleGrants = async (pillarId: string) => {
+        if (expandedPillarId === pillarId) {
+            setExpandedPillarId(null);
+            return;
+        }
+
+        setExpandedPillarId(pillarId);
+        setGrantsLoading(true);
+        setNewGrant({ grantType: "ROLE", grantValue: "", scope: "OWN_AREA" });
+
+        try {
+            const res = await getPillarGrantsAction(pillarId);
+            if (res.success && res.data) {
+                setGrants(res.data as PillarGrant[]);
+            } else {
+                toast.error(res.error || "Error al cargar permisos");
+                setGrants([]);
+            }
+        } catch {
+            toast.error("Error de conexión");
+            setGrants([]);
+        } finally {
+            setGrantsLoading(false);
+        }
+    };
+
+    const handleAddGrant = async (pillarId: string) => {
+        if (!newGrant.grantValue) {
+            toast.error("Selecciona un valor para el permiso");
+            return;
+        }
+
+        setAddingGrant(true);
+        try {
+            const res = await addPillarGrantAction({
+                definitionId: pillarId,
+                scope: newGrant.scope,
+                grantType: newGrant.grantType,
+                grantValue: newGrant.grantValue,
+            });
+
+            if (res.success) {
+                toast.success(res.message);
+                // Refresh grants list
+                const refreshed = await getPillarGrantsAction(pillarId);
+                if (refreshed.success && refreshed.data) {
+                    setGrants(refreshed.data as PillarGrant[]);
+                }
+                setNewGrant({ grantType: "ROLE", grantValue: "", scope: "OWN_AREA" });
+            } else {
+                toast.error(res.error);
+            }
+        } catch {
+            toast.error("Error de conexión");
+        } finally {
+            setAddingGrant(false);
+        }
+    };
+
+    const handleRemoveGrant = async (grantId: string, pillarId: string) => {
+        try {
+            const res = await removePillarGrantAction(grantId);
+            if (res.success) {
+                setGrants(prev => prev.filter(g => g.id !== grantId));
+                toast.success(res.message);
+            } else {
+                toast.error(res.error);
+            }
+        } catch {
+            toast.error("Error de conexión");
+        }
+    };
+
     // Close on Escape
     useEffect(() => {
         const handleEsc = (e: KeyboardEvent) => {
@@ -154,17 +266,14 @@ export function PillarsManager({ semesterId, initialPillars, otherSemesters }: P
     const closeModal = () => setIsOpen(false);
 
     // --- Validation Logic (Hoisted) ---
-    // Calculate validity based on current editing state
     const otherPillars = pillars.filter(p => p.id !== editingPillar.id);
 
-    // Member Validity
     const otherMemberSum = otherPillars
         .filter(p => !p.isDirectorOnly)
         .reduce((sum, p) => sum + p.weight, 0);
     const projectedMemberSum = otherMemberSum + (editingPillar.isDirectorOnly ? 0 : editingPillar.weight);
     const isMemberOver = projectedMemberSum > 100.1;
 
-    // Director Validity
     const otherDirectorSum = otherPillars.reduce((sum, p) => {
         const w = (p.directorWeight !== null && p.directorWeight !== undefined) ? p.directorWeight : p.weight;
         return sum + w;
@@ -172,7 +281,6 @@ export function PillarsManager({ semesterId, initialPillars, otherSemesters }: P
     const projectedDirectorSum = otherDirectorSum + ((editingPillar.directorWeight !== null && editingPillar.directorWeight !== undefined) ? editingPillar.directorWeight : editingPillar.weight);
     const isDirectorOver = projectedDirectorSum > 100.1;
 
-    // Block saving if limit exceeded
     const isFormInvalid = isMemberOver || isDirectorOver;
 
     return (
@@ -230,7 +338,7 @@ export function PillarsManager({ semesterId, initialPillars, otherSemesters }: P
                         </Button>
                     </div>
                     <p className="text-xs text-gray-500 font-medium bg-gray-50 p-2 rounded-lg">
-                        <span className="font-bold text-gray-700">Nota:</span> Copia pesos y reglas del ciclo seleccionado. Borra la configuración actual.
+                        <span className="font-bold text-gray-700">Nota:</span> Copia pesos, reglas y permisos de calificación del ciclo seleccionado. Borra la configuración actual.
                     </p>
                 </div>
             </div>
@@ -240,7 +348,7 @@ export function PillarsManager({ semesterId, initialPillars, otherSemesters }: P
                 <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
                     <div>
                         <h2 className="font-black text-xl text-meteorite-950">Pilares Configurados</h2>
-                        <p className="text-sm text-gray-500 font-medium">Define las columnas de evaluación.</p>
+                        <p className="text-sm text-gray-500 font-medium">Define las columnas de evaluación y sus permisos de calificación.</p>
                     </div>
                     <Button onClick={openCreate} className="bg-meteorite-600 hover:bg-meteorite-700 text-white font-bold rounded-xl shadow-lg shadow-meteorite-600/20 px-4 transition-all hover:scale-105 active:scale-95">
                         <Plus className="w-5 h-5 mr-2" /> Nuevo Pilar
@@ -256,7 +364,7 @@ export function PillarsManager({ semesterId, initialPillars, otherSemesters }: P
                                 <TableHead className="py-4 px-6 text-center text-gray-900 font-bold text-xs uppercase tracking-wider">Peso Director (Opcional)</TableHead>
                                 <TableHead className="py-4 px-6 text-center text-gray-900 font-bold text-xs uppercase tracking-wider">Solo Director?</TableHead>
                                 <TableHead className="py-4 px-6 text-center text-gray-900 font-bold text-xs uppercase tracking-wider">Max Score</TableHead>
-                                <TableHead className="w-[120px]"></TableHead>
+                                <TableHead className="w-[160px]"></TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -268,50 +376,183 @@ export function PillarsManager({ semesterId, initialPillars, otherSemesters }: P
                                 </TableRow>
                             )}
                             {pillars.map(pillar => (
-                                <TableRow key={pillar.id} className="hover:bg-gray-50/50 transition-colors border-b border-gray-50 last:border-0">
-                                    <TableCell className="px-6 py-4 font-bold text-gray-900 text-base">{pillar.name}</TableCell>
+                                <>
+                                    <TableRow key={pillar.id} className="hover:bg-gray-50/50 transition-colors border-b border-gray-50 last:border-0">
+                                        <TableCell className="px-6 py-4 font-bold text-gray-900 text-base">{pillar.name}</TableCell>
 
-                                    {/* Member Weight Column */}
-                                    <TableCell className="px-6 py-4 text-center">
-                                        {!pillar.isDirectorOnly ? (
-                                            <span className="bg-blue-50 text-blue-700 border border-blue-100 px-3 py-1 rounded-lg text-sm font-bold shadow-sm inline-block min-w-[3rem]">
-                                                {pillar.weight}%
-                                            </span>
-                                        ) : (
-                                            <span className="text-gray-300 font-bold text-lg" title="No aplica a miembros">-</span>
-                                        )}
-                                    </TableCell>
+                                        <TableCell className="px-6 py-4 text-center">
+                                            {!pillar.isDirectorOnly ? (
+                                                <span className="bg-blue-50 text-blue-700 border border-blue-100 px-3 py-1 rounded-lg text-sm font-bold shadow-sm inline-block min-w-[3rem]">
+                                                    {pillar.weight}%
+                                                </span>
+                                            ) : (
+                                                <span className="text-gray-300 font-bold text-lg" title="No aplica a miembros">-</span>
+                                            )}
+                                        </TableCell>
 
-                                    {/* Director Weight Column */}
-                                    <TableCell className="px-6 py-4 text-center">
-                                        {(pillar.isDirectorOnly || pillar.directorWeight !== null) ? (
-                                            <span className="bg-purple-50 text-purple-700 border border-purple-100 px-3 py-1 rounded-lg text-sm font-bold shadow-sm inline-block min-w-[3rem]">
-                                                {(pillar.directorWeight !== null && pillar.directorWeight !== undefined) ? pillar.directorWeight : pillar.weight}%
-                                            </span>
-                                        ) : (
-                                            <span className="text-gray-300 font-bold text-lg" title="Mismo peso que miembros">-</span>
-                                        )}
-                                    </TableCell>
+                                        <TableCell className="px-6 py-4 text-center">
+                                            {(pillar.isDirectorOnly || pillar.directorWeight !== null) ? (
+                                                <span className="bg-purple-50 text-purple-700 border border-purple-100 px-3 py-1 rounded-lg text-sm font-bold shadow-sm inline-block min-w-[3rem]">
+                                                    {(pillar.directorWeight !== null && pillar.directorWeight !== undefined) ? pillar.directorWeight : pillar.weight}%
+                                                </span>
+                                            ) : (
+                                                <span className="text-gray-300 font-bold text-lg" title="Mismo peso que miembros">-</span>
+                                            )}
+                                        </TableCell>
 
-                                    <TableCell className="px-6 py-4 text-center">
-                                        {pillar.isDirectorOnly ? (
-                                            <span className="bg-amber-50 text-amber-700 border border-amber-100 px-3 py-1 rounded-lg text-xs font-bold uppercase tracking-wide">Sí</span>
-                                        ) : (
-                                            <span className="text-gray-400 text-xs font-bold uppercase tracking-wide">No</span>
-                                        )}
-                                    </TableCell>
-                                    <TableCell className="px-6 py-4 text-center text-base font-bold text-gray-900">{pillar.maxScore} pts</TableCell>
-                                    <TableCell className="px-6 py-4">
-                                        <div className="flex gap-1 justify-end">
-                                            <Button size="icon" variant="ghost" className="h-9 w-9 text-gray-400 hover:text-meteorite-600 hover:bg-meteorite-50 rounded-lg transition-colors" onClick={() => openEdit(pillar)}>
-                                                <Edit className="w-4 h-4" />
-                                            </Button>
-                                            <Button size="icon" variant="ghost" className="h-9 w-9 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" onClick={() => handleDelete(pillar.id)}>
-                                                <Trash2 className="w-4 h-4" />
-                                            </Button>
-                                        </div>
-                                    </TableCell>
-                                </TableRow>
+                                        <TableCell className="px-6 py-4 text-center">
+                                            {pillar.isDirectorOnly ? (
+                                                <span className="bg-amber-50 text-amber-700 border border-amber-100 px-3 py-1 rounded-lg text-xs font-bold uppercase tracking-wide">Sí</span>
+                                            ) : (
+                                                <span className="text-gray-400 text-xs font-bold uppercase tracking-wide">No</span>
+                                            )}
+                                        </TableCell>
+                                        <TableCell className="px-6 py-4 text-center text-base font-bold text-gray-900">{pillar.maxScore} pts</TableCell>
+                                        <TableCell className="px-6 py-4">
+                                            <div className="flex gap-1 justify-end">
+                                                <Button
+                                                    size="icon"
+                                                    variant="ghost"
+                                                    className={`h-9 w-9 rounded-lg transition-colors ${expandedPillarId === pillar.id ? "text-meteorite-600 bg-meteorite-50" : "text-gray-400 hover:text-meteorite-600 hover:bg-meteorite-50"}`}
+                                                    onClick={() => toggleGrants(pillar.id)}
+                                                    title="Permisos de calificación"
+                                                >
+                                                    <Shield className="w-4 h-4" />
+                                                </Button>
+                                                <Button size="icon" variant="ghost" className="h-9 w-9 text-gray-400 hover:text-meteorite-600 hover:bg-meteorite-50 rounded-lg transition-colors" onClick={() => openEdit(pillar)}>
+                                                    <Edit className="w-4 h-4" />
+                                                </Button>
+                                                <Button size="icon" variant="ghost" className="h-9 w-9 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" onClick={() => handleDelete(pillar.id)}>
+                                                    <Trash2 className="w-4 h-4" />
+                                                </Button>
+                                            </div>
+                                        </TableCell>
+                                    </TableRow>
+
+                                    {/* Grants Expansion Panel */}
+                                    {expandedPillarId === pillar.id && (
+                                        <TableRow key={`${pillar.id}-grants`}>
+                                            <TableCell colSpan={6} className="p-0 bg-gray-50/70">
+                                                <div className="px-6 py-5 space-y-4 border-b border-gray-200">
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="flex items-center gap-2">
+                                                            <Shield className="w-4 h-4 text-meteorite-600" />
+                                                            <h4 className="font-bold text-sm text-gray-900">
+                                                                Permisos de Calificación — {pillar.name}
+                                                            </h4>
+                                                        </div>
+                                                        <button onClick={() => setExpandedPillarId(null)} className="text-gray-400 hover:text-gray-600 p-1">
+                                                            <ChevronUp className="w-4 h-4" />
+                                                        </button>
+                                                    </div>
+
+                                                    <p className="text-xs text-gray-500 font-medium bg-white p-3 rounded-xl border border-gray-100">
+                                                        <span className="font-bold text-gray-700">Sin grants configurados:</span> se usan los permisos legacy globales (<code className="text-meteorite-600 bg-meteorite-50 px-1.5 py-0.5 rounded">grade:assign_all</code> / <code className="text-meteorite-600 bg-meteorite-50 px-1.5 py-0.5 rounded">grade:assign_own_area</code>).
+                                                        Al agregar grants específicos, solo esos roles/permisos podrán calificar este pilar.
+                                                    </p>
+
+                                                    {grantsLoading ? (
+                                                        <div className="flex items-center justify-center py-4">
+                                                            <Loader2 className="w-5 h-5 animate-spin text-meteorite-500" />
+                                                        </div>
+                                                    ) : (
+                                                        <>
+                                                            {/* Existing Grants */}
+                                                            {grants.length > 0 ? (
+                                                                <div className="space-y-2">
+                                                                    {grants.map(grant => (
+                                                                        <div key={grant.id} className="flex items-center justify-between bg-white px-4 py-3 rounded-xl border border-gray-100 shadow-sm group hover:border-gray-200 transition-colors">
+                                                                            <div className="flex items-center gap-3 flex-wrap">
+                                                                                <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md border ${grant.grantType === "ROLE" ? "bg-blue-50 text-blue-700 border-blue-100" : "bg-purple-50 text-purple-700 border-purple-100"}`}>
+                                                                                    {GRANT_TYPE_LABELS[grant.grantType]}
+                                                                                </span>
+                                                                                <span className="font-bold text-sm text-gray-900">{grant.grantValue}</span>
+                                                                                <span className="text-[10px] text-gray-400 font-medium">→</span>
+                                                                                <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md border ${grant.scope === "ALL" ? "bg-emerald-50 text-emerald-700 border-emerald-100" : "bg-amber-50 text-amber-700 border-amber-100"}`}>
+                                                                                    {SCOPE_LABELS[grant.scope]}
+                                                                                </span>
+                                                                            </div>
+                                                                            <Button
+                                                                                size="icon"
+                                                                                variant="ghost"
+                                                                                className="h-7 w-7 text-gray-300 hover:text-red-600 hover:bg-red-50 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
+                                                                                onClick={() => handleRemoveGrant(grant.id, pillar.id)}
+                                                                            >
+                                                                                <Trash2 className="w-3.5 h-3.5" />
+                                                                            </Button>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            ) : (
+                                                                <div className="text-center py-3 text-xs text-gray-400 italic font-medium">
+                                                                    Sin grants específicos — se usan permisos globales
+                                                                </div>
+                                                            )}
+
+                                                            {/* Add New Grant Form */}
+                                                            <div className="flex flex-wrap items-end gap-3 bg-white p-4 rounded-xl border border-dashed border-gray-200">
+                                                                <div className="space-y-1.5 flex-shrink-0">
+                                                                    <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">Tipo</label>
+                                                                    <select
+                                                                        className="bg-white border border-gray-200 rounded-lg text-sm px-3 py-2 text-gray-900 font-medium focus:ring-2 focus:ring-meteorite-500/20 focus:border-meteorite-500 outline-none cursor-pointer"
+                                                                        value={newGrant.grantType}
+                                                                        onChange={(e) => setNewGrant({ ...newGrant, grantType: e.target.value as "ROLE" | "PERMISSION", grantValue: "" })}
+                                                                    >
+                                                                        <option value="ROLE">Rol del sistema</option>
+                                                                        <option value="PERMISSION">Permiso</option>
+                                                                    </select>
+                                                                </div>
+
+                                                                <div className="space-y-1.5 flex-1 min-w-[160px]">
+                                                                    <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">
+                                                                        {newGrant.grantType === "ROLE" ? "Rol" : "Permiso"}
+                                                                    </label>
+                                                                    <select
+                                                                        className="bg-white border border-gray-200 rounded-lg text-sm px-3 py-2 w-full text-gray-900 font-medium focus:ring-2 focus:ring-meteorite-500/20 focus:border-meteorite-500 outline-none cursor-pointer"
+                                                                        value={newGrant.grantValue}
+                                                                        onChange={(e) => setNewGrant({ ...newGrant, grantValue: e.target.value })}
+                                                                    >
+                                                                        <option value="">Seleccionar...</option>
+                                                                        {newGrant.grantType === "ROLE"
+                                                                            ? ROLES.map(role => (
+                                                                                <option key={role} value={role}>{role}</option>
+                                                                            ))
+                                                                            : GRADING_PERMISSIONS.map(perm => (
+                                                                                <option key={perm} value={perm}>{perm}</option>
+                                                                            ))
+                                                                        }
+                                                                    </select>
+                                                                </div>
+
+                                                                <div className="space-y-1.5 flex-shrink-0">
+                                                                    <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">Alcance</label>
+                                                                    <select
+                                                                        className="bg-white border border-gray-200 rounded-lg text-sm px-3 py-2 text-gray-900 font-medium focus:ring-2 focus:ring-meteorite-500/20 focus:border-meteorite-500 outline-none cursor-pointer"
+                                                                        value={newGrant.scope}
+                                                                        onChange={(e) => setNewGrant({ ...newGrant, scope: e.target.value as "ALL" | "OWN_AREA" })}
+                                                                    >
+                                                                        <option value="OWN_AREA">Solo su área</option>
+                                                                        <option value="ALL">Todos los usuarios</option>
+                                                                    </select>
+                                                                </div>
+
+                                                                <Button
+                                                                    size="sm"
+                                                                    onClick={() => handleAddGrant(pillar.id)}
+                                                                    disabled={addingGrant || !newGrant.grantValue}
+                                                                    className="bg-meteorite-600 hover:bg-meteorite-700 text-white font-bold rounded-lg shadow-sm px-4 h-[38px]"
+                                                                >
+                                                                    {addingGrant ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4 mr-1.5" />}
+                                                                    Agregar
+                                                                </Button>
+                                                            </div>
+                                                        </>
+                                                    )}
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+                                    )}
+                                </>
                             ))}
                         </TableBody>
                     </Table>
@@ -361,7 +602,6 @@ export function PillarsManager({ semesterId, initialPillars, otherSemesters }: P
                                         <label className="text-sm font-bold text-gray-900 block">
                                             {editingPillar.isDirectorOnly ? "Peso (Solo Directores)" : "Peso Base (%)"}
                                         </label>
-                                        {/* Show Remaining based on context */}
                                         <span className={`text-xs font-bold ${(editingPillar.isDirectorOnly ? isDirectorOver : isMemberOver) ? "text-red-500" : "text-gray-400"}`}>
                                             {editingPillar.isDirectorOnly
                                                 ? `${(100 - otherDirectorSum).toFixed(1)}% Disp. (Dir)`
@@ -378,7 +618,6 @@ export function PillarsManager({ semesterId, initialPillars, otherSemesters }: P
                                         />
                                         <span className="absolute right-3 top-2.5 text-gray-400 font-bold text-sm">%</span>
                                     </div>
-                                    {/* Contextual Warning */}
                                     {(editingPillar.isDirectorOnly ? isDirectorOver : isMemberOver) ? (
                                         <p className="text-[10px] text-red-600 font-bold">
                                             ⚠️ Excede el 100% {editingPillar.isDirectorOnly ? "de Directores" : "de Miembros"} (Suma: {(editingPillar.isDirectorOnly ? projectedDirectorSum : projectedMemberSum).toFixed(1)}%)
@@ -402,7 +641,6 @@ export function PillarsManager({ semesterId, initialPillars, otherSemesters }: P
                                     />
                                 </div>
 
-                                {/* Extra Director Validation Warning (if both affected or specific director weight issue) */}
                                 {isDirectorOver && !editingPillar.isDirectorOnly && (
                                     <div className="col-span-2 bg-red-50 text-red-700 text-xs font-bold p-2 rounded-lg border border-red-100 flex items-center gap-2">
                                         <span>⚠️ Cuidado: Además, esta configuración excede el 100% para Directores ({projectedDirectorSum.toFixed(1)}%).</span>
@@ -453,7 +691,6 @@ export function PillarsManager({ semesterId, initialPillars, otherSemesters }: P
                                         setEditingPillar({
                                             ...editingPillar,
                                             isDirectorOnly: isChecked,
-                                            // Ensure directorWeight is null if DirectorOnly is active to avoid confusion/double inputs
                                             directorWeight: isChecked ? null : editingPillar.directorWeight
                                         });
                                     }}

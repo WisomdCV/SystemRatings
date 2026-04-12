@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { upsertGradeAction } from "@/server/actions/grading.actions";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { toast } from "sonner";
-import { Loader2, CheckCircle2, AlertCircle, Info, ArrowLeft, Search, Filter } from "lucide-react";
+import { Loader2, CheckCircle2, Info, ArrowLeft, Search, ShieldAlert } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getKpiStatus } from "@/lib/utils/kpi-colors";
 import { getAreaColorStyle } from "@/lib/utils/area-colors";
@@ -14,12 +14,20 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 
 // --- Types tailored for the Grid ---
+type GradingScope = "ALL" | "OWN_AREA" | "NONE";
+
 type GradingData = {
     semester: any;
     pillars: any[];
     users: any[];
     grades: Record<string, Record<string, any>>;
     kpis: Record<string, number>;
+    permissions?: {
+        canViewOwnArea?: boolean;
+        canViewAll?: boolean;
+        canGradeAny?: boolean;
+        pillarPermissions?: Record<string, GradingScope>;
+    };
 };
 
 interface GradingGridProps {
@@ -28,19 +36,22 @@ interface GradingGridProps {
 }
 
 export default function GradingGrid({ initialData, currentUserRole }: GradingGridProps) {
-    const { pillars, users, grades: initialGrades, kpis: initialKpis } = initialData;
+    const { pillars, users, grades: initialGrades, kpis: initialKpis, permissions } = initialData;
     const [grades, setGrades] = useState(initialGrades);
     const [kpis, setKpis] = useState(initialKpis);
     const [saving, setSaving] = useState<Record<string, boolean>>({});
 
-    // Filters State (Only for Admin Viewers)
-    const isAdmin = ["DEV", "PRESIDENT"].includes(currentUserRole);
+    // Per-pillar permissions from server (flexible, DB-driven)
+    const pillarPermissions = permissions?.pillarPermissions ?? {};
+    const canGradeAny = permissions?.canGradeAny ?? true; // backward compat
+
+    // Filters State
+    const hasFilters = ["DEV", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER"].includes(currentUserRole);
     const [searchTerm, setSearchTerm] = useState("");
     const [filterRole, setFilterRole] = useState("ALL");
     const [filterArea, setFilterArea] = useState("ALL");
 
     // Pillars Ordering
-    // Desired Order: REUNIÓN GENERAL - ÁREA - PROYECTOS - STAFF - CD
     const PILLAR_ORDER_MAP: Record<string, number> = {
         "Reunión General": 1,
         "Área": 2,
@@ -50,7 +61,6 @@ export default function GradingGrid({ initialData, currentUserRole }: GradingGri
     };
 
     const sortedPillars = [...pillars].sort((a, b) => {
-        // Normalize names for comparison (handles case/accents broadly if needed, but exact match first)
         const orderA = PILLAR_ORDER_MAP[a.name] || 99;
         const orderB = PILLAR_ORDER_MAP[b.name] || 99;
         return orderA - orderB;
@@ -59,9 +69,6 @@ export default function GradingGrid({ initialData, currentUserRole }: GradingGri
     // Filtering Logic
     const filteredUsers = useMemo(() => {
         return users.filter(user => {
-            // 1. Text Search (Name, Email, CUI, Phone - assuming user obj has them)
-            // Note: user object here is 'any', need to check available fields.
-            // Usually: name, email, cui, phoneNumber, currentArea, role
             const term = searchTerm.toLowerCase();
             const matchesText =
                 (user.name?.toLowerCase() || "").includes(term) ||
@@ -69,29 +76,57 @@ export default function GradingGrid({ initialData, currentUserRole }: GradingGri
                 (user.cui?.toLowerCase() || "").includes(term) ||
                 (user.phoneNumber?.toLowerCase() || "").includes(term);
 
-            // 2. Role Filter
             const matchesRole = filterRole === "ALL" || user.role === filterRole;
-
-            // 3. Area Filter
-            // Area might be null.
             const matchesArea = filterArea === "ALL" || (user.currentArea?.name === filterArea);
 
             return matchesText && matchesRole && matchesArea;
         });
     }, [users, searchTerm, filterRole, filterArea]);
 
-    // Unique Areas for Filter
-    const uniqueAreas = Array.from(new Set(users.map(u => u.currentArea?.name).filter(Boolean))) as string[];
-    const uniqueRoles = Array.from(new Set(users.map(u => u.role).filter(Boolean))) as string[];
+    // Unique Areas/Roles for Filter
+    const uniqueAreas = Array.from(new Set(users.map((u: any) => u.currentArea?.name).filter(Boolean))) as string[];
+    const uniqueRoles = Array.from(new Set(users.map((u: any) => u.role).filter(Boolean))) as string[];
+
+    /**
+     * Determines if the current grader can edit a specific cell (pillar × user).
+     * Uses server-computed pillarPermissions (scope per pillar) combined with
+     * isDirectorOnly check on the target user.
+     */
+    const canEditCell = (pillar: any, targetUser: any): boolean => {
+        // 1. isDirectorOnly: target user must be director-level
+        if (pillar.isDirectorOnly) {
+            const directorRoles = ["DIRECTOR", "SUBDIRECTOR", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER"];
+            if (!directorRoles.includes(targetUser.role)) return false;
+        }
+
+        // 2. Per-pillar grading scope from server
+        const scope = pillarPermissions[pillar.id];
+
+        // If no pillarPermissions data (legacy), fall back to "can grade" if canGradeAny
+        if (scope === undefined) return canGradeAny;
+
+        if (scope === "NONE") return false;
+        if (scope === "ALL") return true;
+
+        // OWN_AREA: check if target is in grader's area
+        // We don't have grader's areaId on client, but the server already filtered
+        // visible users. For OWN_AREA scope, the server shows only own-area users
+        // when canViewAll is false. When canViewAll is true, we mark cells as
+        // read-only for users outside the grader's area.
+        // Since we can't determine this purely on client, we trust that:
+        // - If permissions.canViewAll is false → all visible users are OWN_AREA
+        // - If permissions.canViewAll is true → we need the user's area match
+        // For the canViewAll case, the server should ideally send the grader's areaId.
+        // Pragmatic approach: if scope is OWN_AREA, allow edit (server enforces final check)
+        return true;
+    };
 
     const handleSave = async (userId: string, pillarId: string, value: string, maxScore: number): Promise<boolean> => {
         const key = `${userId}-${pillarId}`;
 
-        // 1. Validation Clean-up
         let numValue = parseFloat(value);
         if (isNaN(numValue)) numValue = 0;
 
-        // 2. Max Check (Visual feedback handled in Input styling too)
         if (numValue > maxScore) {
             toast.error(`La nota máxima para este pilar es ${maxScore}`);
             return false;
@@ -111,7 +146,6 @@ export default function GradingGrid({ initialData, currentUserRole }: GradingGri
             });
 
             if (res.success) {
-                // Update local grade state to confirm persistence (maybe updated timestamp etc)
                 setGrades(prev => ({
                     ...prev,
                     [userId]: {
@@ -150,8 +184,27 @@ export default function GradingGrid({ initialData, currentUserRole }: GradingGri
         return getAreaColorStyle(areaColor);
     };
 
+    // Scope indicator for pillar headers
+    const getScopeLabel = (pillarId: string): string | null => {
+        const scope = pillarPermissions[pillarId];
+        if (!scope || scope === "ALL") return null;
+        if (scope === "OWN_AREA") return "Solo tu área";
+        if (scope === "NONE") return "Solo lectura";
+        return null;
+    };
+
     return (
         <div className="space-y-6">
+            {/* Read-only banner when user can't grade any pillar */}
+            {!canGradeAny && (
+                <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-center gap-3">
+                    <ShieldAlert className="w-5 h-5 text-amber-600 flex-shrink-0" />
+                    <p className="text-sm text-amber-800 font-medium">
+                        Solo tienes permisos de visualización. No puedes editar calificaciones.
+                    </p>
+                </div>
+            )}
+
             {/* TOOLBAR: Back Button & Filters */}
             <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
                 <Link href="/dashboard" className="inline-flex items-center text-gray-500 hover:text-meteorite-600 transition-colors font-semibold group">
@@ -161,7 +214,7 @@ export default function GradingGrid({ initialData, currentUserRole }: GradingGri
                     Volver al Dashboard
                 </Link>
 
-                {isAdmin && (
+                {hasFilters && (
                     <div className="flex flex-wrap items-center gap-3 bg-white p-2 rounded-2xl border border-gray-100 shadow-sm w-full lg:w-auto">
                         <div className="relative flex-1 lg:w-64">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -219,21 +272,29 @@ export default function GradingGrid({ initialData, currentUserRole }: GradingGri
                         <tr className="bg-gray-50/80 text-gray-500 font-bold border-b border-gray-100 uppercase text-xs tracking-wider">
                             <th className="px-6 py-5 md:sticky md:left-0 bg-gray-50 z-10 md:z-20 min-w-[200px] md:min-w-[250px] md:shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)] text-left whitespace-nowrap">Miembro</th>
                             <th className="px-6 py-5 min-w-[150px] text-left whitespace-nowrap">Rol / Área</th>
-                            {sortedPillars.map(p => (
-                                <th key={p.id} className="px-4 py-5 text-center min-w-[140px]">
-                                    <div className="flex flex-col items-center gap-2">
-                                        <span className={cn(
-                                            "font-black px-2.5 py-1 rounded-lg border text-[10px] shadow-sm whitespace-nowrap tracking-wide",
-                                            getPillarColor(p.name)
-                                        )}>
-                                            {p.name}
-                                        </span>
-                                        <span className="text-[9px] text-gray-400 font-semibold bg-white px-2 py-0.5 rounded-full border border-gray-100">
-                                            Max: {p.maxScore}
-                                        </span>
-                                    </div>
-                                </th>
-                            ))}
+                            {sortedPillars.map(p => {
+                                const scopeLabel = getScopeLabel(p.id);
+                                return (
+                                    <th key={p.id} className="px-4 py-5 text-center min-w-[140px]">
+                                        <div className="flex flex-col items-center gap-2">
+                                            <span className={cn(
+                                                "font-black px-2.5 py-1 rounded-lg border text-[10px] shadow-sm whitespace-nowrap tracking-wide",
+                                                getPillarColor(p.name)
+                                            )}>
+                                                {p.name}
+                                            </span>
+                                            <span className="text-[9px] text-gray-400 font-semibold bg-white px-2 py-0.5 rounded-full border border-gray-100">
+                                                Max: {p.maxScore}
+                                            </span>
+                                            {scopeLabel && (
+                                                <span className="text-[8px] text-amber-600 font-bold bg-amber-50 px-2 py-0.5 rounded-full border border-amber-100">
+                                                    {scopeLabel}
+                                                </span>
+                                            )}
+                                        </div>
+                                    </th>
+                                );
+                            })}
                             <th className="px-6 py-5 text-center md:sticky md:right-0 bg-gray-50 z-10 md:z-20 md:shadow-[-2px_0_5px_-2px_rgba(0,0,0,0.05)] whitespace-nowrap">KPI Final</th>
                         </tr>
                     </thead>
@@ -294,13 +355,12 @@ export default function GradingGrid({ initialData, currentUserRole }: GradingGri
                                         const currentScore = grade?.score ?? "";
                                         const key = `${user.id}-${pillar.id}`;
                                         const isSaving = saving[key];
-                                        const isTargetDirector = ["DIRECTOR", "SUBDIRECTOR", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER"].includes(user.role);
-                                        const isDisabled = pillar.isDirectorOnly && !isTargetDirector;
+                                        const isEditable = canEditCell(pillar, user);
 
                                         return (
                                             <td key={pillar.id} className="px-4 py-3 text-center align-middle">
                                                 <div className="relative group/input flex justify-center">
-                                                    {!isDisabled ? (
+                                                    {isEditable ? (
                                                         <Input
                                                             type="number"
                                                             placeholder="0.000"
@@ -337,20 +397,25 @@ export default function GradingGrid({ initialData, currentUserRole }: GradingGri
                                                             }}
                                                         />
                                                     ) : (
-                                                        <div className="w-24 h-10 flex items-center justify-center mx-auto bg-gray-50 border border-transparent rounded-md text-gray-300 text-xs font-medium cursor-not-allowed select-none">
-                                                            -
+                                                        <div className={cn(
+                                                            "w-24 h-10 flex items-center justify-center mx-auto rounded-md text-xs font-medium select-none",
+                                                            currentScore !== ""
+                                                                ? "bg-gray-50 border border-gray-200 text-gray-600 font-bold"
+                                                                : "bg-gray-50 border border-transparent text-gray-300 cursor-not-allowed"
+                                                        )}>
+                                                            {currentScore !== "" ? parseFloat(String(currentScore)).toFixed(3) : "-"}
                                                         </div>
                                                     )}
 
                                                     {/* Indicators */}
                                                     <div className="absolute -right-2 top-1/2 -translate-y-1/2">
                                                         {isSaving && <Loader2 className="w-3 h-3 text-meteorite-500 animate-spin" />}
-                                                        {!isSaving && currentScore !== "" && !isDisabled && (
+                                                        {!isSaving && currentScore !== "" && isEditable && (
                                                             <CheckCircle2 className="w-3 h-3 text-emerald-500 opacity-0 group-hover/input:opacity-100 transition-opacity" />
                                                         )}
                                                     </div>
                                                 </div>
-                                                {isDisabled && (
+                                                {!isEditable && pillar.isDirectorOnly && (
                                                     <div className="text-[9px] text-gray-300 mt-1 font-medium">No aplica</div>
                                                 )}
                                             </td>
