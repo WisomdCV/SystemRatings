@@ -9,6 +9,7 @@ import { recalculateUserKPI } from "@/server/services/kpi.service";
 import { recalculateAreaKPIForUser } from "@/server/services/area-kpi.service";
 import { revalidatePath } from "next/cache";
 import { canGradePillarForUser, type GraderContext } from "@/server/services/grading-permissions.service";
+import { DIRECTOR_LEVEL_ROLES } from "@/lib/permissions";
 
 export async function upsertGradeAction(input: UpsertGradeDTO) {
     try {
@@ -44,8 +45,7 @@ export async function upsertGradeAction(input: UpsertGradeDTO) {
 
         // 4. isDirectorOnly server-side enforcement
         if (pillar.isDirectorOnly) {
-            const directorLevelRoles = ["DIRECTOR", "SUBDIRECTOR", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER"];
-            if (!targetUser.role || !directorLevelRoles.includes(targetUser.role)) {
+            if (!targetUser.role || !DIRECTOR_LEVEL_ROLES.includes(targetUser.role as any)) {
                 return { success: false, error: `El pilar "${pillar.name}" solo aplica a roles directivos.` };
             }
         }

@@ -9,6 +9,7 @@ import { Loader2, CheckCircle2, Info, ArrowLeft, Search, ShieldAlert } from "luc
 import { cn } from "@/lib/utils";
 import { getKpiStatus } from "@/lib/utils/kpi-colors";
 import { getAreaColorStyle } from "@/lib/utils/area-colors";
+import { DIRECTOR_LEVEL_ROLES } from "@/lib/permissions";
 import Link from "next/link";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
@@ -22,6 +23,7 @@ type GradingData = {
     users: any[];
     grades: Record<string, Record<string, any>>;
     kpis: Record<string, number>;
+    graderAreaId?: string | null;
     permissions?: {
         canViewOwnArea?: boolean;
         canViewAll?: boolean;
@@ -36,7 +38,7 @@ interface GradingGridProps {
 }
 
 export default function GradingGrid({ initialData, currentUserRole }: GradingGridProps) {
-    const { pillars, users, grades: initialGrades, kpis: initialKpis, permissions } = initialData;
+    const { pillars, users, grades: initialGrades, kpis: initialKpis, permissions, graderAreaId } = initialData;
     const [grades, setGrades] = useState(initialGrades);
     const [kpis, setKpis] = useState(initialKpis);
     const [saving, setSaving] = useState<Record<string, boolean>>({});
@@ -95,8 +97,7 @@ export default function GradingGrid({ initialData, currentUserRole }: GradingGri
     const canEditCell = (pillar: any, targetUser: any): boolean => {
         // 1. isDirectorOnly: target user must be director-level
         if (pillar.isDirectorOnly) {
-            const directorRoles = ["DIRECTOR", "SUBDIRECTOR", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER"];
-            if (!directorRoles.includes(targetUser.role)) return false;
+            if (!DIRECTOR_LEVEL_ROLES.includes(targetUser.role)) return false;
         }
 
         // 2. Per-pillar grading scope from server
@@ -108,17 +109,13 @@ export default function GradingGrid({ initialData, currentUserRole }: GradingGri
         if (scope === "NONE") return false;
         if (scope === "ALL") return true;
 
-        // OWN_AREA: check if target is in grader's area
-        // We don't have grader's areaId on client, but the server already filtered
-        // visible users. For OWN_AREA scope, the server shows only own-area users
-        // when canViewAll is false. When canViewAll is true, we mark cells as
-        // read-only for users outside the grader's area.
-        // Since we can't determine this purely on client, we trust that:
-        // - If permissions.canViewAll is false → all visible users are OWN_AREA
-        // - If permissions.canViewAll is true → we need the user's area match
-        // For the canViewAll case, the server should ideally send the grader's areaId.
-        // Pragmatic approach: if scope is OWN_AREA, allow edit (server enforces final check)
-        return true;
+        // OWN_AREA: validate target is in grader's area using server-provided graderAreaId
+        if (scope === "OWN_AREA") {
+            if (!graderAreaId) return false;
+            return targetUser.currentAreaId === graderAreaId || targetUser.currentArea?.id === graderAreaId;
+        }
+
+        return false;
     };
 
     const handleSave = async (userId: string, pillarId: string, value: string, maxScore: number): Promise<boolean> => {

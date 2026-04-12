@@ -129,6 +129,14 @@ export type Permission = keyof typeof PERMISSIONS;
 export const ALL_PERMISSIONS = Object.keys(PERMISSIONS) as Permission[];
 
 // ---------------------------------------------------------------------------
+// Director-level roles (roles that qualify for isDirectorOnly pillars)
+// Used in grading backend validation and frontend cell rendering.
+// ---------------------------------------------------------------------------
+export const DIRECTOR_LEVEL_ROLES: readonly Role[] = [
+    "DIRECTOR", "SUBDIRECTOR", "PRESIDENT", "VICEPRESIDENT", "SECRETARY", "TREASURER",
+] as const;
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 

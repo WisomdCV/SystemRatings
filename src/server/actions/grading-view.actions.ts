@@ -137,6 +137,8 @@ export async function getGradingSheetAction() {
                 grades: gradesMap,
                 kpis: kpiMap,
                 currentUserRole: role,
+                // Grader's area ID for client-side OWN_AREA scope validation
+                graderAreaId: currentAreaId ?? null,
                 permissions: {
                     canViewOwnArea,
                     canViewAll,

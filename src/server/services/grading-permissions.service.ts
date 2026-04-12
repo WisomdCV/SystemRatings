@@ -2,7 +2,7 @@
 
 import { db } from "@/db";
 import { pillarGradingPermissions } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { hasPermission, type Permission } from "@/lib/permissions";
 
 // =============================================================================
@@ -132,11 +132,12 @@ export async function resolveAllPillarPermissions(
         return result;
     }
 
-    // Fetch ALL grants for these pillars in one query
-    const allGrants = await db.query.pillarGradingPermissions.findMany();
+    // Fetch grants ONLY for the requested pillars
+    const allGrants = await db.query.pillarGradingPermissions.findMany({
+        where: inArray(pillarGradingPermissions.definitionId, definitionIds),
+    });
     const grantsByPillar = new Map<string, typeof allGrants>();
     for (const grant of allGrants) {
-        if (!definitionIds.includes(grant.definitionId)) continue;
         const existing = grantsByPillar.get(grant.definitionId) || [];
         existing.push(grant);
         grantsByPillar.set(grant.definitionId, existing);
