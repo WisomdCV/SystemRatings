@@ -14,12 +14,12 @@ export default function LoginView() {
 
             <div className="card-glass relative z-10 w-full max-w-md p-8 rounded-3xl text-center space-y-8 bg-white/95">
                 <div className="flex flex-col items-center">
-                    <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500 via-indigo-500 to-sky-500 flex items-center justify-center shadow-lg shadow-indigo-500/30 mb-6 border border-white/30 p-2">
+                    <div className="w-[76px] h-[76px] rounded-2xl bg-gradient-to-br from-violet-500 via-indigo-500 to-sky-500 flex items-center justify-center shadow-lg shadow-indigo-500/30 mb-6 border border-white/30 p-2.5">
                         <Image
-                            src="/branding/LogoIISEUNSAsinFondo.png"
+                            src="/branding/logo-iise-square-transparent.png"
                             alt="Logo IISE UNSA"
-                            width={48}
-                            height={48}
+                            width={56}
+                            height={56}
                             className="w-full h-full object-contain"
                             priority
                         />
