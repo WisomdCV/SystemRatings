@@ -578,14 +578,14 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
 
                 <div className="relative z-10 w-full">
                     {/* Logo & Toggle */}
-                    <div className="h-24 flex items-center justify-between px-5 border-b border-meteorite-800/50">
+                    <div className={`flex items-center justify-between border-b border-meteorite-800/50 ${isSidebarExpanded ? "h-24 px-5" : "h-20 px-4"}`}>
                         <div className="flex items-center">
-                            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-violet-500 via-indigo-500 to-sky-500 flex flex-shrink-0 items-center justify-center shadow-lg shadow-indigo-900/40 border border-white/20 p-2">
+                            <div className={`bg-white flex flex-shrink-0 items-center justify-center shadow-lg shadow-meteorite-900/30 border border-meteorite-200/80 ${isSidebarExpanded ? "w-14 h-14 rounded-2xl p-2" : "w-11 h-11 rounded-xl p-1.5"}`}>
                                 <Image
                                     src="/branding/logo-iise-square-transparent.png"
                                     alt="Logo IISE UNSA"
-                                    width={46}
-                                    height={46}
+                                    width={isSidebarExpanded ? 46 : 36}
+                                    height={isSidebarExpanded ? 46 : 36}
                                     className="w-full h-full object-contain"
                                     priority
                                 />
@@ -733,12 +733,12 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
                 {/* Header */}
                 <header className="h-16 lg:h-20 flex items-center justify-between px-4 lg:px-8 z-10 bg-white/50 backdrop-blur-sm sticky top-0 border-b border-white/50">
                     <div className="lg:hidden flex items-center">
-                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 via-indigo-500 to-sky-500 flex items-center justify-center mr-3 shadow-md border border-white/30 p-1.5">
+                        <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-violet-500 via-indigo-500 to-sky-500 flex items-center justify-center mr-3 shadow-md border border-white/30 p-1">
                             <Image
                                 src="/branding/logo-iise-square-transparent.png"
                                 alt="Logo IISE UNSA"
-                                width={30}
-                                height={30}
+                                width={26}
+                                height={26}
                                 className="w-full h-full object-contain"
                             />
                         </div>
