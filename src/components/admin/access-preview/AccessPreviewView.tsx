@@ -29,11 +29,12 @@ export default function AccessPreviewView({ bootstrap }: Props) {
   );
 
   const groupedDecisions = useMemo(() => {
-    if (!preview) return { events: [], projects: [], grading: [] };
+    if (!preview) return { events: [], projects: [], grading: [], legacy: [] };
     return {
       events: preview.endpointDecisions.filter((d) => d.scope === "events"),
       projects: preview.endpointDecisions.filter((d) => d.scope === "projects"),
       grading: preview.endpointDecisions.filter((d) => d.scope === "grading"),
+      legacy: preview.endpointDecisions.filter((d) => d.scope === "legacy"),
     };
   }, [preview]);
 
@@ -306,6 +307,7 @@ export default function AccessPreviewView({ bootstrap }: Props) {
             <DecisionCard title="Decisiones de Endpoints (Events)" decisions={groupedDecisions.events} />
             <DecisionCard title="Decisiones de Endpoints (Projects)" decisions={groupedDecisions.projects} />
             <DecisionCard title="Decisiones de Endpoints (Calificaciones)" decisions={groupedDecisions.grading} />
+            <DecisionCard title="Compatibilidad Legacy" decisions={groupedDecisions.legacy} />
           </div>
 
           <div className="rounded-2xl border border-meteorite-200 bg-white p-4 space-y-3">
@@ -319,6 +321,9 @@ export default function AccessPreviewView({ bootstrap }: Props) {
             </p>
 
             <div className="flex flex-wrap gap-2 text-[11px]">
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full border border-violet-200 bg-violet-50 text-violet-700 font-black">
+                Modelo: {preview.grading.model}
+              </span>
               <span className="inline-flex items-center px-2 py-0.5 rounded-full border border-indigo-200 bg-indigo-50 text-indigo-700 font-black">
                 Sección: {preview.grading.canAccessSection ? "VISIBLE" : "OCULTA"}
               </span>
@@ -334,6 +339,33 @@ export default function AccessPreviewView({ bootstrap }: Props) {
               <span className="inline-flex items-center px-2 py-0.5 rounded-full border border-amber-200 bg-amber-50 text-amber-700 font-black">
                 Calificables: {preview.grading.assignableUsersCount}
               </span>
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full border border-cyan-200 bg-cyan-50 text-cyan-700 font-black">
+                Super-permiso: {preview.grading.hasSuperAssignAllPillars ? "SI" : "NO"}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-[11px]">
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 font-semibold text-emerald-800">
+                Pilares ALL: <strong>{preview.grading.pillarScopeSummary.all}</strong>
+              </div>
+              <div className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 font-semibold text-sky-800">
+                Pilares OWN_AREA: <strong>{preview.grading.pillarScopeSummary.ownArea}</strong>
+              </div>
+              <div className="rounded-lg border border-meteorite-200 bg-meteorite-50 px-3 py-2 font-semibold text-meteorite-700">
+                Pilares NONE: <strong>{preview.grading.pillarScopeSummary.none}</strong>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-meteorite-100 bg-meteorite-50/30 p-3">
+              <p className="text-[11px] font-black text-meteorite-700 uppercase tracking-wide mb-2">Compatibilidad legacy (informativo)</p>
+              <div className="flex flex-wrap gap-2 text-[11px]">
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full border border-meteorite-200 bg-white text-meteorite-700 font-semibold">
+                  grade:assign_all: {preview.grading.legacyAssignAll ? "SI" : "NO"}
+                </span>
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full border border-meteorite-200 bg-white text-meteorite-700 font-semibold">
+                  grade:assign_own_area: {preview.grading.legacyAssignOwnArea ? "SI" : "NO"}
+                </span>
+              </div>
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
@@ -369,6 +401,33 @@ export default function AccessPreviewView({ bootstrap }: Props) {
                 Tiene permisos de calificaciones por área propia, pero no hay área asignada al contexto simulado.
               </div>
             )}
+
+            <div className="max-h-72 overflow-y-auto rounded-xl border border-meteorite-100">
+              <table className="w-full text-xs">
+                <thead className="bg-meteorite-50 text-meteorite-700 font-black sticky top-0">
+                  <tr>
+                    <th className="text-left p-2">Pilar</th>
+                    <th className="text-left p-2">Scope efectivo</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {preview.grading.pillars.length === 0 ? (
+                    <tr>
+                      <td className="p-3 text-meteorite-500" colSpan={2}>
+                        No hay pilares activos en el ciclo actual.
+                      </td>
+                    </tr>
+                  ) : (
+                    preview.grading.pillars.map((pillar) => (
+                      <tr key={pillar.definitionId} className="border-t border-meteorite-100">
+                        <td className="p-2 font-semibold text-meteorite-900">{pillar.name}</td>
+                        <td className="p-2"><ScopeTag scope={pillar.scope} /></td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
 
             <div className="max-h-96 overflow-y-auto rounded-xl border border-meteorite-100">
               <table className="w-full text-xs">
@@ -571,6 +630,20 @@ function BoolTag({ ok, text }: { ok: boolean; text: string }) {
     <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-black ${ok ? "bg-emerald-100 text-emerald-700 border-emerald-200" : "bg-red-100 text-red-700 border-red-200"}`}>
       {ok ? <CheckCircle2 className="w-2.5 h-2.5" /> : <XCircle className="w-2.5 h-2.5" />}
       {text}
+    </span>
+  );
+}
+
+function ScopeTag({ scope }: { scope: "ALL" | "OWN_AREA" | "NONE" }) {
+  const styles: Record<typeof scope, string> = {
+    ALL: "bg-emerald-100 text-emerald-700 border-emerald-200",
+    OWN_AREA: "bg-sky-100 text-sky-700 border-sky-200",
+    NONE: "bg-meteorite-100 text-meteorite-600 border-meteorite-200",
+  };
+
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-full border text-[10px] font-black ${styles[scope]}`}>
+      {scope}
     </span>
   );
 }

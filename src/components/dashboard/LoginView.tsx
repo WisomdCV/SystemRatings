@@ -1,7 +1,7 @@
 "use client";
 
 import { signIn } from "next-auth/react";
-import { Zap } from "lucide-react";
+import Image from "next/image";
 
 export default function LoginView() {
     return (
@@ -14,8 +14,15 @@ export default function LoginView() {
 
             <div className="card-glass relative z-10 w-full max-w-md p-8 rounded-3xl text-center space-y-8 bg-white/95">
                 <div className="flex flex-col items-center">
-                    <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-meteorite-500 to-meteorite-700 flex items-center justify-center shadow-lg shadow-meteorite-500/30 mb-6">
-                        <Zap className="text-white w-8 h-8" />
+                    <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500 via-indigo-500 to-sky-500 flex items-center justify-center shadow-lg shadow-indigo-500/30 mb-6 border border-white/30 p-2">
+                        <Image
+                            src="/branding/LogoIISEUNSAsinFondo.png"
+                            alt="Logo IISE UNSA"
+                            width={48}
+                            height={48}
+                            className="w-full h-full object-contain"
+                            priority
+                        />
                     </div>
                     <h1 className="text-2xl font-bold text-meteorite-950">IISE Manager</h1>
                     <p className="text-meteorite-500">Sistema de Control y Rendimiento</p>

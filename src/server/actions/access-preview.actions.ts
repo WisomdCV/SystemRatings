@@ -11,6 +11,7 @@ import {
   projectMembers,
   events,
   semesters,
+  gradeDefinitions,
 } from "@/db/schema";
 import { and, asc, desc, eq, ne } from "drizzle-orm";
 import { hasPermission, PERMISSIONS, ALL_PERMISSIONS, type Permission } from "@/lib/permissions";
@@ -48,6 +49,10 @@ import {
   type UpdateProjectDTO,
 } from "@/lib/validators/project";
 import { getActiveSemester, isProjectWritable } from "@/server/services/project-cycle.service";
+import {
+  resolveAllPillarPermissions,
+  type GradingScope,
+} from "@/server/services/grading-permissions.service";
 import type { ActionResult } from "@/types";
 import type { EventType } from "@/lib/constants";
 
@@ -134,7 +139,7 @@ interface SimulatedActorContext {
 
 interface EndpointDecision {
   key: string;
-  scope: "events" | "projects" | "grading";
+  scope: "events" | "projects" | "grading" | "legacy";
   label: string;
   allowed: boolean;
   reason: string;
@@ -172,18 +177,34 @@ interface GradingActorUserItem {
   assignmentReason: string;
 }
 
+interface GradingPillarScopeItem {
+  definitionId: string;
+  name: string;
+  scope: GradingScope;
+}
+
 interface GradingPreview {
+  model: "PILLAR_FLEX";
   canAccessSection: boolean;
   viewScope: "ALL" | "OWN_AREA" | "NONE";
   assignScope: "ALL" | "OWN_AREA" | "NONE";
+  hasSuperAssignAllPillars: boolean;
+  legacyAssignAll: boolean;
+  legacyAssignOwnArea: boolean;
   canViewOwnArea: boolean;
   canViewAll: boolean;
   canAssignOwnArea: boolean;
   canAssignAll: boolean;
   areaRequiredForOwnAreaScope: boolean;
+  pillarScopeSummary: {
+    all: number;
+    ownArea: number;
+    none: number;
+  };
   visibleUsersCount: number;
   assignableUsersCount: number;
   summary: string;
+  pillars: GradingPillarScopeItem[];
   actors: GradingActorUserItem[];
 }
 
@@ -264,7 +285,7 @@ function resolvePermissionOrigin(permission: Permission, role: string, customPer
 
 function permissionDecision(
   key: string,
-  scope: "events" | "projects" | "grading",
+  scope: "events" | "projects" | "grading" | "legacy",
   label: string,
   permission: Permission,
   role: string,
@@ -285,7 +306,7 @@ function permissionDecision(
 
 function anyPermissionDecision(
   key: string,
-  scope: "events" | "projects" | "grading",
+  scope: "events" | "projects" | "grading" | "legacy",
   label: string,
   permissions: Permission[],
   role: string,
@@ -673,20 +694,22 @@ async function buildGradingPreview(params: {
   role: string;
   areaId: string | null;
   customPermissions: string[];
+  activeSemesterId: string | null;
 }): Promise<GradingPreview> {
   const {
     actorUserId,
     role,
     areaId,
     customPermissions,
+    activeSemesterId,
   } = params;
+
+  const hasSuperAssignAllPillars = hasPermission(role, "grade:assign_all_pillars", customPermissions);
+  const legacyAssignAll = hasPermission(role, "grade:assign_all", customPermissions);
+  const legacyAssignOwnArea = hasPermission(role, "grade:assign_own_area", customPermissions);
 
   const canViewAll = hasPermission(role, "grade:view_all", customPermissions);
   const canViewOwnArea = hasPermission(role, "grade:view_own_area", customPermissions);
-  const canAssignAll = hasPermission(role, "grade:assign_all", customPermissions);
-  const canAssignOwnArea = hasPermission(role, "grade:assign_own_area", customPermissions);
-
-  const areaRequiredForOwnAreaScope = (canViewOwnArea || canAssignOwnArea) && !areaId;
 
   const viewScope: GradingPreview["viewScope"] = canViewAll
     ? "ALL"
@@ -694,11 +717,50 @@ async function buildGradingPreview(params: {
       ? "OWN_AREA"
       : "NONE";
 
-  const assignScope: GradingPreview["assignScope"] = canAssignAll
+  const graderCtx = {
+    userId: actorUserId,
+    userRole: role,
+    userAreaId: areaId,
+    customPermissions,
+  };
+
+  const pillars = activeSemesterId
+    ? await db.query.gradeDefinitions.findMany({
+      where: eq(gradeDefinitions.semesterId, activeSemesterId),
+      columns: { id: true, name: true },
+      orderBy: [asc(gradeDefinitions.name)],
+    })
+    : [];
+
+  const pillarScopeMap = pillars.length > 0
+    ? await resolveAllPillarPermissions(graderCtx, pillars.map((pillar) => pillar.id))
+    : {};
+
+  const pillarScopeSummary = pillars.reduce(
+    (acc, pillar) => {
+      const scope = pillarScopeMap[pillar.id] || "NONE";
+      if (scope === "ALL") acc.all += 1;
+      else if (scope === "OWN_AREA") acc.ownArea += 1;
+      else acc.none += 1;
+      return acc;
+    },
+    { all: 0, ownArea: 0, none: 0 },
+  );
+
+  const assignScope: GradingPreview["assignScope"] = pillarScopeSummary.all > 0
     ? "ALL"
-    : (canAssignOwnArea && areaId)
+    : pillarScopeSummary.ownArea > 0
       ? "OWN_AREA"
       : "NONE";
+
+  const canAssignAll = assignScope === "ALL";
+  const canAssignOwnArea = assignScope === "OWN_AREA";
+
+  const areaRequiredForOwnAreaScope = (
+    (viewScope === "OWN_AREA")
+    || (assignScope === "OWN_AREA")
+    || legacyAssignOwnArea
+  ) && !areaId;
 
   const canAccessSection = viewScope !== "NONE";
 
@@ -736,15 +798,17 @@ async function buildGradingPreview(params: {
     let canAssign = false;
     let assignmentReason = "Sin permiso de asignación";
 
-    if (assignScope === "ALL") {
+    if (pillars.length === 0) {
+      assignmentReason = "No hay pilares activos para evaluar permisos de calificación";
+    } else if (assignScope === "ALL") {
       canAssign = true;
-      assignmentReason = "Puede calificar globalmente (excepto usuarios DEV)";
+      assignmentReason = `Puede calificar globalmente (${pillarScopeSummary.all} pilar(es) con alcance ALL)`;
     } else if (assignScope === "OWN_AREA") {
       const sameArea = !!areaId && targetUser.currentAreaId === areaId;
       canAssign = sameArea;
       assignmentReason = sameArea
-        ? "Puede calificar por coincidencia de área"
-        : "Visible pero fuera de su área para asignación";
+        ? `Puede calificar por coincidencia de área (${pillarScopeSummary.ownArea} pilar(es) OWN_AREA)`
+        : `Visible pero fuera de su área (${pillarScopeSummary.ownArea} pilar(es) OWN_AREA)`;
     }
 
     return {
@@ -762,30 +826,44 @@ async function buildGradingPreview(params: {
   const assignableUsersCount = actors.filter((actor) => actor.canAssign).length;
 
   let summary = "Sin permisos para acceder al apartado de calificaciones";
-  if (canAccessSection && assignScope === "ALL") {
-    summary = "Puede ver la hoja y calificar globalmente";
+  if (canAccessSection && pillars.length === 0) {
+    summary = "Puede ver la hoja, pero no hay pilares activos para evaluar calificación";
+  } else if (canAccessSection && assignScope === "ALL") {
+    summary = `Puede ver la hoja y calificar globalmente (${pillarScopeSummary.all} pilar(es) con alcance ALL)`;
   } else if (canAccessSection && assignScope === "OWN_AREA") {
-    summary = "Puede ver la hoja y calificar solo miembros de su área";
+    summary = `Puede ver la hoja y calificar solo miembros de su área (${pillarScopeSummary.ownArea} pilar(es) OWN_AREA)`;
   } else if (canAccessSection) {
-    summary = "Puede ver la hoja de calificaciones, pero no asignar notas";
+    summary = "Puede ver la hoja de calificaciones, pero no asignar notas con el modelo actual por pilar";
   }
 
   if (areaRequiredForOwnAreaScope) {
     summary = `${summary}. Tiene permisos de área propia, pero sin área asignada no se pueden aplicar.`;
   }
 
+  const pillarDetails: GradingPillarScopeItem[] = pillars.map((pillar) => ({
+    definitionId: pillar.id,
+    name: pillar.name,
+    scope: pillarScopeMap[pillar.id] || "NONE",
+  }));
+
   return {
+    model: "PILLAR_FLEX",
     canAccessSection,
     viewScope,
     assignScope,
+    hasSuperAssignAllPillars,
+    legacyAssignAll,
+    legacyAssignOwnArea,
     canViewOwnArea,
     canViewAll,
     canAssignOwnArea,
     canAssignAll,
     areaRequiredForOwnAreaScope,
+    pillarScopeSummary,
     visibleUsersCount: visibleUsers.length,
     assignableUsersCount,
     summary,
+    pillars: pillarDetails,
     actors,
   };
 }
@@ -1592,14 +1670,20 @@ export async function getAccessPreviewAction(
       permissionDecision("events.create_meeting", "events", "POST /events (INDIVIDUAL_GROUP)", "event:create_meeting", resolvedRole, extraPermissions),
       anyPermissionDecision("events.manage", "events", "PATCH/DELETE /events/:id", ["event:manage_own", "event:manage_all"], resolvedRole, extraPermissions),
       anyPermissionDecision("events.attendance_take", "events", "POST /attendance (tomar asistencia)", ["attendance:take_own_area", "attendance:take_all"], resolvedRole, extraPermissions),
+      anyPermissionDecision("events.attendance_review", "events", "PATCH /attendance/:id/review (justificaciones)", ["attendance:review_own_area", "attendance:review_all"], resolvedRole, extraPermissions),
       permissionDecision("projects.create", "projects", "POST /projects", "project:create", resolvedRole, extraPermissions),
       permissionDecision("projects.view_any", "projects", "GET /projects (view_any)", "project:view_any", resolvedRole, extraPermissions),
       permissionDecision("projects.view_iise_area", "projects", "GET /projects (view_iise_area)", "project:view_iise_area", resolvedRole, extraPermissions),
       permissionDecision("projects.manage", "projects", "PATCH /projects/:id (global manage)", "project:manage", resolvedRole, extraPermissions),
       anyPermissionDecision("grading.view_sheet", "grading", "GET /dashboard/management/grades", ["grade:view_own_area", "grade:view_all"], resolvedRole, extraPermissions),
-      anyPermissionDecision("grading.assign", "grading", "POST /grades (upsert)", ["grade:assign_own_area", "grade:assign_all"], resolvedRole, extraPermissions),
+      anyPermissionDecision("grading.assign", "grading", "POST /grades (upsert)", ["grade:assign_all_pillars", "grade:assign_own_area", "grade:assign_all"], resolvedRole, extraPermissions),
+      permissionDecision("grading.assign_all_pillars", "grading", "Scope asignación total por pilar", "grade:assign_all_pillars", resolvedRole, extraPermissions),
       permissionDecision("grading.view_all", "grading", "Scope visualización global", "grade:view_all", resolvedRole, extraPermissions),
       permissionDecision("grading.assign_all", "grading", "Scope asignación global", "grade:assign_all", resolvedRole, extraPermissions),
+      permissionDecision("legacy.user_manage", "legacy", "Compatibilidad legacy: user:manage", "user:manage", resolvedRole, extraPermissions),
+      permissionDecision("legacy.dashboard_area_comparison", "legacy", "Compatibilidad legacy: dashboard:area_comparison", "dashboard:area_comparison", resolvedRole, extraPermissions),
+      permissionDecision("legacy.dashboard_leadership_view", "legacy", "Compatibilidad legacy: dashboard:leadership_view", "dashboard:leadership_view", resolvedRole, extraPermissions),
+      permissionDecision("legacy.admin_full", "legacy", "Compatibilidad legacy: admin:full", "admin:full", resolvedRole, extraPermissions),
     ];
 
     const [canCreateGeneralIISE, canCreateAreaIISE, canCreateMeetingIISE] = await Promise.all([
@@ -1624,6 +1708,7 @@ export async function getAccessPreviewAction(
       role: resolvedRole,
       areaId: resolvedAreaId,
       customPermissions: extraPermissions,
+      activeSemesterId: activeSemester?.id || null,
     });
 
     endpointDecisions.push({

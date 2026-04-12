@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useRef } from "react";
 import { User } from "next-auth";
+import Image from "next/image";
 import {
-    Zap,
     LayoutDashboard,
     Users,
     CalendarCheck,
@@ -580,8 +580,15 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
                     {/* Logo & Toggle */}
                     <div className="h-20 flex items-center justify-between px-6 border-b border-meteorite-800/50">
                         <div className="flex items-center">
-                            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-meteorite-400 to-meteorite-600 flex flex-shrink-0 items-center justify-center shadow-lg shadow-meteorite-900/50">
-                                <Zap className="text-white w-5 h-5" />
+                            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-violet-500 via-indigo-500 to-sky-500 flex flex-shrink-0 items-center justify-center shadow-lg shadow-indigo-900/40 border border-white/20 p-1.5">
+                                <Image
+                                    src="/branding/LogoIISEUNSAsinFondo.png"
+                                    alt="Logo IISE UNSA"
+                                    width={36}
+                                    height={36}
+                                    className="w-full h-full object-contain"
+                                    priority
+                                />
                             </div>
                             <span
                                 className={`ml-3 font-bold text-xl tracking-wide transition-all duration-300 overflow-hidden whitespace-nowrap ${isSidebarExpanded ? "opacity-100 w-auto" : "opacity-0 w-0 ml-0"
@@ -726,8 +733,14 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
                 {/* Header */}
                 <header className="h-16 lg:h-20 flex items-center justify-between px-4 lg:px-8 z-10 bg-white/50 backdrop-blur-sm sticky top-0 border-b border-white/50">
                     <div className="lg:hidden flex items-center">
-                        <div className="w-8 h-8 rounded-lg bg-meteorite-600 flex items-center justify-center mr-3 shadow-md">
-                            <Zap className="text-white w-4 h-4" />
+                        <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-violet-500 via-indigo-500 to-sky-500 flex items-center justify-center mr-3 shadow-md border border-white/30 p-1">
+                            <Image
+                                src="/branding/LogoIISEUNSAsinFondo.png"
+                                alt="Logo IISE UNSA"
+                                width={28}
+                                height={28}
+                                className="w-full h-full object-contain"
+                            />
                         </div>
                         <div>
                             <h1 className="font-bold text-meteorite-950 leading-tight">
