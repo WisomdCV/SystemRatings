@@ -119,13 +119,26 @@ export async function getGradingSheetAction() {
             kpiMap[k.userId] = k.finalKpiScore || 0;
         });
 
-        // 7. Structure grades map
+        // 7. Structure grades map (latest grade wins per user+pillar)
         const gradesMap: Record<string, Record<string, any>> = {};
-        existingGrades.forEach(g => {
-            if (!gradesMap[g.userId]) gradesMap[g.userId] = {};
-            if (g.definition.semesterId === activeSemester.id) {
-                gradesMap[g.userId][g.definitionId] = g;
+        const latestByUserDefinition = new Map<string, any>();
+
+        existingGrades.forEach((grade) => {
+            if (grade.definition.semesterId !== activeSemester.id) return;
+
+            const key = `${grade.userId}:${grade.definitionId}`;
+            const current = latestByUserDefinition.get(key);
+            const currentTs = current?.createdAt ? new Date(current.createdAt).getTime() : 0;
+            const candidateTs = grade.createdAt ? new Date(grade.createdAt).getTime() : 0;
+
+            if (!current || candidateTs >= currentTs) {
+                latestByUserDefinition.set(key, grade);
             }
+        });
+
+        latestByUserDefinition.forEach((grade) => {
+            if (!gradesMap[grade.userId]) gradesMap[grade.userId] = {};
+            gradesMap[grade.userId][grade.definitionId] = grade;
         });
 
         return {
