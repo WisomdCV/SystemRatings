@@ -407,6 +407,15 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
         ? dashboardData.grades.pillars.map(p => p.normalized)
         : [0];
 
+    const competencyRows = hasGradesData
+        ? dashboardData.grades.pillars.map((pillar) => ({
+            name: pillar.name,
+            normalized: pillar.normalized,
+            score: pillar.score,
+            maxScore: pillar.maxScore,
+        }))
+        : [];
+
     const radarData = {
         labels: radarLabels,
         datasets: [
@@ -1154,6 +1163,16 @@ export default function DashboardView({ user, upcomingEvents = [], pendingJustif
                                     </div>
                                 )}
                             </div>
+                            {competencyRows.length > 0 && (
+                                <div className="mt-4 grid grid-cols-1 gap-2">
+                                    {competencyRows.map((pillar) => (
+                                        <div key={pillar.name} className="flex items-center justify-between rounded-xl border border-meteorite-100 bg-white/70 px-3 py-2 text-xs">
+                                            <span className="font-semibold text-meteorite-700 truncate pr-2">{pillar.name}</span>
+                                            <span className="font-bold text-meteorite-900 whitespace-nowrap">{pillar.normalized.toFixed(1)}/5 • {pillar.score.toFixed(1)}/{pillar.maxScore}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
                         </div>
 
                         {/* Agenda */}

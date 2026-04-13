@@ -64,7 +64,7 @@ export default function AreaComparison({ data }: AreaComparisonProps) {
 
     // -- Radar State --
     const [selectedAreaId, setSelectedAreaId] = useState<string>(data.areas[0]?.id || "");
-    const [areaPillars, setAreaPillars] = useState<Array<{ name: string; normalized: number }>>([]);
+    const [areaPillars, setAreaPillars] = useState<Array<{ name: string; normalized: number; percentage?: number }>>([]);
     const [isLoadingRadar, setIsLoadingRadar] = useState(false);
 
     useEffect(() => {
@@ -552,6 +552,7 @@ export default function AreaComparison({ data }: AreaComparisonProps) {
                                         <div className="min-w-0 flex-1 overflow-hidden pr-1">
                                             <p className="font-bold text-sm text-gray-900 truncate" title={member.user.name}>{member.user.name}</p>
                                             <p className="text-[10px] text-gray-500 font-medium truncate uppercase tracking-widest">{member.area?.name || "Sin Área"}</p>
+                                            <p className="text-[10px] text-meteorite-500 font-semibold truncate">Asistencia: {typeof member.attendancePercent === "number" ? `${member.attendancePercent}%` : "0%"}</p>
                                         </div>
                                     </div>
                                     <div className="text-right flex-shrink-0 min-w-[86px]">
@@ -611,7 +612,7 @@ export default function AreaComparison({ data }: AreaComparisonProps) {
                                     <div key={idx}>
                                         <div className="flex justify-between text-xs font-bold mb-1">
                                             <span className="text-gray-700">{pillar.name}</span>
-                                            <span className="text-meteorite-600">{pillar.normalized.toFixed(1)}/5</span>
+                                            <span className="text-meteorite-600">{pillar.normalized.toFixed(1)}/5{typeof pillar.percentage === "number" ? ` (${pillar.percentage}%)` : ""}</span>
                                         </div>
                                         <div className="w-full bg-gray-100 rounded-full h-2.5 overflow-hidden">
                                             <div
@@ -684,13 +685,25 @@ export default function AreaComparison({ data }: AreaComparisonProps) {
                 </div>
 
                 <div className="md:w-2/3 flex items-center justify-center bg-white/40 rounded-3xl p-6 border border-white/60">
-                    <div className="h-80 w-full max-w-md">
+                    <div className="h-80 w-full max-w-md flex flex-col">
                         {isLoadingRadar ? (
                             <div className="h-full flex items-center justify-center animate-pulse">
                                 <div className="w-48 h-48 rounded-full bg-meteorite-100"></div>
                             </div>
                         ) : areaPillars.length > 0 ? (
-                            <Radar data={radarData} options={radarOptions} />
+                            <>
+                                <div className="flex-1">
+                                    <Radar data={radarData} options={radarOptions} />
+                                </div>
+                                <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                    {areaPillars.map((pillar) => (
+                                        <div key={pillar.name} className="flex items-center justify-between rounded-xl border border-meteorite-100 bg-white/80 px-3 py-2 text-xs">
+                                            <span className="font-semibold text-meteorite-700 truncate pr-2">{pillar.name}</span>
+                                            <span className="font-bold text-meteorite-900 whitespace-nowrap">{pillar.normalized.toFixed(1)}/5{typeof pillar.percentage === "number" ? ` • ${pillar.percentage}%` : ""}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </>
                         ) : (
                             <div className="h-full flex flex-col items-center justify-center text-gray-400">
                                 <Target className="w-10 h-10 mb-2 text-gray-300" />

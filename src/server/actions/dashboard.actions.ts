@@ -10,7 +10,7 @@ import {
     semesters,
     areaKpiSummaries
 } from "@/db/schema";
-import { eq, and, desc, asc } from "drizzle-orm";
+import { eq, and, desc, asc, inArray } from "drizzle-orm";
 
 export interface DashboardData {
     kpi: {
@@ -95,23 +95,51 @@ export async function getMyDashboardDataAction(): Promise<{
             )
         });
 
-        // 4. Get User's Grades for Radar Chart
-        const userGrades = await db.query.grades.findMany({
-            where: eq(grades.userId, userId),
-            with: {
-                definition: true
-            }
+        // 4. Get User's Grades for Radar Chart (deduped and stable per active definitions)
+        const activeDefinitions = await db.query.gradeDefinitions.findMany({
+            where: eq(gradeDefinitions.semesterId, activeSemester.id),
+            columns: { id: true, name: true, maxScore: true },
         });
 
-        // Filter grades for active semester and build pillar data
-        const pillarsData = userGrades
-            .filter(g => g.definition.semesterId === activeSemester.id)
-            .map(g => ({
-                name: g.definition.name,
-                score: g.score,
-                maxScore: g.definition.maxScore || 5,
-                normalized: ((g.score / (g.definition.maxScore || 5)) * 5) // Normalize to 0-5 scale
-            }));
+        const definitionIds = activeDefinitions.map((definition) => definition.id);
+
+        const userGrades = definitionIds.length === 0
+            ? []
+            : await db.query.grades.findMany({
+                where: and(
+                    eq(grades.userId, userId),
+                    inArray(grades.definitionId, definitionIds)
+                ),
+                columns: {
+                    definitionId: true,
+                    score: true,
+                    createdAt: true,
+                },
+            });
+
+        const latestGradeByDefinition = new Map<string, typeof userGrades[number]>();
+        for (const grade of userGrades) {
+            const current = latestGradeByDefinition.get(grade.definitionId);
+            const currentTs = current?.createdAt ? new Date(current.createdAt).getTime() : 0;
+            const candidateTs = grade.createdAt ? new Date(grade.createdAt).getTime() : 0;
+            if (!current || candidateTs >= currentTs) {
+                latestGradeByDefinition.set(grade.definitionId, grade);
+            }
+        }
+
+        const pillarsData = activeDefinitions.map((definition) => {
+            const latest = latestGradeByDefinition.get(definition.id);
+            const score = latest?.score ?? 0;
+            const maxScore = definition.maxScore || 5;
+            const normalized = Math.max(0, Math.min(5, (score / maxScore) * 5));
+
+            return {
+                name: definition.name,
+                score,
+                maxScore,
+                normalized,
+            };
+        });
 
         // 5. Get KPI History (Monthly)
         const kpiHistory = await db.query.kpiMonthlySummaries.findMany({

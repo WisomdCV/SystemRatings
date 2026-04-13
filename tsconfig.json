@@ -21,15 +21,11 @@
         "name": "next"
       }
     ],
-    // --- LÍNEAS CORREGIDAS ---
-    "baseUrl": ".",
     "paths": {
       "@/*": [
-        "src/*"
+        "./src/*"
       ]
-    }
-    // -------------------------
-    ,
+    },
     "target": "ES2017"
   },
   "include": [
