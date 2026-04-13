@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
-import { BarChart3, TrendingUp, Medal, ChevronLeft, ChevronRight, Users, Target, Zap, Activity, ArrowUpRight, Award, User as UserIcon } from "lucide-react";
+import { useState, useMemo, useEffect, useRef } from "react";
+import { BarChart3, TrendingUp, Medal, ChevronLeft, ChevronRight, Users, Target, Zap, Activity, ArrowUpRight, Award, User as UserIcon, X } from "lucide-react";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import {
     Chart as ChartJS,
@@ -57,7 +57,10 @@ export default function AreaComparison({ data }: AreaComparisonProps) {
     const [isLoadingMetrics, setIsLoadingMetrics] = useState(false);
 
     // Drill-down State
-    const [hoveredMember, setHoveredMember] = useState<any | null>(null);
+    const [panelMember, setPanelMember] = useState<any | null>(null);
+    const [isPanelVisible, setIsPanelVisible] = useState(false);
+    const [supportsHover, setSupportsHover] = useState(false);
+    const panelHideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     // -- Radar State --
     const [selectedAreaId, setSelectedAreaId] = useState<string>(data.areas[0]?.id || "");
@@ -103,6 +106,58 @@ export default function AreaComparison({ data }: AreaComparisonProps) {
         };
         fetchRadar();
     }, [selectedMonth, selectedAreaId]);
+
+    useEffect(() => {
+        if (typeof window === "undefined") return;
+
+        const mediaQuery = window.matchMedia("(hover: hover) and (pointer: fine)");
+        const updateHoverCapability = () => setSupportsHover(mediaQuery.matches);
+
+        updateHoverCapability();
+
+        if (typeof mediaQuery.addEventListener === "function") {
+            mediaQuery.addEventListener("change", updateHoverCapability);
+            return () => mediaQuery.removeEventListener("change", updateHoverCapability);
+        }
+
+        mediaQuery.addListener(updateHoverCapability);
+        return () => mediaQuery.removeListener(updateHoverCapability);
+    }, []);
+
+    useEffect(() => {
+        return () => {
+            if (panelHideTimeoutRef.current) {
+                clearTimeout(panelHideTimeoutRef.current);
+            }
+        };
+    }, []);
+
+    const handleMemberHoverStart = (member: any) => {
+        if (panelHideTimeoutRef.current) {
+            clearTimeout(panelHideTimeoutRef.current);
+            panelHideTimeoutRef.current = null;
+        }
+
+        setPanelMember(member);
+        requestAnimationFrame(() => setIsPanelVisible(true));
+    };
+
+    const handleMemberHoverEnd = () => {
+        setIsPanelVisible(false);
+
+        panelHideTimeoutRef.current = setTimeout(() => {
+            setPanelMember(null);
+        }, 220);
+    };
+
+    const handleMemberTap = (member: any) => {
+        if (panelMember?.user.id === member.user.id && isPanelVisible) {
+            handleMemberHoverEnd();
+            return;
+        }
+
+        handleMemberHoverStart(member);
+    };
 
     // -- Derived Stats (Local) --
     const sortedAreas = useMemo(() => {
@@ -458,7 +513,10 @@ export default function AreaComparison({ data }: AreaComparisonProps) {
                         <p className="text-xs text-meteorite-300 mt-1">Miembros de más alto rendimiento en {selectedMonth?.label}</p>
                     </div>
 
-                    <div className="p-4 flex-1 flex flex-col gap-2">
+                    <div
+                        className="p-4 flex-1 flex flex-col gap-2"
+                        onMouseLeave={supportsHover ? handleMemberHoverEnd : undefined}
+                    >
                         {isLoadingMetrics ? (
                             [...Array(5)].map((_, i) => (
                                 <div key={i} className="animate-pulse flex space-x-4 items-center p-3">
@@ -473,14 +531,14 @@ export default function AreaComparison({ data }: AreaComparisonProps) {
                             topMembers.map((member, index) => (
                                 <div
                                     key={member.user.id}
-                                    onMouseEnter={() => setHoveredMember(member)}
-                                    onMouseLeave={() => setHoveredMember(null)}
-                                    className={`relative flex items-center justify-between p-3 rounded-2xl cursor-pointer transition-all ${hoveredMember?.user.id === member.user.id
-                                        ? "bg-meteorite-50 shadow-inner scale-[1.02]"
+                                    onMouseEnter={supportsHover ? () => handleMemberHoverStart(member) : undefined}
+                                    onClick={!supportsHover ? () => handleMemberTap(member) : undefined}
+                                    className={`relative flex items-center justify-between gap-3 p-3 rounded-2xl cursor-pointer transition-all duration-200 ${panelMember?.user.id === member.user.id && isPanelVisible
+                                        ? "bg-meteorite-50 shadow-inner scale-[1.01] border border-meteorite-100"
                                         : "hover:bg-gray-50 bg-white border border-gray-100"
                                         }`}
                                 >
-                                    <div className="flex items-center gap-3">
+                                    <div className="flex items-center gap-3 min-w-0 flex-1">
                                         <div className="w-8 text-center flex-shrink-0">
                                             {getRankingIcon(index + 1)}
                                         </div>
@@ -491,13 +549,13 @@ export default function AreaComparison({ data }: AreaComparisonProps) {
                                                 <UserIcon className="w-5 h-5 text-meteorite-600" />
                                             </div>
                                         )}
-                                        <div className="overflow-hidden min-w-0 pr-2">
-                                            <p className="font-bold text-sm text-gray-900 truncate">{member.user.name}</p>
+                                        <div className="min-w-0 flex-1 overflow-hidden pr-1">
+                                            <p className="font-bold text-sm text-gray-900 truncate" title={member.user.name}>{member.user.name}</p>
                                             <p className="text-[10px] text-gray-500 font-medium truncate uppercase tracking-widest">{member.area?.name || "Sin Área"}</p>
                                         </div>
                                     </div>
-                                    <div className="text-right flex-shrink-0">
-                                        <div className="bg-meteorite-100 px-3 py-1 rounded-full text-meteorite-900 font-bold text-sm">
+                                    <div className="text-right flex-shrink-0 min-w-[86px]">
+                                        <div className="bg-meteorite-100 px-3 py-1 rounded-full text-meteorite-900 font-bold text-sm text-center">
                                             {member.kpi.toFixed(2)}
                                         </div>
                                     </div>
@@ -511,34 +569,45 @@ export default function AreaComparison({ data }: AreaComparisonProps) {
                     </div>
 
                     {/* Drill-Down Popover Overlay inside the card */}
-                    {hoveredMember && (
-                        <div className="absolute inset-0 bg-white/95 backdrop-blur-md z-20 flex flex-col p-6 shadow-[inset_0_0_20px_rgba(0,0,0,0.05)] animate-in fade-in duration-200 pointer-events-none">
+                    {panelMember && (
+                        <div className={`absolute inset-0 bg-white/95 backdrop-blur-md z-20 flex flex-col p-6 shadow-[inset_0_0_20px_rgba(0,0,0,0.05)] transition-all duration-200 ease-out ${supportsHover ? "pointer-events-none" : "pointer-events-auto"} ${isPanelVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-1"}`}>
                             <div className="flex items-center justify-between mb-6">
                                 <h4 className="font-bold text-meteorite-950 flex items-center gap-2">
                                     <ArrowUpRight className="w-5 h-5 text-meteorite-500" />
                                     Desglose de Pilares
                                 </h4>
-                                <div className="bg-gradient-to-r from-yellow-400 to-amber-500 text-white font-bold px-3 py-1 rounded-full text-sm shadow-md">
-                                    {hoveredMember.kpi.toFixed(2)} / 10
+                                <div className="flex items-center gap-2">
+                                    <div className="bg-gradient-to-r from-yellow-400 to-amber-500 text-white font-bold px-3 py-1 rounded-full text-sm shadow-md">
+                                        {panelMember.kpi.toFixed(2)} / 10
+                                    </div>
+                                    {!supportsHover && (
+                                        <button
+                                            onClick={handleMemberHoverEnd}
+                                            className="w-8 h-8 rounded-full bg-white border border-gray-200 flex items-center justify-center text-gray-500 hover:text-gray-700 transition-colors"
+                                            aria-label="Cerrar desglose"
+                                        >
+                                            <X className="w-4 h-4" />
+                                        </button>
+                                    )}
                                 </div>
                             </div>
 
                             <div className="flex items-center gap-4 mb-6 pb-6 border-b border-gray-100">
-                                {hoveredMember.user.image ? (
-                                    <UserAvatar src={hoveredMember.user.image} name={hoveredMember.user.name} className="w-14 h-14 rounded-full border-2 border-meteorite-200" />
+                                {panelMember.user.image ? (
+                                    <UserAvatar src={panelMember.user.image} name={panelMember.user.name} className="w-14 h-14 rounded-full border-2 border-meteorite-200" />
                                 ) : (
                                     <div className="w-14 h-14 rounded-full bg-meteorite-100 flex items-center justify-center border-2 border-meteorite-200">
                                         <UserIcon className="w-6 h-6 text-meteorite-500" />
                                     </div>
                                 )}
                                 <div>
-                                    <p className="font-bold text-gray-900 text-lg leading-tight">{hoveredMember.user.name}</p>
-                                    <p className="text-xs font-bold text-meteorite-500 uppercase tracking-widest">{hoveredMember.area?.name}</p>
+                                    <p className="font-bold text-gray-900 text-lg leading-tight">{panelMember.user.name}</p>
+                                    <p className="text-xs font-bold text-meteorite-500 uppercase tracking-widest">{panelMember.area?.name}</p>
                                 </div>
                             </div>
 
                             <div className="flex-1 space-y-4 overflow-y-auto">
-                                {hoveredMember.pillars.length > 0 ? hoveredMember.pillars.map((pillar: any, idx: number) => (
+                                {panelMember.pillars.length > 0 ? panelMember.pillars.map((pillar: any, idx: number) => (
                                     <div key={idx}>
                                         <div className="flex justify-between text-xs font-bold mb-1">
                                             <span className="text-gray-700">{pillar.name}</span>
