@@ -1481,7 +1481,11 @@ export default function ProjectDetail({ project, eligibleUsers, allProjectRoles,
                         userPermissions={userPerms}
                         categories={resourceCategories}
                         resources={projectResources}
-                        tasks={project.tasks.map((task) => ({ id: task.id, title: task.title }))}
+                        tasks={project.tasks.map((task) => ({
+                            id: task.id,
+                            title: task.title,
+                            isAssignedToCurrentUser: task.assignments.some((assignment) => assignment.user.id === currentUserId),
+                        }))}
                         areas={allProjectAreas.map((area) => ({ id: area.id, name: area.name, color: area.color || null }))}
                     />
                 </div>

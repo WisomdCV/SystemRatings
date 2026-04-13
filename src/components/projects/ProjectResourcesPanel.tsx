@@ -58,6 +58,7 @@ interface ProjectResource {
 interface TaskOption {
   id: string;
   title: string;
+  isAssignedToCurrentUser?: boolean;
 }
 
 interface AreaOption {
@@ -116,10 +117,22 @@ export default function ProjectResourcesPanel({
 
   const [previewingLinkId, setPreviewingLinkId] = useState<string | null>(null);
 
-  const canCreateResources = isSystemAdmin
+  const assignedTaskOptions = useMemo(
+    () => tasks.filter((task) => task.isAssignedToCurrentUser),
+    [tasks],
+  );
+  const assignedTaskIdSet = useMemo(
+    () => new Set(assignedTaskOptions.map((task) => task.id)),
+    [assignedTaskOptions],
+  );
+
+  const canCreateByRole = isSystemAdmin
     || userPermissions.includes("project:resource_create")
     || userPermissions.includes("project:task_manage_any")
     || userPermissions.includes("project:task_manage_own");
+  const canCreateAssignedEvidence = assignedTaskOptions.length > 0;
+  const onlyAssignedEvidenceMode = !canCreateByRole && canCreateAssignedEvidence;
+  const canCreateResources = canCreateByRole || canCreateAssignedEvidence;
 
   const canDeleteAny = isSystemAdmin || userPermissions.includes("project:resource_delete_any");
   const canDeleteOwn = isSystemAdmin || userPermissions.includes("project:resource_delete_own");
@@ -148,7 +161,19 @@ export default function ProjectResourcesPanel({
   };
 
   const handleCreateResource = () => {
-    if (!resourceName.trim() || !linkUrl.trim()) {
+    const selectedTaskId = onlyAssignedEvidenceMode
+      ? (resourceTaskId === "none" ? (assignedTaskOptions[0]?.id || "none") : resourceTaskId)
+      : resourceTaskId;
+
+    if (onlyAssignedEvidenceMode && selectedTaskId === "none") {
+      showMessage("error", "Debes seleccionar una tarea asignada para adjuntar evidencia.");
+      return;
+    }
+
+    const selectedTaskTitle = tasks.find((task) => task.id === selectedTaskId)?.title || "Tarea";
+    const effectiveName = resourceName.trim() || (onlyAssignedEvidenceMode ? `Evidencia - ${selectedTaskTitle}` : "");
+
+    if (!effectiveName || !linkUrl.trim()) {
       showMessage("error", "Nombre y primer link son obligatorios.");
       return;
     }
@@ -156,11 +181,11 @@ export default function ProjectResourcesPanel({
     startTransition(async () => {
       const result = await createResourceAction({
         projectId,
-        name: resourceName.trim(),
+        name: effectiveName,
         description: resourceDescription.trim() || undefined,
         categoryId: resourceCategoryId === "none" ? undefined : resourceCategoryId,
-        projectAreaId: resourceAreaId === "none" ? undefined : resourceAreaId,
-        taskId: resourceTaskId === "none" ? undefined : resourceTaskId,
+        projectAreaId: onlyAssignedEvidenceMode ? undefined : (resourceAreaId === "none" ? undefined : resourceAreaId),
+        taskId: selectedTaskId === "none" ? undefined : selectedTaskId,
         links: [
           {
             url: linkUrl.trim(),
@@ -287,7 +312,7 @@ export default function ProjectResourcesPanel({
               className="px-3 py-1.5 text-xs font-bold rounded-lg bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50"
             >
               <Plus className="w-3.5 h-3.5 inline mr-1" />
-              Nuevo recurso
+              {onlyAssignedEvidenceMode ? "Subir evidencia" : "Nuevo recurso"}
             </button>
           )}
         </div>
@@ -334,9 +359,14 @@ export default function ProjectResourcesPanel({
 
       {showCreate && (
         <div className="p-3 rounded-xl border border-violet-200 bg-violet-50/50 space-y-3">
+          {onlyAssignedEvidenceMode && (
+            <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[11px] font-semibold text-emerald-700">
+              Puedes subir evidencia solo para tareas donde estás asignado.
+            </div>
+          )}
           <input
             type="text"
-            placeholder="Nombre del recurso *"
+            placeholder={onlyAssignedEvidenceMode ? "Nombre (vacío = usa título de la tarea)" : "Nombre del recurso *"}
             value={resourceName}
             onChange={(e) => setResourceName(e.target.value)}
             className="w-full px-3 py-2 text-sm rounded-lg border border-gray-200 bg-white outline-none text-meteorite-950 placeholder:text-gray-400"
@@ -364,6 +394,7 @@ export default function ProjectResourcesPanel({
             <select
               value={resourceAreaId}
               onChange={(e) => setResourceAreaId(e.target.value)}
+              disabled={onlyAssignedEvidenceMode}
               className="px-3 py-2 text-xs rounded-lg border border-gray-200 bg-white outline-none text-meteorite-950"
             >
               <option value="none">Área general</option>
@@ -377,8 +408,8 @@ export default function ProjectResourcesPanel({
               onChange={(e) => setResourceTaskId(e.target.value)}
               className="px-3 py-2 text-xs rounded-lg border border-gray-200 bg-white outline-none text-meteorite-950"
             >
-              <option value="none">No vincular a tarea</option>
-              {tasks.map((task) => (
+              {!onlyAssignedEvidenceMode && <option value="none">No vincular a tarea</option>}
+              {(onlyAssignedEvidenceMode ? assignedTaskOptions : tasks).map((task) => (
                 <option key={task.id} value={task.id}>{task.title}</option>
               ))}
             </select>
@@ -430,7 +461,9 @@ export default function ProjectResourcesPanel({
         <div className="space-y-3">
           {orderedResources.map((resource) => {
             const canDeleteResource = canDeleteAny || (canDeleteOwn && resource.createdById === currentUserId);
-            const canManageLinks = canEditAny || (canEditOwn && resource.createdById === currentUserId);
+            const canManageLinks = canEditAny
+              || (canEditOwn && resource.createdById === currentUserId)
+              || (!!resource.taskId && assignedTaskIdSet.has(resource.taskId));
 
             return (
               <div key={resource.id} className="rounded-xl border border-gray-200 bg-white p-3 space-y-2">
